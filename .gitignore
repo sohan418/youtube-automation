@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+.env
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project data (keep structure, ignore generated content)
+projects/*/
+!projects/.gitkeep
+exports/*/
+!exports/.gitkeep
+logs/*.log
+
+# Secrets
+*.pem
+credentials.json
