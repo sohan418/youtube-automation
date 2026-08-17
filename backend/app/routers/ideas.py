@@ -11,7 +11,12 @@ router = APIRouter(prefix="/ideas", tags=["Ideas"])
 
 @router.get("/project/{project_id}", response_model=list[IdeaResponse])
 def list_project_ideas(project_id: int, db: Session = Depends(get_db)):
-    return db.query(Idea).filter(Idea.project_id == project_id).all()
+    return (
+        db.query(Idea)
+        .filter(Idea.project_id == project_id)
+        .order_by(Idea.created_at.desc(), Idea.id.desc())
+        .all()
+    )
 
 
 @router.post("/project/{project_id}/generate", response_model=list[IdeaResponse])
@@ -22,11 +27,17 @@ def generate_ideas(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    raw_ideas = ai_service.generate_ideas(
-        category=payload.category or project.category,
-        count=payload.count,
-        language=payload.language or project.language,
-    )
+    try:
+        raw_ideas = ai_service.generate_ideas(
+            category=payload.category or project.category,
+            count=payload.count,
+            language=payload.language or project.language,
+            topic=payload.topic,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"AI idea generation failed: {exc}"
+        ) from exc
 
     ideas: list[Idea] = []
     for raw in raw_ideas:

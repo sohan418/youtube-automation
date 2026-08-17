@@ -44,6 +44,7 @@ class Project(Base):
         Enum(ProjectStatus, native_enum=False, length=50), default=ProjectStatus.DRAFT
     )
     folder_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    ratio: Mapped[str] = mapped_column(String(10), default="16:9")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -53,6 +54,9 @@ class Project(Base):
     scripts: Mapped[list["Script"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     scenes: Mapped[list["Scene"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     seo_metadata: Mapped["SEOMetadata | None"] = relationship(
+        back_populates="project", cascade="all, delete-orphan", uselist=False
+    )
+    timeline: Mapped["Timeline | None"] = relationship(
         back_populates="project", cascade="all, delete-orphan", uselist=False
     )
 
@@ -102,6 +106,7 @@ class Scene(Base):
     order_index: Mapped[int] = mapped_column(Integer, nullable=False)
     narration: Mapped[str] = mapped_column(Text, nullable=False)
     image_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    video_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     audio_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -112,6 +117,48 @@ class Scene(Base):
 
     project: Mapped["Project"] = relationship(back_populates="scenes")
     script: Mapped["Script"] = relationship(back_populates="scenes")
+    scene_images: Mapped[list["SceneImage"]] = relationship(
+        back_populates="scene",
+        cascade="all, delete-orphan",
+        order_by="SceneImage.position",
+    )
+    scene_videos: Mapped[list["SceneVideo"]] = relationship(
+        back_populates="scene",
+        cascade="all, delete-orphan",
+        order_by="SceneVideo.position",
+    )
+
+    @property
+    def video_path(self) -> str | None:
+        if self.scene_videos:
+            return self.scene_videos[0].file_path
+        return None
+
+
+class SceneImage(Base):
+    __tablename__ = "scene_images"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id"), nullable=False, index=True)
+    file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), default="generated")  # generated | upload | link
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    scene: Mapped["Scene"] = relationship(back_populates="scene_images")
+
+
+class SceneVideo(Base):
+    __tablename__ = "scene_videos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id"), nullable=False, index=True)
+    file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), default="upload")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    scene: Mapped["Scene"] = relationship(back_populates="scene_videos")
 
 
 class Thumbnail(Base):
@@ -123,6 +170,23 @@ class Thumbnail(Base):
     prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_selected: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Timeline(Base):
+    __tablename__ = "project_timelines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id"), unique=True, nullable=False, index=True
+    )
+    data: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    project: Mapped["Project"] = relationship(back_populates="timeline")
 
 
 class SEOMetadata(Base):

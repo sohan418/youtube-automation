@@ -21,14 +21,14 @@ _LANGUAGE_SCRIPT_TEMPLATES: dict[str, dict[str, str]] = {
         "hook": "What if everything you know about {topic} was about to change?",
         "body": (
             "Today we're diving deep into {topic}.\n\n"
-            "First, let's cover the basics. Whether you're a beginner or already experienced, understanding the fundamentals of {topic} is essential to getting real results.\n\n"
-            "Next, the core strategies. The most successful people in {topic} follow a simple framework: start small, stay consistent, and measure what works.\n\n"
-            "Then, common mistakes. Most people fail in {topic} not because of lack of effort, but because of avoidable errors. We'll show you what to watch out for.\n\n"
-            "Finally, tools and resources. You don't need expensive gear to succeed in {topic} — with the right approach, free tools are more than enough to get started.\n\n"
-            "That wraps up this {minutes}-minute deep dive into {topic}. Remember: progress over perfection."
+            "First, let's cover the basics. Whether you're a beginner or already experienced, understanding the fundamentals is essential to getting real results.\n\n"
+            "Next, the core strategies. The most successful people follow a simple framework: start small, stay consistent, and measure what works.\n\n"
+            "Then, common mistakes. Most people fail not because of lack of effort, but because of avoidable errors. We'll show you what to watch out for.\n\n"
+            "Finally, tools and resources. You don't need expensive gear to succeed — with the right approach, free tools are more than enough to get started.\n\n"
+            "That wraps up this {minutes}-minute deep dive. Remember: progress over perfection."
         ),
         "ending": (
-            "If you enjoyed this guide on {topic}, hit subscribe for more content like this. "
+            "If you enjoyed this guide, hit subscribe for more content like this. "
             "Drop your questions in the comments — see you in the next one!"
         ),
     },
@@ -37,14 +37,14 @@ _LANGUAGE_SCRIPT_TEMPLATES: dict[str, dict[str, str]] = {
         "hook": "Kya aap jante hain ki {topic} ke baare mein sab kuch badalne wala hai?",
         "body": (
             "Aaj hum {topic} ke baare mein gehrai se jaanenge.\n\n"
-            "Pehle basics. Chahe aap beginner hon ya experienced, {topic} ke fundamentals samajhna sabse zaroori hai.\n\n"
-            "Ab core strategies. {topic} mein successful log ek simple framework follow karte hain: chhote steps se shuru karo, consistent raho, aur jo kaam kare use measure karo.\n\n"
-            "Phir common mistakes. Zyada tar log {topic} mein mehnat ki kami ki nahi, balki avoidable galtiyon ki wajah se fail hote hain.\n\n"
-            "Aakhir mein, tools aur resources. {topic} mein kamyab hone ke liye mehenge instruments ki zaroorat nahi — sahi approach ke saath free tools hi kaafi hain.\n\n"
-            "Isi ke saath {minutes} minute ki yah {topic} deep dive samapt hoti hai. Yaad rakhein: progress over perfection."
+            "Pehle basics. Chahe aap beginner hon ya experienced, fundamentals samajhna sabse zaroori hai.\n\n"
+            "Ab core strategies. Successful log ek simple framework follow karte hain: chhote steps se shuru karo, consistent raho, aur jo kaam kare use measure karo.\n\n"
+            "Phir common mistakes. Zyada tar log mehnat ki kami ki nahi, balki avoidable galtiyon ki wajah se fail hote hain.\n\n"
+            "Aakhir mein, tools aur resources. Kamyab hone ke liye mehenge instruments ki zaroorat nahi — sahi approach ke saath free tools hi kaafi hain.\n\n"
+            "Isi ke saath {minutes} minute ki yah deep dive samapt hoti hai. Yaad rakhein: progress over perfection."
         ),
         "ending": (
-            "Agar {topic} par yah guide pasand aayi ho, toh channel subscribe karein aur comments mein apne sawal poochhein. "
+            "Agar yah guide pasand aayi ho, toh channel subscribe karein aur comments mein apne sawal poochhein. "
             "Agle video mein milte hain!"
         ),
     },
@@ -53,14 +53,14 @@ _LANGUAGE_SCRIPT_TEMPLATES: dict[str, dict[str, str]] = {
         "hook": "Kya aap jante hain ki {topic} ke baare mein sab kuch badalne wala hai?",
         "body": (
             "Aaj hum {topic} ke baare mein deep dive karenge.\n\n"
-            "First, basics se shuru karte hain. Chahe aap beginner ho ya experienced, {topic} ke fundamentals clear hona sabse zaroori hai.\n\n"
-            "Next, core strategies. {topic} mein successful log ek simple framework follow karte hain: chhote steps se shuru karo, consistent raho, aur jo kaam kare use measure karo.\n\n"
-            "Then, common mistakes. Zyada tar log {topic} mein avoidable galtiyon ki wajah se fail hote hain — hum dikhayenge kya galtiyan avoid karni chahiye.\n\n"
-            "Finally, tools aur resources. {topic} mein kamyab hone ke liye mehenge gear ki zaroorat nahi — sahi approach ke saath free tools hi kaafi hain.\n\n"
-            "Bas itna hi! {minutes} minute ki yah {topic} deep dive yahan khatam hoti hai. Remember: progress over perfection."
+            "First, basics se shuru karte hain. Chahe aap beginner ho ya experienced, fundamentals clear hona sabse zaroori hai.\n\n"
+            "Next, core strategies. Successful log ek simple framework follow karte hain: chhote steps se shuru karo, consistent raho, aur jo kaam kare use measure karo.\n\n"
+            "Then, common mistakes. Zyada tar log avoidable galtiyon ki wajah se fail hote hain — hum dikhayenge kya galtiyan avoid karni chahiye.\n\n"
+            "Finally, tools aur resources. Kamyab hone ke liye mehenge gear ki zaroorat nahi — sahi approach ke saath free tools hi kaafi hain.\n\n"
+            "Bas itna hi! {minutes} minute ki yah deep dive yahan khatam hoti hai. Remember: progress over perfection."
         ),
         "ending": (
-            "Agar {topic} par yah guide pasand aayi ho, toh subscribe karna mat bhoolna aur comments mein apne sawal poochho. "
+            "Agar yah guide pasand aayi ho, toh subscribe karna mat bhoolna aur comments mein apne sawal poochho. "
             "See you in the next one!"
         ),
     },
@@ -113,6 +113,13 @@ _SEO_LANGUAGE_TEMPLATES: dict[str, dict[str, str | list[str]]] = {
 }
 
 
+_LANGUAGE_NAMES: dict[str, str] = {
+    "en": "English",
+    "hi": "Hindi",
+    "hinglish": "Hinglish",
+}
+
+
 class AIService:
     def __init__(self) -> None:
         self.provider: TextProvider | None = None
@@ -135,6 +142,32 @@ class AIService:
             return self._mock_response(system, user)
         return self.provider.complete(system, user, json_mode=json_mode)
 
+    def _generate_json(
+        self,
+        system: str,
+        user: str,
+        attempts: int = 3,
+        label: str = "AI generation",
+    ) -> dict:
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                raw = self._chat(system, user, json_mode=True)
+                if not raw or not raw.strip():
+                    raise ValueError("AI returned an empty response")
+                return TextProvider.extract_json(raw)
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "%s attempt %d/%d failed (%s): %s",
+                    label,
+                    attempt + 1,
+                    attempts,
+                    type(exc).__name__,
+                    exc,
+                )
+        raise ValueError(f"{label} failed: {last_error}") from last_error
+
     def _mock_response(self, system: str, user: str) -> str:
         logger.warning("No AI provider configured — using mock AI responses")
         system_lower = system.lower()
@@ -148,35 +181,42 @@ class AIService:
             return self._mock_seo(user)
         if "thumbnail designer" in system_lower:
             return "Bold YouTube thumbnail with text 'AI VIDEO GUIDE', shocked face emoji style, bright yellow and red colors, high contrast"
+        if "image prompt engineer" in system_lower:
+            return self._mock_image_prompt(user)
         return "Mock AI response — set OPENAI_API_KEY for real generation."
 
     def generate_ideas(
-        self, category: str | None, count: int, language: str
+        self, category: str | None, count: int, language: str, topic: str | None = None
     ) -> list[dict[str, Any]]:
         category_text = f" in the '{category}' category" if category else ""
+        topic_text = f" about: {topic}" if topic else ""
         system = "You are a YouTube trend analyst. Generate video ideas as JSON."
         user = (
-            f"Generate {count} trending YouTube video ideas{category_text}. "
+            f"Generate {count} trending YouTube video ideas{topic_text}{category_text}. "
             f"Language: {language}. "
             'Return JSON: {"ideas": [{"title": "...", "description": "...", '
             '"category": "...", "trending_score": 0-100}]}'
         )
-        raw = self._chat(system, user, json_mode=True)
-        data = TextProvider.extract_json(raw)
+        data = self._generate_json(system, user, label="Idea generation")
         return data.get("ideas", [])
 
     def _mock_ideas(self, user: str) -> str:
         category_match = re.search(r"in the ['\"](.+?)['\"] category", user)
         category = category_match.group(1).strip() if category_match else "Technology"
+        topic_match = re.search(
+            r"about:\s*(.+?)(?:\s+in the\s*['\"]|\.\s|\.$|$)", user
+        )
+        topic = topic_match.group(1).strip() if topic_match else None
         count_match = re.search(r"Generate (\d+) trending", user)
         count = int(count_match.group(1)) if count_match else 5
+        subject = topic if topic else category
 
         ideas: list[dict[str, Any]] = []
         for title, description, score in _MOCK_IDEA_TEMPLATES[:count]:
             ideas.append(
                 {
-                    "title": title.format(category=category),
-                    "description": description.format(category=category),
+                    "title": title.format(category=subject),
+                    "description": description.format(category=subject),
                     "category": category,
                     "trending_score": score,
                 }
@@ -205,23 +245,57 @@ class AIService:
     def _mock_scenes(self, user: str) -> str:
         hook = re.search(r"Hook:\s*(.*?)\n\nBody:", user, re.DOTALL)
         body = re.search(r"Body:\s*(.*?)\n\nEnding:", user, re.DOTALL)
-        ending = re.search(r"Ending:\s*(.*)$", user, re.DOTALL)
+        ending = re.search(r"Ending:\s*(.*?)(?:\n\s*Return\b|$)", user, re.DOTALL)
         hook = hook.group(1).strip() if hook else "Let's dive right in."
         body = body.group(1).strip() if body else "Today we're exploring this topic step by step."
         ending = ending.group(1).strip() if ending else "Subscribe for more content like this!"
 
+        count_match = re.search(r"EXACTLY (\d+) scenes", user)
+        count = int(count_match.group(1)) if count_match else None
+
         segments: list[str] = [hook]
         segments += [p.strip() for p in body.split("\n\n") if p.strip()]
         segments.append(ending)
+        if count:
+            segments = self._fit_segments(segments, count)
 
         scenes = [
             {
-                "narration": segment,
-                "image_prompt": f"Cinematic visual illustrating: {segment[:120]}",
+                "narration": self._clean_narration(segment),
+                "image_prompt": self._clean_narration(
+                    f"Cinematic visual illustrating: {self._clip(segment, 120)}"
+                ),
             }
             for segment in segments
         ]
         return json.dumps({"scenes": scenes})
+
+    @staticmethod
+    def _clip(text: str, limit: int = 120) -> str:
+        text = text.strip()
+        if len(text) <= limit:
+            return text
+        cut = text[:limit]
+        if " " in cut:
+            cut = cut[: cut.rfind(" ")]
+        return cut.rstrip(" .,;:!?") + " ..."
+
+    @staticmethod
+    def _fit_segments(segments: list[str], count: int) -> list[str]:
+        if len(segments) == count:
+            return segments
+        if len(segments) > count:
+            out = segments[:]
+            while len(out) > count:
+                merged = (out[-2] + " " + out[-1]).strip()
+                out = out[:-2] + [merged]
+            return out
+        sentences: list[str] = []
+        for seg in segments:
+            sentences += [s.strip() for s in re.split(r"(?<=[.!?])\s+", seg) if s.strip()]
+        if len(sentences) >= count:
+            return sentences[:count]
+        return sentences + [sentences[-1]] * (count - len(sentences))
 
     def generate_script(
         self,
@@ -235,8 +309,15 @@ class AIService:
             f"Language: {language}. Include hook, body, and ending. "
             'Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}'
         )
-        raw = self._chat(system, user, json_mode=True)
-        return TextProvider.extract_json(raw)
+        try:
+            raw = self._chat(system, user, json_mode=True)
+            data = TextProvider.extract_json(raw)
+            if not data or "body" not in data:
+                return json.loads(self._mock_script(user))
+            return data
+        except Exception:
+            logger.warning("Script generation failed, falling back to mock script")
+            return json.loads(self._mock_script(user))
 
     def generate_scenes(
         self,
@@ -244,23 +325,113 @@ class AIService:
         hook: str,
         ending: str,
         language: str = "en",
+        count: int | None = None,
+        ratio: str = "16:9",
     ) -> list[dict[str, str]]:
-        system = "You are a video director. Break scripts into scenes as JSON."
-        user = (
-            f"Break this script into scenes. Each scene needs narration and an image prompt.\n\n"
-            f"Language: {language}\n\n"
-            f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
-            'Return JSON: {"scenes": [{"narration": "...", "image_prompt": "..."}]}'
+        system = (
+            "You are a video director. Break scripts into scenes as JSON. "
+            "Each scene has a 'narration', an 'image_prompt', and a 'video_prompt'. "
+            "Narrations are spoken voice-over text ONLY — never include instructions, "
+            "JSON, or any metadata in them. Keep each narration short (one or two "
+            "sentences). If a section of the script is long, split it into multiple scenes. "
+            "Write every narration in the requested language; image prompts stay in English. "
+            "Both the image_prompt and video_prompt MUST always mention the aspect ratio "
+            f"'{ratio}' so every scene stays consistent."
         )
-        raw = self._chat(system, user, json_mode=True)
-        data = TextProvider.extract_json(raw)
-        return data.get("scenes", [])
+        lang_name = _LANGUAGE_NAMES.get(language, language or "English")
+        count_text = (
+            f"Split the script into EXACTLY {count} scenes."
+            if count
+            else "Split the script into a natural number of scenes based on the content."
+        )
+        user = (
+            f"Break this script into scenes. Each scene needs narration, an image prompt, "
+            f"and a video prompt.\n\n"
+            f"Language: {language} ({lang_name})\n\n"
+            f"Aspect ratio: {ratio}\n\n"
+            f"Write all narrations in {lang_name}.\n\n"
+            f"{count_text}\n\n"
+            f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
+            'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
+        )
+        data = self._generate_json(system, user, label="Scene generation")
+        scenes: list[dict[str, str]] = []
+        for raw_scene in data.get("scenes", []):
+            narration = self._clean_narration(raw_scene.get("narration") or "")
+            if not narration:
+                continue
+            image_prompt = self._clean_narration(raw_scene.get("image_prompt") or "")
+            video_prompt = self._clean_narration(raw_scene.get("video_prompt") or "")
+            if image_prompt and ratio not in image_prompt:
+                image_prompt = f"{image_prompt}, {ratio} aspect ratio"
+            if video_prompt and ratio not in video_prompt:
+                video_prompt = f"{video_prompt}, {ratio} aspect ratio"
+            scenes.append(
+                {
+                    "narration": narration,
+                    "image_prompt": image_prompt,
+                    "video_prompt": video_prompt,
+                }
+            )
+        return scenes
 
-    def generate_image_prompt(self, scene_narration: str, style: str | None = None) -> str:
+    @staticmethod
+    def _clean_narration(text: str) -> str:
+        if not text:
+            return ""
+        cleaned = re.sub(r"\bReturn\s+(?:ONLY|a)\s+(?:valid\s+)?JSON\b.*$", "", text, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(r"\bReturn JSON\b.*$", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(r'\{\s*"scenes"\s*:.*$', "", cleaned, flags=re.DOTALL)
+        cleaned = re.sub(
+            r"\b(?:if text is long\s*,\s*)?wrap it\b.*$",
+            "",
+            cleaned,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        return re.sub(r"\s+", " ", cleaned).strip()
+
+    def generate_image_prompt(
+        self,
+        scene_narration: str,
+        style: str | None = None,
+        ratio: str = "16:9",
+    ) -> str:
         style_text = f" Style: {style}." if style else ""
-        system = "You are an image prompt engineer for AI art generation."
-        user = f"Create a detailed image prompt for: {scene_narration}{style_text}"
+        system = (
+            "You are an expert image prompt engineer for AI art generation. "
+            "Create ONE detailed image prompt in English that visually shows what the "
+            "scene's narration is describing. Describe concrete visual imagery: setting, "
+            "subject, objects, mood, and lighting. Output only the prompt itself. "
+            "No text, no words, no watermarks, no labels. Cinematic, ultra detailed, "
+            f"{ratio} aspect ratio."
+        )
+        user = (
+            f"Scene narration: {scene_narration}.\n"
+            f"Create a detailed cinematic image prompt that visualizes this scene. "
+            f"Always include the {ratio} aspect ratio.{style_text}"
+        )
         return self._chat(system, user)
+
+    @staticmethod
+    def _mock_image_prompt(user: str) -> str:
+        match = re.search(r"Scene narration:\s*(.*?)(?:\n|$)", user, re.DOTALL)
+        narration = match.group(1).strip() if match else ""
+        narration = re.sub(r"\s+", " ", narration)
+        narration = narration.rstrip("?.!")
+        narration = narration[:240]
+        if not narration:
+            narration = "the scene"
+        ratio_match = re.search(r"(16:9|9:16)", user)
+        ratio = ratio_match.group(1) if ratio_match else "16:9"
+        style_match = re.search(r"Style:\s*([^\n.]+)", user)
+        style = f" Style: {style_match.group(1).strip()}." if style_match else ""
+        return (
+            f"Cinematic visual illustrating: {narration}. "
+            "Epic scale, dramatic volumetric lighting, cinematic color grading, "
+            "ultra detailed, 8K, "
+            f"{ratio} aspect ratio, no text or watermarks."
+            f"{style}"
+        )
 
     def _mock_seo(self, user: str) -> str:
         title_match = re.search(r"Title:\s*(.+)", user)
@@ -306,14 +477,104 @@ class AIService:
             f"Script excerpt: {script_body[:500]}\nLanguage: {language}\n"
             'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}'
         )
-        raw = self._chat(system, user, json_mode=True)
-        return TextProvider.extract_json(raw)
+        return self._generate_json(system, user, label="SEO generation")
 
     def generate_thumbnail_prompt(self, title: str, style: str | None = None) -> str:
         style_text = f" Style: {style}." if style else ""
-        system = "You are a YouTube thumbnail designer."
-        user = f"Create a thumbnail image prompt for video titled: {title}{style_text}"
-        return self._chat(system, user)
+        system = (
+            "You are an expert YouTube thumbnail designer and AI prompt engineer. "
+            "Create ONE detailed, eye-catching image prompt in English for generating a YouTube thumbnail. "
+            "Describe the subject, high-emotion facial expressions, vibrant color palette, dynamic lighting, and text overlays. "
+            "CRITICAL INSTRUCTION: Output ONLY the plain text prompt itself. Do NOT include markdown headers, bold asterisks (**), "
+            "hashtags (#), code block ticks (```), emojis, or introductory labels like 'Thumbnail Prompt:'."
+        )
+        user = f"Create a thumbnail image prompt for a video titled: '{title}'.{style_text}"
+        raw = self._chat(system, user)
+        return self._clean_prompt(raw)
+
+    @staticmethod
+    def _clean_prompt(text: str) -> str:
+        if not text:
+            return ""
+        cleaned = re.sub(r"```[a-z]*", "", text, flags=re.IGNORECASE).replace("```", "")
+        cleaned = re.sub(r"^\s*[#*•📌:-]+\s*", "", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"\*{1,3}(.*?)\*{1,3}", r"\1", cleaned)
+        cleaned = re.sub(r"#{1,6}\s*", "", cleaned)
+        cleaned = re.sub(
+            r"^(?:YouTube\s+)?Thumbnail\s+Prompt(?:\s*\([^)]*\))?\s*[-–:]*\s*",
+            "",
+            cleaned,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        cleaned = re.sub(r"^Prompt\s*[-–:]*\s*", "", cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        return cleaned.strip()
+
+    def recommend_music(
+        self, script_title: str, script_body: str, category: str | None = None, language: str = "en"
+    ) -> dict[str, Any]:
+        system = (
+            "You are a professional video sound designer and YouTube soundtrack curator. "
+            "Analyze the script and recommend ideal background music search keywords, mood, genre tags, and volume."
+        )
+        user = (
+            f"Video Title: {script_title}\n"
+            f"Category: {category or 'General'}\n"
+            f"Language: {language}\n"
+            f"Script Excerpt: {script_body[:600]}\n\n"
+            "Recommend background music. Return ONLY valid JSON:\n"
+            "{\n"
+            '  "mood": "e.g. Chill Lo-Fi / Relaxed",\n'
+            '  "search_keywords": "e.g. lofi chill retro nostalgic beats royalty free no copyright",\n'
+            '  "genre_tags": ["lofi", "chill", "ambient", "retro"],\n'
+            '  "recommended_volume": 0.12,\n'
+            '  "explanation": "Brief reason why this soundtrack fits the video"\n'
+            "}"
+        )
+        try:
+            raw = self._chat(system, user, json_mode=True)
+            data = TextProvider.extract_json(raw)
+            if not data or "search_keywords" not in data:
+                return self._mock_music_recommendation(script_title, category)
+            return data
+        except Exception:
+            return self._mock_music_recommendation(script_title, category)
+
+    def _mock_music_recommendation(
+        self, script_title: str, category: str | None = None
+    ) -> dict[str, Any]:
+        title_lower = script_title.lower()
+        if any(w in title_lower for w in ["90s", "retro", "nostalgia", "yaad", "purane", "old", "video"]):
+            return {
+                "mood": "Nostalgic / Warm Lo-Fi",
+                "search_keywords": "90s retro nostalgic chill lofi ambient beats no copyright",
+                "genre_tags": ["lofi", "nostalgic", "retro", "chill"],
+                "recommended_volume": 0.12,
+                "explanation": "Matches the nostalgic storytelling tone without overpowering spoken narration.",
+            }
+        if any(w in title_lower for w in ["tech", "ai", "coding", "software", "future", "modern"]):
+            return {
+                "mood": "Modern Tech / Upbeat Ambient",
+                "search_keywords": "modern tech ambient electronic synth beats royalty free",
+                "genre_tags": ["tech", "electronic", "ambient", "modern"],
+                "recommended_volume": 0.10,
+                "explanation": "Provides a clean, innovative tech feel that keeps listeners engaged.",
+            }
+        if any(w in title_lower for w in ["mystery", "horror", "dark", "secret", "crime", "story"]):
+            return {
+                "mood": "Cinematic Suspense / Deep Ambient",
+                "search_keywords": "cinematic suspense dark ambient mystery background music no copyright",
+                "genre_tags": ["suspense", "cinematic", "mystery", "ambient"],
+                "recommended_volume": 0.14,
+                "explanation": "Builds intrigue and dramatic tension for mysterious storytelling.",
+            }
+        return {
+            "mood": "Inspiring Chill / Acoustic Calm",
+            "search_keywords": "calm inspirational acoustic piano chill background music royalty free",
+            "genre_tags": ["acoustic", "calm", "inspirational", "piano"],
+            "recommended_volume": 0.12,
+            "explanation": "Warm and pleasant accompaniment suitable for general informative videos.",
+        }
 
 
 ai_service = AIService()
+

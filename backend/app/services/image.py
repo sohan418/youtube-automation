@@ -19,9 +19,13 @@ class ImageService:
         narration: str,
         image_prompt: str | None = None,
         style: str | None = None,
-    ) -> str:
-        prompt = image_prompt or ai_service.generate_image_prompt(narration, style)
+        ratio: str = "16:9",
+    ) -> tuple[str, str]:
+        prompt = image_prompt or ai_service.generate_image_prompt(narration, style, ratio)
+        if ratio and ratio not in prompt:
+            prompt = f"{prompt}, {ratio} aspect ratio"
         filename = f"scene_{order_index:03d}.png"
+        size = "1024x1792" if ratio == "9:16" else "1792x1024"
 
         if settings.openai_api_key:
             try:
@@ -31,7 +35,7 @@ class ImageService:
                 response = client.images.generate(
                     model="dall-e-3",
                     prompt=prompt,
-                    size="1792x1024",
+                    size=size,
                     quality="standard",
                     n=1,
                 )
@@ -41,13 +45,16 @@ class ImageService:
                 if image_url:
                     img_response = httpx.get(image_url, timeout=60)
                     img_response.raise_for_status()
-                    return storage_service.save_binary(
-                        slug, "images", filename, img_response.content
+                    return (
+                        storage_service.save_binary(
+                            slug, "images", filename, img_response.content
+                        ),
+                        prompt,
                     )
             except Exception as exc:
                 logger.warning("DALL-E generation failed, using placeholder: %s", exc)
 
-        return self._create_placeholder(slug, filename, prompt, order_index)
+        return self._create_placeholder(slug, filename, prompt, order_index, ratio=ratio), prompt
 
     def generate_thumbnail(
         self,
@@ -90,8 +97,12 @@ class ImageService:
         prompt: str,
         index: int,
         subdir: str = "images",
+        ratio: str = "16:9",
     ) -> str:
-        width, height = 1920, 1080
+        if ratio == "9:16":
+            width, height = 1080, 1920
+        else:
+            width, height = 1920, 1080
         img = Image.new("RGB", (width, height), color=(30, 30, 60))
         draw = ImageDraw.Draw(img)
 
@@ -115,8 +126,8 @@ class ImageService:
         return storage_service.save_binary(slug, subdir, filename, buffer.getvalue())
 
     @staticmethod
-    def _wrap_text(text: str, width: int) -> list[str]:
-        words = text.split()
+    def _wrap_text(text: str | None, width: int) -> list[str]:
+        words = (text or "").split()
         lines: list[str] = []
         current: list[str] = []
         for word in words:

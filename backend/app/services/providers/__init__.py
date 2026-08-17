@@ -4,10 +4,12 @@ from .base import TextProvider
 from .cli_provider import CLIProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
+from .openrouter_provider import OpenRouterProvider
 
 PROVIDERS: dict[str, type[TextProvider]] = {
     "openai": OpenAIProvider,
     "ollama": OllamaProvider,
+    "openrouter": OpenRouterProvider,
     "cli": CLIProvider,
     "custom": CLIProvider,
 }
@@ -30,6 +32,8 @@ def build_provider() -> TextProvider | None:
     if choice == "auto":
         if settings.openai_api_key and not is_placeholder_key(settings.openai_api_key):
             return OpenAIProvider()
+        if settings.openrouter_api_key and not is_placeholder_key(settings.openrouter_api_key):
+            return OpenRouterProvider()
         if settings.ai_provider_cli.strip():
             return CLIProvider()
         return None
@@ -47,6 +51,7 @@ __all__ = [
     "TextProvider",
     "OpenAIProvider",
     "OllamaProvider",
+    "OpenRouterProvider",
     "CLIProvider",
     "build_provider",
     "is_placeholder_key",

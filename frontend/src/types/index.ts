@@ -20,6 +20,8 @@ export interface Project {
   language: string;
   status: ProjectStatus;
   folder_path: string;
+  ratio: string;
+  thumbnail: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +51,29 @@ export interface Script {
   updated_at: string;
 }
 
+export interface SceneImage {
+  id: number;
+  scene_id: number;
+  file_path: string;
+  source: string;
+  position: number;
+  created_at: string;
+}
+
+export interface SceneVideo {
+  id: number;
+  scene_id: number;
+  file_path: string;
+  source: string;
+  position: number;
+  created_at: string;
+}
+
+export interface SceneMediaItem {
+  type: "image" | "video";
+  id: number;
+}
+
 export interface Scene {
   id: number;
   project_id: number;
@@ -56,9 +81,13 @@ export interface Scene {
   order_index: number;
   narration: string;
   image_prompt: string | null;
+  video_prompt: string | null;
   image_path: string | null;
+  video_path: string | null;
   audio_path: string | null;
   duration_seconds: number | null;
+  images: SceneImage[];
+  videos: SceneVideo[];
   created_at: string;
   updated_at: string;
 }
@@ -96,15 +125,85 @@ export interface ExportResult {
   message: string;
 }
 
-export const PIPELINE_STEPS: { key: ProjectStatus; label: string }[] = [
-  { key: "draft", label: "Draft" },
-  { key: "idea", label: "Ideas" },
-  { key: "script", label: "Script" },
-  { key: "scenes", label: "Scenes" },
-  { key: "images", label: "Images" },
-  { key: "audio", label: "Voice" },
-  { key: "video", label: "Video" },
-  { key: "thumbnail", label: "Thumbnail" },
-  { key: "seo", label: "SEO" },
-  { key: "exported", label: "Exported" },
-];
+export interface VoiceProvider {
+  id: string;
+  name: string;
+  default: string;
+  voices: string[];
+  requires_key: boolean;
+  key_configured: boolean;
+  voice_labels?: Record<string, string>;
+}
+
+export interface VoiceCatalog {
+  default_provider: string;
+  providers: VoiceProvider[];
+}
+
+export interface VoiceConfig {
+  gemini_key_configured: boolean;
+  sarvam_key_configured: boolean;
+  deepgram_key_configured: boolean;
+  elevenlabs_key_configured: boolean;
+  edgetts_key_configured: boolean;
+}
+
+export interface VideoRatio {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  resolution: string;
+}
+
+export interface VideoRatioCatalog {
+  default: string;
+  ratios: VideoRatio[];
+}
+
+export interface VideoClip {
+  filename: string;
+  name: string;
+  file_path: string;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  size_bytes: number;
+}
+
+export interface VideoStatus {
+  running: boolean;
+  progress: number;
+  stage: string;
+  message: string;
+  output: string | null;
+  error: string | null;
+  updated_at: string | null;
+}
+
+export interface TimelineClip {
+  id: string;
+  scene_id: number;
+  track: "video" | "narration";
+  start: number;
+  duration: number;
+  image_path: string | null;
+  video_path: string | null;
+  audio_path: string | null;
+  audio_in: number | null;
+  audio_out: number | null;
+  volume: number;
+}
+
+export interface TimelineData {
+  version: number;
+  duration: number;
+  clips: TimelineClip[];
+}
+
+export interface TimelineResponse {
+  project_id: number;
+  data: TimelineData;
+  version: number;
+  updated_at: string | null;
+}

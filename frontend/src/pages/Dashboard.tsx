@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
+import { Clapperboard, Trash2 } from "lucide-react";
+import { api, mediaUrl } from "../api/client";
 import type { Project, SEOCategory } from "../types";
+import ToastNotification from "../components/studio/ToastNotification";
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`badge badge-${status}`}>{status}</span>;
@@ -36,6 +38,15 @@ export default function Dashboard() {
       .catch(() => {});
   }, [loadProjects]);
 
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError("");
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
@@ -69,11 +80,44 @@ export default function Dashboard() {
   };
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0.85rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+      {/* Simple Header Bar */}
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0.6rem 1.25rem",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius)",
+          marginBottom: "0.25rem"
+        }}
+      >
+        <Link to="/" style={{ display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none" }}>
+          <div style={{
+            background: "var(--primary)",
+            width: 30,
+            height: 30,
+            borderRadius: "6px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "white",
+            fontWeight: 800,
+            fontSize: "1.1rem"
+          }}>
+            ▶
+          </div>
+          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text)" }}>YouTube Content Studio</span>
+        </Link>
+        <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>Local MVP</span>
+      </header>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
         <div>
-          <h2 style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>Projects</h2>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.15rem" }}>Projects</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
             Manage your AI-powered video production pipeline
           </p>
         </div>
@@ -82,7 +126,14 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <ToastNotification
+          message={error}
+          type="error"
+          onClose={() => setError("")}
+          duration={6000}
+        />
+      )}
 
       {showForm && (
         <form onSubmit={handleCreate} className="card" style={{ marginBottom: "1.5rem" }}>
@@ -150,25 +201,48 @@ export default function Dashboard() {
           <button className="btn-primary" onClick={() => setShowForm(true)}>+ New Project</button>
         </div>
       ) : (
-        <div style={{ display: "grid", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
           {projects.map((project) => (
-            <div key={project.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
-                  <Link to={`/projects/${project.id}`} style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text)", textDecoration: "none" }}>
+            <div key={project.id} className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden", padding: 0 }}>
+              <Link to={`/projects/${project.id}`} style={{ textDecoration: "none", display: "block" }}>
+                <div
+                  style={{
+                    aspectRatio: "16 / 9",
+                    background: "linear-gradient(135deg, #1a1a24, #2a2a3a)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "var(--text-muted)", position: "relative", overflow: "hidden",
+                  }}
+                >
+                  {project.thumbnail ? (
+                    <img src={mediaUrl(project.thumbnail)} alt={project.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <Clapperboard size={40} style={{ opacity: 0.4 }} />
+                  )}
+                </div>
+              </Link>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.9rem", flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
+                  <Link to={`/projects/${project.id}`} style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", textDecoration: "none", lineHeight: 1.25 }}>
                     {project.name}
                   </Link>
                   <StatusBadge status={project.status} />
                 </div>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
+                {project.description && (
+                  <p style={{ color: "var(--text-muted)", fontSize: "0.78rem", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {project.description}
+                  </p>
+                )}
+                <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: "auto" }}>
                   {project.category || "Uncategorized"} · {project.language.toUpperCase()} · Updated {new Date(project.updated_at).toLocaleDateString()}
                 </p>
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <Link to={`/projects/${project.id}`}>
-                  <button className="btn-accent">Open</button>
-                </Link>
-                <button className="btn-secondary" onClick={() => handleDelete(project.id)}>Delete</button>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <Link to={`/projects/${project.id}`} style={{ flex: 1 }}>
+                    <button className="btn-accent" style={{ width: "100%" }}>Open</button>
+                  </Link>
+                  <button className="btn-secondary" onClick={() => handleDelete(project.id)} title="Delete project">
+                    <Trash2 size={14} style={{ verticalAlign: "-2px" }} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

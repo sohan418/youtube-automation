@@ -1,17 +1,58 @@
+import shutil
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Project, ProjectStatus
+from app.models import Project, ProjectStatus, Scene, SceneImage, Thumbnail
 from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
+def _project_thumbnail(db: Session, project_id: int) -> str | None:
+    thumb = (
+        db.query(Thumbnail)
+        .filter(Thumbnail.project_id == project_id)
+        .order_by(Thumbnail.is_selected.desc(), Thumbnail.id.desc())
+        .first()
+    )
+    if thumb:
+        return thumb.file_path
+    img = (
+        db.query(SceneImage)
+        .join(Scene, SceneImage.scene_id == Scene.id)
+        .filter(Scene.project_id == project_id)
+        .order_by(Scene.order_index.asc(), SceneImage.position.asc())
+        .first()
+    )
+    if img:
+        return img.file_path
+    return None
+
+
+def _serialize_project(db: Session, project: Project) -> ProjectResponse:
+    return ProjectResponse(
+        name=project.name,
+        description=project.description,
+        category=project.category,
+        language=project.language,
+        id=project.id,
+        slug=project.slug,
+        status=project.status,
+        folder_path=project.folder_path,
+        ratio=project.ratio or "16:9",
+        thumbnail=_project_thumbnail(db, project.id),
+        created_at=project.created_at,
+        updated_at=project.updated_at,
+    )
+
+
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(db: Session = Depends(get_db)):
-    return db.query(Project).order_by(Project.updated_at.desc()).all()
+    projects = db.query(Project).order_by(Project.updated_at.desc()).all()
+    return [_serialize_project(db, p) for p in projects]
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -39,7 +80,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
     db.add(project)
     db.commit()
     db.refresh(project)
-    return project
+    return _serialize_project(db, project)
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -47,7 +88,7 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    return _serialize_project(db, project)
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
@@ -63,7 +104,7 @@ def update_project(
 
     db.commit()
     db.refresh(project)
-    return project
+    return _serialize_project(db, project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -71,5 +112,17 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    project_dir = storage_service.root.parent / project.folder_path
+    if project_dir.exists():
+        shutil.rmtree(project_dir, ignore_errors=True)
+
+    export_dir = storage_service.exports_root / project.slug
+    if export_dir.exists():
+        shutil.rmtree(export_dir, ignore_errors=True)
+
+    db.query(Thumbnail).filter(Thumbnail.project_id == project_id).delete(
+        synchronize_session=False
+    )
     db.delete(project)
     db.commit()

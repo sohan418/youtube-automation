@@ -1,3 +1,4 @@
+import { Check, ChevronRight } from "lucide-react";
 import type { ProjectStatus } from "../types";
 
 interface Props {
@@ -14,12 +15,12 @@ export default function PipelineStep({ currentStatus, steps }: Props) {
 
   return (
     <div
+      className="scrollable-x"
       style={{
         display: "flex",
         gap: "0.25rem",
-        marginBottom: "1.5rem",
-        overflowX: "auto",
-        padding: "0.5rem 0",
+        marginBottom: "0.6rem",
+        padding: "0.2rem 0",
       }}
     >
       {steps.map((step, i) => {
@@ -31,9 +32,9 @@ export default function PipelineStep({ currentStatus, steps }: Props) {
           <div key={step.key} style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
             <div
               style={{
-                padding: "0.35rem 0.75rem",
+                padding: "0.25rem 0.6rem",
                 borderRadius: "999px",
-                fontSize: "0.7rem",
+                fontSize: "0.68rem",
                 fontWeight: 600,
                 whiteSpace: "nowrap",
                 background: isActive
@@ -45,10 +46,10 @@ export default function PipelineStep({ currentStatus, steps }: Props) {
                 border: `1px solid ${isActive ? "var(--primary)" : isDone ? "var(--success)" : "var(--border)"}`,
               }}
             >
-              {isDone ? "✓ " : ""}{step.label}
+              {isDone ? <Check size={12} style={{ verticalAlign: "-2px" }} /> : null}{step.label}
             </div>
             {i < steps.length - 1 && (
-              <span style={{ color: "var(--border)", fontSize: "0.7rem" }}>→</span>
+              <ChevronRight size={14} style={{ color: "var(--border)", flexShrink: 0 }} />
             )}
           </div>
         );

@@ -13,6 +13,7 @@ class StorageService:
         "video",
         "thumbnail",
         "metadata",
+        "clips",
     ]
 
     def __init__(self) -> None:

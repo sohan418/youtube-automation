@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -24,11 +25,18 @@ class Settings(BaseSettings):
 
     # AI
     openai_api_key: str = ""
-    ai_provider: str = "auto"  # auto | openai | ollama | cli | mock
+    gemini_api_key: str = ""
+    # Voice providers — keys can be set here or entered in the UI (persisted to .env)
+    sarvam_api_key: str = ""
+    deepgram_api_key: str = ""
+    elevenlabs_api_key: str = ""
+    ai_provider: str = "auto"  # auto | openai | ollama | openrouter | cli | mock
     ai_model: str = ""
     openai_model: str = "gpt-4o-mini"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai"
     ai_provider_cli: str = ""  # e.g. 'claude -p "{prompt}"' or 'gemini -p "{prompt}"'
     cli_timeout_seconds: int = 120
 
@@ -59,6 +67,22 @@ class Settings(BaseSettings):
 
     def resolve_path(self, relative: str) -> Path:
         return (BACKEND_DIR / relative).resolve()
+
+    def update_api_key(self, field: str, value: str) -> None:
+        env_name = field.upper()
+        setattr(self, field, value.strip())
+        env_path = BACKEND_DIR / ".env"
+        if not env_path.exists():
+            env_path.write_text(f"{env_name}={value.strip()}\n", encoding="utf-8")
+            return
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+        pattern = re.compile(rf"^\s*{re.escape(env_name)}\s*=")
+        value_line = f"{env_name}={value.strip()}"
+        if any(pattern.match(line) for line in lines):
+            lines = [value_line if pattern.match(line) else line for line in lines]
+        else:
+            lines.append(value_line)
+        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 settings = Settings()

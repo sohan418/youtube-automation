@@ -23,4 +23,4 @@ def serve_media(path: str):
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Not found")
 
-    return FileResponse(file_path)
+    return FileResponse(file_path, headers={"Cache-Control": "no-store"})

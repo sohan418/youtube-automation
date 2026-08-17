@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import ai, export, ideas, images, media, projects, scenes, scripts, seo, thumbnails, video, voice
+from app.routers import ai, export, ideas, images, media, projects, scenes, scene_videos, scripts, seo, thumbnails, timeline, video, voice
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,9 +39,11 @@ app.include_router(projects.router, prefix="/api")
 app.include_router(ideas.router, prefix="/api")
 app.include_router(scripts.router, prefix="/api")
 app.include_router(scenes.router, prefix="/api")
+app.include_router(scene_videos.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(voice.router, prefix="/api")
 app.include_router(video.router, prefix="/api")
+app.include_router(timeline.router, prefix="/api")
 app.include_router(thumbnails.router, prefix="/api")
 app.include_router(seo.router, prefix="/api")
 app.include_router(export.router, prefix="/api")

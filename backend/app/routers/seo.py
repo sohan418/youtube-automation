@@ -93,9 +93,14 @@ def generate_seo(
     if not script:
         raise HTTPException(status_code=400, detail="Generate a script first")
 
-    raw = ai_service.generate_seo(
-        script.title, script.body, payload.language or project.language
-    )
+    try:
+        raw = ai_service.generate_seo(
+            script.title, script.body, payload.language or project.language
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"AI SEO generation failed: {exc}"
+        ) from exc
 
     seo = db.query(SEOMetadata).filter(SEOMetadata.project_id == project_id).first()
     if not seo:

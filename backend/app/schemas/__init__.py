@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,6 +23,7 @@ class ProjectUpdate(BaseModel):
     category: str | None = None
     language: str | None = None
     status: ProjectStatus | None = None
+    ratio: str | None = None
 
 
 class ProjectResponse(ProjectBase):
@@ -31,6 +33,8 @@ class ProjectResponse(ProjectBase):
     slug: str
     status: ProjectStatus
     folder_path: str
+    ratio: str = "16:9"
+    thumbnail: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -44,7 +48,8 @@ class IdeaBase(BaseModel):
 class IdeaGenerateRequest(BaseModel):
     category: str | None = None
     count: int = Field(default=5, ge=1, le=20)
-    language: str = "en"
+    language: str | None = None
+    topic: str | None = None
 
 
 class IdeaResponse(IdeaBase):
@@ -60,8 +65,16 @@ class IdeaResponse(IdeaBase):
 class ScriptGenerateRequest(BaseModel):
     idea_id: int | None = None
     topic: str | None = None
-    language: str = "en"
+    language: str | None = None
     target_duration_minutes: int = Field(default=5, ge=1, le=30)
+
+
+class ScriptCreate(BaseModel):
+    title: str = Field(min_length=1)
+    hook: str | None = None
+    body: str = Field(min_length=1)
+    ending: str | None = None
+    language: str | None = None
 
 
 class ScriptUpdate(BaseModel):
@@ -69,6 +82,15 @@ class ScriptUpdate(BaseModel):
     hook: str | None = None
     body: str | None = None
     ending: str | None = None
+
+
+class ScriptImportRequest(BaseModel):
+    title: str | None = None
+    hook: str | None = None
+    body: str = Field(min_length=1)
+    ending: str | None = None
+    language: str | None = None
+    replace: bool = True
 
 
 class ScriptResponse(BaseModel):
@@ -89,12 +111,55 @@ class ScriptResponse(BaseModel):
 
 class SceneGenerateRequest(BaseModel):
     script_id: int
+    count: int | None = Field(default=None, ge=1, le=30)
+
+
+class SceneCreate(BaseModel):
+    narration: str = Field(min_length=1)
+    image_prompt: str | None = None
+    video_prompt: str | None = None
+    script_id: int | None = None
+    order_index: int | None = None
+
+
+class SceneImportItem(BaseModel):
+    narration: str
+    image_prompt: str | None = None
+    video_prompt: str | None = None
+
+
+class SceneImportRequest(BaseModel):
+    scenes: list[SceneImportItem]
+    replace: bool = True
 
 
 class SceneUpdate(BaseModel):
     narration: str | None = None
     image_prompt: str | None = None
+    video_prompt: str | None = None
     order_index: int | None = None
+
+
+class SceneImageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    scene_id: int
+    file_path: str
+    source: str
+    position: int
+    created_at: datetime
+
+
+class SceneVideoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    scene_id: int
+    file_path: str
+    source: str
+    position: int
+    created_at: datetime
 
 
 class SceneResponse(BaseModel):
@@ -106,9 +171,13 @@ class SceneResponse(BaseModel):
     order_index: int
     narration: str
     image_prompt: str | None
+    video_prompt: str | None
     image_path: str | None
+    video_path: str | None
     audio_path: str | None
     duration_seconds: float | None
+    images: list[SceneImageResponse] = Field(default_factory=list, validation_alias="scene_images")
+    videos: list[SceneVideoResponse] = Field(default_factory=list, validation_alias="scene_videos")
     created_at: datetime
     updated_at: datetime
 
@@ -118,15 +187,117 @@ class ImageGenerateRequest(BaseModel):
     style: str | None = None
 
 
+class ImageLinkRequest(BaseModel):
+    url: str
+
+
+class ImageReorderRequest(BaseModel):
+    image_ids: list[int]
+
+
+class SceneMediaReorderItem(BaseModel):
+    type: Literal["image", "video"]
+    id: int
+
+
+class SceneMediaReorderRequest(BaseModel):
+    items: list[SceneMediaReorderItem]
+
+
+class ImageCopyRequest(BaseModel):
+    scene_id: int
+
+
 class VoiceGenerateRequest(BaseModel):
     scene_id: int | None = None
-    voice: str = "alloy"
+    voice: str | None = None
+    provider: str = "gemini"
     generate_all: bool = False
+    rate: str = "+0%"
+
+
+class VoiceConfigUpdate(BaseModel):
+    sarvam_api_key: str | None = None
+    deepgram_api_key: str | None = None
+    elevenlabs_api_key: str | None = None
+
+
+class TimelineClip(BaseModel):
+    id: str
+    scene_id: int
+    track: str = "video"  # "video" | "narration"
+    start: float = 0.0
+    duration: float = 5.0
+    image_path: str | None = None
+    video_path: str | None = None
+    audio_path: str | None = None
+    audio_in: float | None = None
+    audio_out: float | None = None
+    volume: float = 1.0
+
+
+class TimelineMusic(BaseModel):
+    file_path: str | None = None
+    volume: float = 0.12
+
+
+class TimelineData(BaseModel):
+    version: int = 1
+    duration: float = 0.0
+    clips: list[TimelineClip] = Field(default_factory=list)
+    music: TimelineMusic | None = None
+
+
+class TimelineResponse(BaseModel):
+    project_id: int
+    data: TimelineData
+    version: int = 0
+    updated_at: datetime | None = None
 
 
 class VideoBuildRequest(BaseModel):
     background_music: str | None = None
-    resolution: str = "1920x1080"
+    music_volume: float = Field(default=0.12, ge=0.0, le=1.0)
+    resolution: str | None = None
+    ratio: str = "16:9"
+    timeline: TimelineData | None = None
+
+
+class MusicTrackResponse(BaseModel):
+    filename: str
+    name: str
+    file_path: str
+    duration_seconds: float | None = None
+    size_bytes: int
+
+
+class VideoClipResponse(BaseModel):
+    filename: str
+    name: str
+    file_path: str
+    duration_seconds: float | None = None
+    width: int | None = None
+    height: int | None = None
+    size_bytes: int
+
+
+class MusicSuggestionResponse(BaseModel):
+    mood: str
+    search_keywords: str
+    genre_tags: list[str] = Field(default_factory=list)
+    recommended_volume: float = 0.12
+    explanation: str
+    search_urls: dict[str, str] = Field(default_factory=dict)
+
+
+class VideoStatusResponse(BaseModel):
+    running: bool
+    progress: int
+    stage: str
+    message: str
+    output: str | None = None
+    error: str | None = None
+    updated_at: str | None = None
 
 
 class ThumbnailGenerateRequest(BaseModel):

@@ -28,3 +28,6 @@ logs/*.log
 # Secrets
 *.pem
 credentials.json
+
+# TypeScript build info
+*.tsbuildinfo

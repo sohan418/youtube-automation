@@ -4,7 +4,7 @@ sqlalchemy==2.0.36
 pymysql==1.1.1
 cryptography==44.0.0
 alembic==1.14.0
-pydantic==2.10.3
+pydantic==2.13.4
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
 httpx==0.28.1
@@ -13,3 +13,4 @@ google-genai==2.16.0
 python-multipart==0.0.20
 aiofiles==24.1.0
 Pillow==11.0.0
+edge-tts==7.2.8
