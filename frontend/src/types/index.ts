@@ -207,3 +207,10 @@ export interface TimelineResponse {
   version: number;
   updated_at: string | null;
 }
+
+export interface PromptTemplate {
+  key: string;
+  label: string;
+  system: string;
+  user: string;
+}

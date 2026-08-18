@@ -1,60 +1,23 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  Sparkles,
-  Copy,
   Check,
-  Download,
-  Upload,
   FileText,
   X,
-  Clipboard,
-  Braces,
   Pencil,
+  Search,
+  GripVertical,
+  Film,
+  Image,
+  Video,
+  ChevronLeft,
+  ChevronRight,
+  Lightbulb,
+  MoreVertical,
+  Save,
 } from "lucide-react";
 import type { Scene, Script } from "../../types";
-
-interface Props {
-  scenes: Scene[];
-  activeScript: Script | null;
-  actionLoading: string;
-  sceneCount: string;
-  onSceneCountChange: (v: string) => void;
-  onGenerate: () => void;
-  onClearAll: () => void;
-  addingScene: boolean;
-  addSceneAt: number | null;
-  newSceneNarration: string;
-  onNewSceneNarration: (v: string) => void;
-  onAddScene: () => void;
-  onOpenAdd: (pos: number | null) => void;
-  onCloseAdd: () => void;
-  editingSceneId: number | null;
-  sceneEditForm: {
-    narration: string;
-    image_prompt: string;
-    video_prompt: string;
-  };
-  onEditFormChange: (
-    patch: Partial<{
-      narration: string;
-      image_prompt: string;
-      video_prompt: string;
-    }>,
-  ) => void;
-  onStartEdit: (scene: Scene) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (id: number) => void;
-  onRemove: (id: number) => void;
-  onImportScenes?: (
-    importedList: {
-      narration: string;
-      image_prompt?: string;
-      video_prompt?: string;
-    }[],
-    replace: boolean,
-  ) => Promise<void>;
-  projectName?: string;
-}
+import { mediaUrl } from "../../api/client";
+import FreeAIGuide from "../editors/FreeAIGuide";
 
 function parseImportedText(
   text: string,
@@ -128,6 +91,50 @@ function parseImportedText(
   }));
 }
 
+interface Props {
+  scenes: Scene[];
+  activeScript: Script | null;
+  actionLoading: string;
+  sceneCount: string;
+  onSceneCountChange: (v: string) => void;
+  onGenerate: () => void;
+  onClearAll: () => void;
+  addingScene: boolean;
+  addSceneAt: number | null;
+  newSceneNarration: string;
+  onNewSceneNarration: (v: string) => void;
+  onAddScene: () => void;
+  onOpenAdd: (pos: number | null) => void;
+  onCloseAdd: () => void;
+  editingSceneId: number | null;
+  sceneEditForm: {
+    narration: string;
+    image_prompt: string;
+    video_prompt: string;
+  };
+  onEditFormChange: (
+    patch: Partial<{
+      narration: string;
+      image_prompt: string;
+      video_prompt: string;
+    }>,
+  ) => void;
+  onStartEdit: (scene: Scene) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (id: number) => void;
+  onRemove: (id: number) => void;
+  onImportScenes?: (
+    importedList: {
+      narration: string;
+      image_prompt?: string;
+      video_prompt?: string;
+    }[],
+    replace: boolean,
+  ) => void;
+  projectName?: string;
+  prompts?: { system: string; user: string };
+}
+
 export default function ScenesStep({
   scenes,
   activeScript,
@@ -152,18 +159,21 @@ export default function ScenesStep({
   onRemove,
   onImportScenes,
   projectName = "project",
+  prompts,
 }: Props) {
   const [copiedPromptId, setCopiedPromptId] = useState<number | null>(null);
-  const [copiedAllType, setCopiedAllType] = useState<
-    "prompts" | "full" | "json" | null
-  >(null);
+  const [copiedImagePromptId, setCopiedImagePromptId] = useState<number | null>(null);
+  const [copiedVideoPromptId, setCopiedVideoPromptId] = useState<number | null>(null);
+  const [copiedAllType, setCopiedAllType] = useState<"prompts" | "full" | "json" | null>(null);
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showFreeAI, setShowFreeAI] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState("");
   const [importReplace, setImportReplace] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (scenes.length === 0) setActiveIdx(0);
@@ -184,12 +194,27 @@ export default function ScenesStep({
   }, [scenes.length]);
 
   const handleCopyPrompt = (scene: Scene) => {
-    const textToCopy = scene.image_prompt || scene.narration;
+    const textToCopy = scene.narration;
     if (!textToCopy) return;
-    const prefix = scene.image_prompt ? "Generate an image: " : "";
-    navigator.clipboard.writeText(prefix + textToCopy);
+    navigator.clipboard.writeText(textToCopy);
     setCopiedPromptId(scene.id);
     setTimeout(() => setCopiedPromptId(null), 2000);
+  };
+
+  const handleCopyImagePrompt = (scene: Scene) => {
+    const text = scene.image_prompt || "";
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedImagePromptId(scene.id);
+    setTimeout(() => setCopiedImagePromptId(null), 2000);
+  };
+
+  const handleCopyVideoPrompt = (scene: Scene) => {
+    const text = scene.video_prompt || "";
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedVideoPromptId(scene.id);
+    setTimeout(() => setCopiedVideoPromptId(null), 2000);
   };
 
   const handleCopyAllPrompts = () => {
@@ -288,6 +313,8 @@ export default function ScenesStep({
   };
 
   const parsedImportScenes = parseImportedText(importText);
+
+  // Add scene popover card
   const sceneForm = (position: number | null) => {
     if (!addingScene || addSceneAt !== position) return null;
     const label =
@@ -297,14 +324,8 @@ export default function ScenesStep({
           ? "Inserting new scene at the top"
           : `Inserting new scene after scene #${addSceneAt - 1}`;
     return (
-      <div className="card" style={{ background: "var(--bg)" }}>
-        <p
-          style={{
-            fontSize: "0.8rem",
-            color: "var(--text-muted)",
-            marginBottom: "0.4rem",
-          }}
-        >
+      <div className="card" style={{ background: "rgba(255, 255, 255, 0.015)", border: "1px solid var(--border)", padding: "1rem", display: "grid", gap: "0.5rem" }}>
+        <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, fontWeight: 600 }}>
           {label}
         </p>
         <textarea
@@ -312,18 +333,17 @@ export default function ScenesStep({
           onChange={(e) => onNewSceneNarration(e.target.value)}
           placeholder="Enter the narration (voice-over text) for this scene..."
           rows={3}
-          style={{ width: "100%", marginBottom: "0.5rem" }}
+          style={{ width: "100%", fontSize: "0.82rem" }}
         />
-        <div
-          style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}
-        >
-          <button className="btn-secondary" onClick={onCloseAdd}>
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+          <button className="btn-secondary" onClick={onCloseAdd} style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}>
             Cancel
           </button>
           <button
             className="btn-primary"
             disabled={!newSceneNarration.trim() || !!actionLoading}
             onClick={onAddScene}
+            style={{ padding: "0.25rem 0.75rem", fontSize: "0.75rem", background: "var(--primary)" }}
           >
             {actionLoading === "add-scene" ? "Adding..." : "Add Scene"}
           </button>
@@ -332,42 +352,55 @@ export default function ScenesStep({
     );
   };
 
+  const activeScene = scenes[activeIdx];
+  const filteredScenes = scenes.filter((scene) =>
+    scene.narration.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const calculateDuration = (narration: string) => {
+    return Math.max(3, Math.round(narration.length * 0.15));
+  };
+
+  const formatDurationText = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
   return (
-    <div className="card">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "0.6rem",
-          flexWrap: "wrap",
-          gap: "0.4rem",
-        }}
-      >
-        <h3 style={{ fontSize: "1.05rem" }}>Scenes ({scenes.length})</h3>
-        <div
-          style={{
-            display: "flex",
-            gap: "0.35rem",
-            alignItems: "center",
-            flexWrap: "wrap",
-            position: "relative",
-          }}
-        >
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", height: "100%", overflow: "hidden" }}>
+      {/* 1. Header Toolbar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+        <div>
+          <h2 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0 }}>Scenes ({scenes.length})</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", margin: "2px 0 0 0" }}>
+            Organize, review and refine each part of your video
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap", position: "relative" }}>
           <button
-            className="btn-accent"
+            className="btn-primary"
             disabled={!!actionLoading || !activeScript}
             onClick={onGenerate}
-            style={{ padding: "0.3rem 0.65rem", fontSize: "0.78rem" }}
+            style={{ padding: "0.4rem 0.95rem", fontSize: "0.78rem", background: "var(--primary)", color: "white", fontWeight: 600 }}
           >
-            {actionLoading === "scenes" ? (
-              "Generating..."
-            ) : (
-              <>
-                <Sparkles size={13} style={{ verticalAlign: "middle" }} />{" "}
-                Generate Scenes
-              </>
-            )}
+            {actionLoading === "scenes" ? "Generating..." : "Generate Scenes"}
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={() => setShowFreeAI(!showFreeAI)}
+            style={{
+              padding: "0.4rem 0.85rem",
+              fontSize: "0.78rem",
+              borderColor: showFreeAI ? "var(--primary)" : "var(--border)",
+              color: showFreeAI ? "var(--primary)" : "var(--text-muted)",
+              background: showFreeAI ? "rgba(255, 0, 60, 0.05)" : "transparent",
+              fontWeight: 600,
+            }}
+          >
+            Free AI
           </button>
 
           <input
@@ -381,16 +414,16 @@ export default function ScenesStep({
             style={{
               width: "3.8rem",
               textAlign: "center",
-              padding: "0.3rem 0.35rem",
+              padding: "0.38rem 0.35rem",
               fontSize: "0.78rem",
             }}
           />
 
           <button
-            className="btn-primary"
+            className="btn-accent"
             disabled={!!actionLoading}
             onClick={() => onOpenAdd(null)}
-            style={{ padding: "0.3rem 0.65rem", fontSize: "0.78rem" }}
+            style={{ padding: "0.4rem 0.85rem", fontSize: "0.78rem" }}
           >
             + Add Scene
           </button>
@@ -405,7 +438,7 @@ export default function ScenesStep({
                 setShowExportMenu(false);
               }}
               style={{
-                padding: "0.3rem 0.6rem",
+                padding: "0.4rem 0.8rem",
                 fontSize: "0.78rem",
                 display: "flex",
                 alignItems: "center",
@@ -414,15 +447,7 @@ export default function ScenesStep({
                 color: copiedAllType ? "var(--success)" : undefined,
               }}
             >
-              {copiedAllType ? (
-                <>
-                  <Check size={12} /> Copied All!
-                </>
-              ) : (
-                <>
-                  <Copy size={12} /> Copy All ▾
-                </>
-              )}
+              {copiedAllType ? "Copied!" : "Copy All ▾"}
             </button>
 
             {showCopyMenu && (
@@ -445,43 +470,21 @@ export default function ScenesStep({
               >
                 <button
                   onClick={handleCopyAllPrompts}
-                  style={{
-                    textAlign: "left",
-                    background: "transparent",
-                    padding: "0.4rem 0.6rem",
-                    fontSize: "0.75rem",
-                    color: "var(--text)",
-                  }}
+                  style={{ textAlign: "left", background: "transparent", padding: "0.4rem 0.6rem", fontSize: "0.75rem", color: "var(--text)" }}
                 >
-                  <Clipboard size={14} style={{ verticalAlign: "-2px" }} />{" "}
-                  <strong>Copy All Image Prompts</strong> (for
-                  Midjourney/DALL-E)
+                  Copy All Image Prompts
                 </button>
                 <button
                   onClick={handleCopyAllFull}
-                  style={{
-                    textAlign: "left",
-                    background: "transparent",
-                    padding: "0.4rem 0.6rem",
-                    fontSize: "0.75rem",
-                    color: "var(--text)",
-                  }}
+                  style={{ textAlign: "left", background: "transparent", padding: "0.4rem 0.6rem", fontSize: "0.75rem", color: "var(--text)" }}
                 >
-                  <FileText size={14} style={{ verticalAlign: "-2px" }} />{" "}
-                  <strong>Copy All Scenes & Text</strong>
+                  Copy All Scenes & Text
                 </button>
                 <button
                   onClick={handleCopyAllJson}
-                  style={{
-                    textAlign: "left",
-                    background: "transparent",
-                    padding: "0.4rem 0.6rem",
-                    fontSize: "0.75rem",
-                    color: "var(--text)",
-                  }}
+                  style={{ textAlign: "left", background: "transparent", padding: "0.4rem 0.6rem", fontSize: "0.75rem", color: "var(--text)" }}
                 >
-                  <Braces size={13} style={{ verticalAlign: "-2px" }} />{" "}
-                  <strong>Copy Raw JSON</strong>
+                  Copy All JSON
                 </button>
               </div>
             )}
@@ -496,15 +499,9 @@ export default function ScenesStep({
                 setShowExportMenu(!showExportMenu);
                 setShowCopyMenu(false);
               }}
-              style={{
-                padding: "0.3rem 0.6rem",
-                fontSize: "0.78rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.25rem",
-              }}
+              style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}
             >
-              <Download size={12} /> Export ▾
+              Export ▾
             </button>
 
             {showExportMenu && (
@@ -519,7 +516,7 @@ export default function ScenesStep({
                   border: "1px solid var(--border)",
                   borderRadius: "var(--radius)",
                   boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                  width: 170,
+                  width: 140,
                   padding: "0.3rem",
                   display: "grid",
                   gap: "0.25rem",
@@ -527,451 +524,522 @@ export default function ScenesStep({
               >
                 <button
                   onClick={handleExportJson}
-                  style={{
-                    textAlign: "left",
-                    background: "transparent",
-                    padding: "0.4rem 0.6rem",
-                    fontSize: "0.75rem",
-                    color: "var(--text)",
-                  }}
+                  style={{ textAlign: "left", background: "transparent", padding: "0.4rem 0.6rem", fontSize: "0.75rem", color: "var(--text)" }}
                 >
-                  📁 Export JSON (.json)
+                  Export JSON
                 </button>
                 <button
                   onClick={handleExportTxt}
-                  style={{
-                    textAlign: "left",
-                    background: "transparent",
-                    padding: "0.4rem 0.6rem",
-                    fontSize: "0.75rem",
-                    color: "var(--text)",
-                  }}
+                  style={{ textAlign: "left", background: "transparent", padding: "0.4rem 0.6rem", fontSize: "0.75rem", color: "var(--text)" }}
                 >
-                  <FileText size={14} style={{ verticalAlign: "-2px" }} />{" "}
-                  <strong>Export Text (.txt)</strong>
+                  Export Text (.txt)
                 </button>
               </div>
             )}
           </div>
 
-          {/* Import Button */}
           <button
             className="btn-secondary"
-            disabled={!!actionLoading}
             onClick={() => setShowImportModal(true)}
-            style={{
-              padding: "0.3rem 0.6rem",
-              fontSize: "0.78rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.25rem",
-            }}
-            title="Import scenes from JSON or Text file"
+            style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}
           >
-            <Upload size={12} /> Import
+            Import
+          </button>
+
+          <button
+            className="btn-accent"
+            onClick={() => setShowFreeAI(!showFreeAI)}
+            style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem", background: showFreeAI ? "var(--primary)" : undefined, color: showFreeAI ? "white" : undefined }}
+          >
+            {showFreeAI ? "Hide Free AI" : "Generate with Free AI"}
           </button>
 
           <button
             className="btn-secondary"
-            disabled={!!actionLoading || scenes.length === 0}
+            disabled={scenes.length === 0 || !!actionLoading}
             onClick={onClearAll}
-            style={{
-              color: "var(--danger)",
-              padding: "0.3rem 0.6rem",
-              fontSize: "0.78rem",
-            }}
+            style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem", color: "var(--danger)", borderColor: "rgba(255,0,0,0.15)" }}
           >
             Clear
           </button>
         </div>
       </div>
 
+      {showFreeAI && (
+        <FreeAIGuide
+          title="Generate Scenes with Free AI"
+          prompt={prompts ? undefined : `SYSTEM PROMPT:\nYou are a video director. Break scripts into scenes as JSON.\nEach scene has a "narration", an "image_prompt", and a "video_prompt".\n\nUSER PROMPT:\nBreak this script into scenes. Each scene needs narration, image prompt, and video prompt.\nReturn JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}`}
+          promptPair={prompts}
+          responsePlaceholder='Paste AI response here...\n\nAccepts JSON or plain text scenes.'
+          onParseResponse={(text) => {
+            if (!onImportScenes) return;
+            try {
+              const jsonMatch = text.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                const sceneList = parsed.scenes || parsed;
+                if (Array.isArray(sceneList)) {
+                  const scenes = sceneList.map((s: any) => ({
+                    narration: s.narration || "",
+                    image_prompt: s.image_prompt || "",
+                    video_prompt: s.video_prompt || "",
+                  })).filter((s: any) => s.narration);
+                  if (scenes.length > 0) {
+                    onImportScenes(scenes, false);
+                  }
+                }
+              }
+            } catch {
+              // Fallback: treat as plain text
+            }
+          }}
+        />
+      )}
+
       {scenes.length === 0 ? (
-        <div style={{ display: "grid", gap: "0.4rem" }}>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-            Generate a script first, then break it into scenes, or click{" "}
-            <strong>Import</strong> to load scenes from a file.
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "var(--surface)", border: "1px dashed var(--border)", borderRadius: "var(--radius)", padding: "2rem" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "0.85rem" }}>
+            No scenes have been generated yet. Use script content or import tools to build your scene deck.
           </p>
-          {sceneForm(null)}
+          <button
+            className="btn-primary"
+            disabled={!!actionLoading || !activeScript}
+            onClick={onGenerate}
+            style={{ padding: "0.45rem 1rem", fontSize: "0.8rem", background: "var(--primary)" }}
+          >
+            Generate Scenes from Script
+          </button>
         </div>
       ) : (
-        <div style={{ display: "flex", gap: "0.5rem", minHeight: 320 }}>
-          {/* Scene Sidebar */}
+        /* 2. Main Workspace Split (Left sidebar list + Right canvas details) */
+        <div style={{ flex: 1, display: "flex", gap: "0.85rem", minHeight: 0, overflow: "hidden" }}>
+          
+          {/* Left Column: Scene Navigation Sidebar */}
           <div
             style={{
-              width: 200,
+              width: 250,
               flexShrink: 0,
               border: "1px solid var(--border)",
               borderRadius: "var(--radius)",
-              overflowY: "auto",
-              background: "var(--bg)",
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--surface)",
+              overflow: "hidden",
             }}
           >
-            {scenes.map((scene, idx) => (
-              <div
-                key={scene.id}
-                onClick={() => setActiveIdx(idx)}
+            {/* Search Input */}
+            <div style={{ padding: "0.55rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "0.35rem", background: "rgba(0,0,0,0.08)" }}>
+              <Search size={13} color="var(--text-muted)" />
+              <input
+                type="text"
+                placeholder="Search scenes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
-                  padding: "0.5rem 0.6rem",
-                  cursor: "pointer",
-                  background:
-                    idx === activeIdx ? "var(--primary-dim, rgba(100,100,255,0.12))" : "transparent",
-                  borderLeft:
-                    idx === activeIdx
-                      ? "3px solid var(--primary)"
-                      : "3px solid transparent",
-                  transition: "background 0.12s",
+                  border: "none",
+                  background: "transparent",
+                  outline: "none",
+                  fontSize: "0.75rem",
+                  color: "var(--text)",
+                  width: "100%",
+                  padding: 0,
                 }}
-                onMouseEnter={(e) => {
-                  if (idx !== activeIdx)
-                    e.currentTarget.style.background = "var(--surface)";
-                }}
-                onMouseLeave={(e) => {
-                  if (idx !== activeIdx)
-                    e.currentTarget.style.background = "transparent";
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    marginBottom: "0.2rem",
-                  }}
-                >
-                  <span
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} style={{ background: "transparent", border: "none", padding: 0 }}>
+                  <X size={12} color="var(--text-muted)" style={{ cursor: "pointer" }} />
+                </button>
+              )}
+            </div>
+
+            {/* List scroll wrapper */}
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1px", background: "var(--border)" }}>
+              {filteredScenes.map((scene) => {
+                const idx = scenes.findIndex((s) => s.id === scene.id);
+                const active = idx === activeIdx;
+                const durationVal = calculateDuration(scene.narration);
+                const durationStr = formatDurationText(durationVal);
+
+                return (
+                  <button
+                    key={scene.id}
+                    onClick={() => setActiveIdx(idx)}
                     style={{
-                      background:
-                        idx === activeIdx ? "var(--primary)" : "var(--border)",
-                      color: "#fff",
-                      borderRadius: "50%",
-                      width: 18,
-                      height: 18,
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "0.6rem",
-                      fontWeight: 700,
-                      flexShrink: 0,
+                      gap: "0.55rem",
+                      width: "100%",
+                      background: active ? "rgba(255, 0, 60, 0.05)" : "var(--surface)",
+                      border: "none",
+                      borderLeft: active ? "3px solid var(--primary)" : "3px solid transparent",
+                      padding: "0.55rem 0.65rem",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      transition: "all 0.12s ease",
+                      borderBottom: "1px solid var(--border)",
                     }}
                   >
-                    {scene.order_index}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "0.72rem",
-                      fontWeight: idx === activeIdx ? 600 : 400,
-                      color: "var(--text)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Scene {scene.order_index}
-                  </span>
-                </div>
-                <p
-                  style={{
-                    fontSize: "0.68rem",
-                    color: "var(--text-muted)",
-                    margin: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {(scene.narration || "").slice(0, 40)}
-                  {(scene.narration || "").length > 40 ? "..." : ""}
-                </p>
-              </div>
-            ))}
+                    {/* Circle badge */}
+                    <div
+                      style={{
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
+                        background: active ? "var(--primary)" : "rgba(255, 255, 255, 0.08)",
+                        color: active ? "white" : "var(--text-muted)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {idx + 1}
+                    </div>
+
+                    {/* Layout icon */}
+                    <div style={{ color: "var(--text-muted)", display: "flex", alignItems: "center", flexShrink: 0 }}>
+                      <Film size={12} />
+                    </div>
+
+                    {/* Meta info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "0.78rem", fontWeight: active ? 700 : 600, color: "var(--text)", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span>Scene {idx + 1}</span>
+                      </div>
+                      <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", margin: "1px 0 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {scene.narration}
+                      </p>
+                    </div>
+
+                    {/* Time & Grip */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", flexShrink: 0 }}>
+                      <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: 500 }}>{durationStr}</span>
+                      <GripVertical size={11} color="var(--text-muted)" style={{ opacity: 0.5 }} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Stretched add button */}
             <button
               onClick={() => onOpenAdd(null)}
               disabled={!!actionLoading}
               style={{
                 width: "100%",
+                background: "rgba(255, 255, 255, 0.015)",
                 border: "none",
                 borderTop: "1px solid var(--border)",
-                background: "var(--surface)",
                 color: "var(--text-muted)",
-                padding: "0.35rem 0.5rem",
+                padding: "0.65rem",
                 cursor: "pointer",
-                fontSize: "0.72rem",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                textAlign: "center",
+                transition: "all 0.1s ease",
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.025)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.015)")}
             >
               + Add Scene
             </button>
           </div>
 
-          {/* Active Scene Detail */}
-          <div style={{ flex: 1, display: "grid", gap: "0.35rem", minWidth: 0 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  color: "var(--text)",
-                }}
-              >
-                Scene {scenes[activeIdx]?.order_index ?? activeIdx + 1} of{" "}
-                {scenes.length}
-              </span>
-              <span
-                style={{
-                  color: "var(--text-muted)",
-                  fontSize: "0.72rem",
-                  marginLeft: "auto",
-                }}
-              >
+          {/* Right Column: Canvas Workspace */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.65rem", minWidth: 0, overflowY: "auto" }}>
+            
+            {/* Header row */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text)" }}>
+                  Scene {activeIdx + 1} of {scenes.length}
+                </span>
+                <div style={{ display: "flex", gap: "0.15rem" }}>
+                  <button
+                    className="btn-secondary"
+                    disabled={activeIdx <= 0}
+                    onClick={() => setActiveIdx(activeIdx - 1)}
+                    style={{ padding: "0.15rem 0.35rem" }}
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={activeIdx >= scenes.length - 1}
+                    onClick={() => setActiveIdx(activeIdx + 1)}
+                    style={{ padding: "0.15rem 0.35rem" }}
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+              <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>
                 Use ← / → keys to switch scenes
               </span>
             </div>
 
+            {/* Popover form for inserting scene */}
             {sceneForm(null)}
-            {scenes.map((scene, idx) => {
-              if (idx !== activeIdx) return null;
-              return (
-                <div key={scene.id} style={{ display: "grid", gap: "0.35rem" }}>
-                  <div
-                    className="card"
-                    style={{ background: "var(--bg)", padding: "0.5rem 0.75rem" }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "0.6rem",
-                        alignItems: "start",
-                      }}
-                    >
-                      <span
-                        style={{
-                          background: "var(--primary)",
-                          color: "white",
-                          borderRadius: "50%",
-                          width: 24,
-                          height: 24,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "0.7rem",
-                          fontWeight: 700,
-                          flexShrink: 0,
-                          marginTop: "2px",
-                        }}
-                      >
-                        {scene.order_index}
+
+            {/* Main two-column editor */}
+            {activeScene && (
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "0.85rem", flex: 1, minHeight: 0 }}>
+                
+                {/* Left side: Prompts & Narration */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                  
+                  {/* Card 1: Narration */}
+                  <div className="card" style={{ padding: "0.75rem 0.85rem", background: "var(--surface)", display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)" }}>
+                        Scene Title / Prompt
                       </span>
-                      {editingSceneId === scene.id ? (
-                        <div style={{ flex: 1, display: "grid", gap: "0.5rem" }}>
-                          <textarea
-                            value={sceneEditForm.narration}
-                            onChange={(e) =>
-                              onEditFormChange({ narration: e.target.value })
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                        <button
+                          className="btn-secondary"
+                          onClick={() => handleCopyPrompt(activeScene)}
+                          style={{ padding: "0.2rem 0.5rem", fontSize: "0.68rem" }}
+                        >
+                          {copiedPromptId === activeScene.id ? "Copied" : "Copy Prompt"}
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          onClick={() => {
+                            if (editingSceneId === activeScene.id) {
+                              onCancelEdit();
+                            } else {
+                              onStartEdit(activeScene);
                             }
-                            rows={3}
-                            placeholder="Scene narration"
-                            style={{ width: "100%" }}
-                          />
-                          <textarea
-                            value={sceneEditForm.image_prompt}
-                            onChange={(e) =>
-                              onEditFormChange({ image_prompt: e.target.value })
-                            }
-                            rows={2}
-                            placeholder="Image prompt"
-                            style={{ width: "100%", fontStyle: "italic" }}
-                          />
-                          <textarea
-                            value={sceneEditForm.video_prompt}
-                            onChange={(e) =>
-                              onEditFormChange({ video_prompt: e.target.value })
-                            }
-                            rows={2}
-                            placeholder="Video prompt"
-                            style={{ width: "100%", fontStyle: "italic" }}
-                          />
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "0.5rem",
-                              justifyContent: "flex-end",
-                            }}
-                          >
-                            <button
-                              className="btn-secondary"
-                              disabled={!!actionLoading}
-                              onClick={onCancelEdit}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              className="btn-primary"
-                              disabled={
-                                !!actionLoading || !sceneEditForm.narration.trim()
-                              }
-                              onClick={() => onSaveEdit(scene.id)}
-                            >
-                              {actionLoading === `edit-scene-${scene.id}`
-                                ? "Saving..."
-                                : "Save"}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ flex: 1 }}>
-                            <p
-                              onClick={() => onStartEdit(scene)}
-                              style={{
-                                marginBottom: "0.4rem",
-                                cursor: "text",
-                                borderRadius: "4px",
-                                fontSize: "0.85rem",
-                              }}
-                              title="Click to edit this scene's text"
-                            >
-                              {scene.narration}
-                            </p>
-                            {scene.image_prompt && (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.5rem",
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <p
-                                  style={{
-                                    fontSize: "0.78rem",
-                                    color: "var(--text-muted)",
-                                    fontStyle: "italic",
-                                    flex: 1,
-                                  }}
-                                >
-                                  <strong>Image Prompt:</strong>{" "}
-                                  {scene.image_prompt}
-                                </p>
-                              </div>
-                            )}
-                            {scene.video_prompt && (
-                              <p
-                                style={{
-                                  fontSize: "0.78rem",
-                                  color: "var(--text-muted)",
-                                  fontStyle: "italic",
-                                  marginTop: "0.25rem",
-                                }}
-                              >
-                                <strong>Video Prompt:</strong>{" "}
-                                {scene.video_prompt}
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            className="btn-secondary"
-                            onClick={() => handleCopyPrompt(scene)}
-                            title="Copy image prompt to generate on Midjourney, Leonardo AI, DALL-E, etc."
-                            style={{
-                              fontSize: "0.75rem",
-                              padding: "0.25rem 0.5rem",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              color:
-                                copiedPromptId === scene.id
-                                  ? "var(--success)"
-                                  : "var(--text)",
-                              borderColor:
-                                copiedPromptId === scene.id
-                                  ? "var(--success)"
-                                  : "var(--border)",
-                            }}
-                          >
-                            {copiedPromptId === scene.id ? (
-                              <>
-                                <Check size={12} /> Copied
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={12} /> Copy Prompt
-                              </>
-                            )}
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            disabled={!!actionLoading}
-                            onClick={() => onStartEdit(scene)}
-                            style={{
-                              fontSize: "0.75rem",
-                              padding: "0.25rem 0.5rem",
-                            }}
-                          >
-                            <Pencil size={12} style={{ verticalAlign: "-2px" }} />{" "}
-                            Edit
-                          </button>
-                        </>
-                      )}
+                          }}
+                          style={{ padding: "0.2rem 0.5rem", fontSize: "0.68rem", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                        >
+                          <Pencil size={11} />
+                          {editingSceneId === activeScene.id ? "Cancel" : "Edit"}
+                        </button>
+                        <MoreVertical size={14} color="var(--text-muted)" style={{ cursor: "pointer" }} />
+                      </div>
+                    </div>
+
+                    {editingSceneId === activeScene.id ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                        <textarea
+                          value={sceneEditForm.narration}
+                          onChange={(e) => onEditFormChange({ narration: e.target.value })}
+                          rows={3}
+                          placeholder="Scene narration"
+                          style={{ width: "100%", fontSize: "0.85rem", lineHeight: 1.5 }}
+                        />
+                        <span style={{ alignSelf: "flex-end", fontSize: "0.65rem", color: "var(--text-muted)" }}>
+                          {sceneEditForm.narration.length}/200
+                        </span>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: "0.88rem", lineHeight: 1.5, margin: 0, color: "var(--text)", fontWeight: 500 }}>
+                        {activeScene.narration}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Card 2: Image Prompt */}
+                  <div className="card" style={{ padding: "0.75rem 0.85rem", background: "var(--surface)", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                        <Image size={13} />
+                        Image Prompt
+                      </span>
                       <button
-                        title="Remove scene"
-                        disabled={!!actionLoading}
-                        onClick={() => onRemove(scene.id)}
-                        style={{
-                          border: "none",
-                          background: "var(--surface2, var(--bg))",
-                          cursor: "pointer",
-                          borderRadius: "4px",
-                          fontSize: "0.8rem",
-                          padding: "0.2rem 0.45rem",
-                          color: "var(--danger)",
-                        }}
+                        className="btn-secondary"
+                        onClick={() => handleCopyImagePrompt(activeScene)}
+                        disabled={!activeScene.image_prompt}
+                        style={{ padding: "0.2rem 0.5rem", fontSize: "0.68rem" }}
                       >
-                        <X size={14} />
+                        {copiedImagePromptId === activeScene.id ? "Copied" : "Copy"}
                       </button>
                     </div>
+
+                    {editingSceneId === activeScene.id ? (
+                      <textarea
+                        value={sceneEditForm.image_prompt}
+                        onChange={(e) => onEditFormChange({ image_prompt: e.target.value })}
+                        rows={2}
+                        placeholder="Image prompt description"
+                        style={{ width: "100%", fontSize: "0.8rem", fontStyle: "italic" }}
+                      />
+                    ) : (
+                      <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.45 }}>
+                        {activeScene.image_prompt || "No image prompt defined."}
+                      </p>
+                    )}
                   </div>
-                  {sceneForm(scene.order_index + 1)}
-                  <button
-                    onClick={() => onOpenAdd(scene.order_index + 1)}
-                    disabled={!!actionLoading}
+
+                  {/* Card 3: Video Prompt */}
+                  <div className="card" style={{ padding: "0.75rem 0.85rem", background: "var(--surface)", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                        <Video size={13} />
+                        Video Prompt
+                      </span>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => handleCopyVideoPrompt(activeScene)}
+                        disabled={!activeScene.video_prompt}
+                        style={{ padding: "0.2rem 0.5rem", fontSize: "0.68rem" }}
+                      >
+                        {copiedVideoPromptId === activeScene.id ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+
+                    {editingSceneId === activeScene.id ? (
+                      <textarea
+                        value={sceneEditForm.video_prompt}
+                        onChange={(e) => onEditFormChange({ video_prompt: e.target.value })}
+                        rows={2}
+                        placeholder="Video movement motion prompt"
+                        style={{ width: "100%", fontSize: "0.8rem", fontStyle: "italic" }}
+                      />
+                    ) : (
+                      <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.45 }}>
+                        {activeScene.video_prompt || "No video prompt defined."}
+                      </p>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Right side: Preview & Style badging & save action */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                  
+                  {/* Scene Preview */}
+                  <div className="card" style={{ padding: "0.75rem 0.85rem", background: "var(--surface)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)" }}>
+                      Scene Preview
+                    </span>
+
+                    {/* Image Box */}
+                    <div
+                      style={{
+                        position: "relative",
+                        aspectRatio: "16/9",
+                        width: "100%",
+                        background: "rgba(0,0,0,0.25)",
+                        borderRadius: "6px",
+                        overflow: "hidden",
+                        border: "1px solid var(--border)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {activeScene.image_path ? (
+                        <img
+                          src={`${mediaUrl(activeScene.image_path)}`}
+                          alt={`Scene ${activeIdx + 1}`}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.35rem", color: "var(--text-muted)" }}>
+                          <Image size={24} style={{ opacity: 0.4 }} />
+                          <span style={{ fontSize: "0.68rem" }}>Generate media in the next step</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Badges footer */}
+                    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.2rem" }}>
+                      <span style={{ fontSize: "0.65rem", padding: "0.15rem 0.5rem", borderRadius: "12px", background: "rgba(0, 184, 212, 0.1)", color: "var(--accent)", border: "1px solid rgba(0, 184, 212, 0.2)", fontWeight: 600 }}>
+                        Visual Style: Futuristic
+                      </span>
+                      <span style={{ fontSize: "0.65rem", padding: "0.15rem 0.5rem", borderRadius: "12px", background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", border: "1px solid var(--border)", fontWeight: 600 }}>
+                        Duration: ~{formatDurationText(calculateDuration(activeScene.narration))} sec
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tip banner */}
+                  <div
                     style={{
-                      border: "1px dashed var(--border)",
-                      background: "var(--surface)",
-                      color: "var(--text-muted)",
-                      borderRadius: "var(--radius)",
-                      padding: "0.25rem 0.5rem",
-                      cursor: "pointer",
-                      fontSize: "0.75rem",
+                      display: "flex",
+                      gap: "0.45rem",
+                      alignItems: "start",
+                      background: "rgba(0, 184, 212, 0.03)",
+                      border: "1px solid rgba(0, 184, 212, 0.15)",
+                      borderRadius: "6px",
+                      padding: "0.6rem 0.75rem",
                     }}
                   >
-                    + Insert scene after #{scene.order_index}
-                  </button>
+                    <Lightbulb size={13} color="var(--accent)" style={{ marginTop: "2px", flexShrink: 0 }} />
+                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                      <strong>Tip:</strong> Add more details to your prompts for better AI-generated results.
+                    </span>
+                  </div>
+
+                  {/* Actions buttons */}
+                  <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginTop: "auto" }}>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete Scene #${activeIdx + 1}?`)) {
+                          onRemove(activeScene.id);
+                        }
+                      }}
+                      disabled={!!actionLoading}
+                      style={{
+                        padding: "0.45rem 1rem",
+                        fontSize: "0.78rem",
+                        color: "var(--danger)",
+                        background: "transparent",
+                        border: "1px solid rgba(255, 0, 60, 0.25)",
+                        borderRadius: "var(--radius)",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Delete Scene
+                    </button>
+
+                    <button
+                      className="btn-primary"
+                      disabled={
+                        !!actionLoading ||
+                        (editingSceneId === activeScene.id && !sceneEditForm.narration.trim())
+                      }
+                      onClick={() => {
+                        if (editingSceneId === activeScene.id) {
+                          onSaveEdit(activeScene.id);
+                        } else {
+                          onStartEdit(activeScene);
+                        }
+                      }}
+                      style={{
+                        padding: "0.45rem 1.1rem",
+                        fontSize: "0.78rem",
+                        background: "var(--primary)",
+                        color: "white",
+                        fontWeight: 600,
+                        boxShadow: "0 0 10px rgba(255, 0, 60, 0.15)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                      }}
+                    >
+                      {editingSceneId === activeScene.id && (actionLoading === `edit-scene-${activeScene.id}` || actionLoading === "edit-scene") ? (
+                        "Saving..."
+                      ) : (
+                        <>
+                          <Save size={13} />
+                          {editingSceneId === activeScene.id ? "Save Changes" : "Edit Scene"}
+                        </>
+                      )}
+                    </button>
+                  </div>
+
                 </div>
-              );
-            })}
-            <button
-              onClick={() => onOpenAdd(null)}
-              disabled={!!actionLoading}
-              style={{
-                border: "1px dashed var(--border)",
-                background: "var(--surface)",
-                color: "var(--text-muted)",
-                borderRadius: "var(--radius)",
-                padding: "0.25rem 0.5rem",
-                cursor: "pointer",
-                fontSize: "0.75rem",
-              }}
-            >
-              + Add scene at the end
-            </button>
+
+              </div>
+            )}
           </div>
+
         </div>
       )}
 
@@ -1000,34 +1068,17 @@ export default function ScenesStep({
               boxShadow: "var(--shadow)",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "0.75rem",
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
               <h3 style={{ fontSize: "1.1rem" }}>Import Scenes</h3>
               <button
                 onClick={() => setShowImportModal(false)}
-                style={{
-                  background: "transparent",
-                  color: "var(--text-muted)",
-                  fontSize: "1.1rem",
-                }}
+                style={{ background: "transparent", color: "var(--text-muted)", fontSize: "1.1rem" }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <p
-              style={{
-                fontSize: "0.8rem",
-                color: "var(--text-muted)",
-                marginBottom: "0.75rem",
-              }}
-            >
+            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
               Upload a <strong>JSON</strong> or <strong>Text</strong> file, or
               paste your scenes text/JSON directly into the box below.
             </p>
@@ -1043,14 +1094,7 @@ export default function ScenesStep({
               <button
                 className="btn-secondary"
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                  fontSize: "0.8rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  width: "100%",
-                  justifyContent: "center",
-                }}
+                style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", justifyContent: "center" }}
               >
                 <FileText size={14} /> Upload Scenes File (.json / .txt)
               </button>
@@ -1061,45 +1105,18 @@ export default function ScenesStep({
               onChange={(e) => setImportText(e.target.value)}
               placeholder={`Paste scenes JSON or text list here:\n\n[{"narration": "First scene narration", "image_prompt": "Prompt for image", "video_prompt": "Prompt for video"}]\n\nOR\n\n1. Scene narration one\n2. Scene narration two`}
               rows={6}
-              style={{
-                width: "100%",
-                fontSize: "0.8rem",
-                marginBottom: "0.75rem",
-              }}
+              style={{ width: "100%", fontSize: "0.8rem", marginBottom: "0.75rem" }}
             />
 
             {importText.trim() && (
-              <div
-                style={{
-                  fontSize: "0.8rem",
-                  color: "var(--accent)",
-                  marginBottom: "0.75rem",
-                  fontWeight: 600,
-                }}
-              >
-                <Check size={13} style={{ verticalAlign: "-2px" }} /> Detected{" "}
-                {parsedImportScenes.length} scene
+              <div style={{ fontSize: "0.8rem", color: "var(--accent)", marginBottom: "0.75rem", fontWeight: 600 }}>
+                <Check size={13} style={{ verticalAlign: "-2px" }} /> Detected {parsedImportScenes.length} scene
                 {parsedImportScenes.length !== 1 ? "s" : ""} ready to import
               </div>
             )}
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "1rem",
-                marginBottom: "1rem",
-                fontSize: "0.8rem",
-              }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  cursor: "pointer",
-                }}
-              >
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", fontSize: "0.8rem" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
                 <input
                   type="radio"
                   name="importOption"
@@ -1108,14 +1125,7 @@ export default function ScenesStep({
                 />
                 Replace existing scenes
               </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  cursor: "pointer",
-                }}
-              >
+              <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
                 <input
                   type="radio"
                   name="importOption"
@@ -1126,17 +1136,8 @@ export default function ScenesStep({
               </label>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                className="btn-secondary"
-                onClick={() => setShowImportModal(false)}
-              >
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button className="btn-secondary" onClick={() => setShowImportModal(false)}>
                 Cancel
               </button>
               <button
@@ -1150,9 +1151,7 @@ export default function ScenesStep({
                   }
                 }}
               >
-                {actionLoading === "import-scenes"
-                  ? "Importing..."
-                  : `Import ${parsedImportScenes.length} Scenes`}
+                {actionLoading === "import-scenes" ? "Importing..." : `Import ${parsedImportScenes.length} Scenes`}
               </button>
             </div>
           </div>

@@ -36,7 +36,7 @@ export const STUDIO_STEPS: StepDef[] = [
   { key: "ideas", label: "Ideas", icon: Lightbulb, hint: "Brainstorm video topics" },
   { key: "script", label: "Script", icon: FileText, hint: "Generate or write the script" },
   { key: "scenes", label: "Scenes", icon: Clapperboard, hint: "Split the script into scenes" },
-  { key: "images", label: "Images", icon: ImageIcon, hint: "Create visuals for each scene" },
+  { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene" },
   { key: "voice", label: "Voice", icon: Mic, hint: "Add narration (AI or recorded)" },
   { key: "timeline", label: "Timeline", icon: Timer, hint: "Reorder and trim clips" },
   { key: "video", label: "Video", icon: Video, hint: "Render the final video" },

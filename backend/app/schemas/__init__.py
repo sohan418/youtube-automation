@@ -329,6 +329,13 @@ class SEOCategoryUpdate(BaseModel):
     category_id: int
 
 
+class SEOUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    tags: str | None = None
+    hashtags: str | None = None
+
+
 class SEOResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Sparkles, Download, Upload, FileText, X, Pencil, Check } from "lucide-react";
 import type { Idea, Script } from "../../types";
+import FreeAIGuide from "../editors/FreeAIGuide";
 
 interface Props {
   ideas: Idea[];
@@ -19,6 +20,7 @@ interface Props {
   form: { title: string; hook: string; body: string; ending: string };
   onFormChange: (patch: Partial<{ title: string; hook: string; body: string; ending: string }>) => void;
   onImportScript?: (imported: { title?: string; hook?: string; body: string; ending?: string; language?: string }, replace: boolean) => Promise<void>;
+  prompts?: { system: string; user: string };
 }
 
 interface ImportedScript {
@@ -81,8 +83,10 @@ export default function ScriptStep({
   form,
   onFormChange,
   onImportScript,
+  prompts,
 }: Props) {
   const activeScript = scripts.find((s) => s.is_active) || null;
+  const [showFreeAI, setShowFreeAI] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState("");
@@ -162,6 +166,13 @@ export default function ScriptStep({
               Paste Your Own Script
             </button>
           )}
+          <button
+            className="btn-accent"
+            onClick={() => setShowFreeAI(!showFreeAI)}
+            style={{ padding: "0.35rem 0.7rem", fontSize: "0.78rem", background: showFreeAI ? "var(--primary)" : undefined, color: showFreeAI ? "white" : undefined }}
+          >
+            {showFreeAI ? "Hide Free AI" : "Generate with Free AI"}
+          </button>
 
           {activeScript && (
             <div style={{ position: "relative" }}>
@@ -291,7 +302,40 @@ export default function ScriptStep({
       )}
 
       {!activeScript && !creating && (
-        <p style={{ color: "var(--text-muted)" }}>No script yet. Select an idea and generate a script, or paste your own.</p>
+        <div>
+          <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>No script yet. Select an idea and generate a script, or paste your own.</p>
+        </div>
+      )}
+
+      {showFreeAI && (
+        <FreeAIGuide
+          title="Generate Script with Free AI"
+          prompt={prompts ? undefined : `SYSTEM PROMPT:\nYou are an expert YouTube scriptwriter. Write engaging scripts as JSON.\n\nUSER PROMPT:\nWrite a 5-minute YouTube script about: ${scriptTopic || ideas.find((i) => i.is_selected)?.title || projectName || "General topic"}. Language: en. Include hook, body, and ending. Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}`}
+          promptPair={prompts}
+          responsePlaceholder='Paste AI response here...\n\nAccepts JSON or plain text script.'
+          onParseResponse={(text) => {
+            if (!onImportScript) return;
+            try {
+              const jsonMatch = text.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                if (parsed.body) {
+                  onImportScript({
+                    title: parsed.title,
+                    hook: parsed.hook,
+                    body: parsed.body,
+                    ending: parsed.ending,
+                  }, false);
+                }
+              }
+            } catch {
+              // Fallback: treat entire text as body
+              if (text.trim().length > 50) {
+                onImportScript({ body: text.trim() }, false);
+              }
+            }
+          }}
+        />
       )}
 
       {showImportModal && (

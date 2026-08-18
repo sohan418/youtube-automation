@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -7,6 +8,41 @@ from app.schemas import IdeaGenerateRequest, IdeaResponse
 from app.services.ai import ai_service
 
 router = APIRouter(prefix="/ideas", tags=["Ideas"])
+
+
+class IdeaImportItem(BaseModel):
+    title: str
+    description: str | None = None
+    category: str | None = None
+
+
+class IdeaImportRequest(BaseModel):
+    ideas: list[IdeaImportItem]
+
+
+@router.post("/project/{project_id}/import", response_model=list[IdeaResponse])
+def import_ideas(project_id: int, payload: IdeaImportRequest, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    ideas: list[Idea] = []
+    for item in payload.ideas:
+        idea = Idea(
+            project_id=project_id,
+            title=item.title,
+            description=item.description,
+            category=item.category,
+            trending_score=50,
+        )
+        db.add(idea)
+        ideas.append(idea)
+
+    project.status = ProjectStatus.IDEA
+    db.commit()
+    for idea in ideas:
+        db.refresh(idea)
+    return ideas
 
 
 @router.get("/project/{project_id}", response_model=list[IdeaResponse])

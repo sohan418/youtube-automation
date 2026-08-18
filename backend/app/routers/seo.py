@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Project, ProjectStatus, Script, SEOMetadata
-from app.schemas import SEOCategory, SEOCategoryUpdate, SEOGenerateRequest, SEOResponse
+from app.schemas import SEOCategory, SEOCategoryUpdate, SEOGenerateRequest, SEOResponse, SEOUpdate
 from app.services.ai import ai_service
 from app.services.storage import storage_service
 
@@ -72,6 +72,28 @@ def update_seo_category(
 
     seo.category = category["name"]  # type: ignore[assignment]
     seo.category_id = category["id"]  # type: ignore[assignment]
+    db.commit()
+    db.refresh(seo)
+    return seo
+
+
+@router.patch("/project/{project_id}", response_model=SEOResponse)
+def update_seo(
+    project_id: int, payload: SEOUpdate, db: Session = Depends(get_db)
+):
+    seo = db.query(SEOMetadata).filter(SEOMetadata.project_id == project_id).first()
+    if not seo:
+        raise HTTPException(status_code=404, detail="SEO metadata not found")
+
+    if payload.title is not None:
+        seo.title = payload.title
+    if payload.description is not None:
+        seo.description = payload.description
+    if payload.tags is not None:
+        seo.tags = payload.tags
+    if payload.hashtags is not None:
+        seo.hashtags = payload.hashtags
+
     db.commit()
     db.refresh(seo)
     return seo

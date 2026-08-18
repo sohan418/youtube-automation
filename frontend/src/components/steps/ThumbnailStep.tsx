@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Sparkles, Copy, Check, Eye } from "lucide-react";
 import type { Thumbnail } from "../../types";
+import FreeAIGuide from "../editors/FreeAIGuide";
 
 interface Props {
   thumbnails: Thumbnail[];
@@ -8,6 +9,7 @@ interface Props {
   mediaUrl: (p: string) => string;
   onGenerate: () => void;
   onSelect: (id: number) => void;
+  prompts?: { system: string; user: string };
 }
 
 function cleanPromptText(raw: string | null | undefined): string {
@@ -21,7 +23,7 @@ function cleanPromptText(raw: string | null | undefined): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onGenerate, onSelect }: Props) {
+export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onGenerate, onSelect, prompts }: Props) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -46,7 +48,33 @@ export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onG
       </div>
 
       {thumbnails.length === 0 ? (
-        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", padding: "1rem 0" }}>No thumbnails yet. Click "Generate Thumbnails" to create options.</p>
+        <div>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", padding: "1rem 0" }}>No thumbnails yet. Click "Generate Thumbnails" to create options.</p>
+          <FreeAIGuide
+            title="Generate Thumbnail Prompts with Free AI"
+            prompt={prompts ? undefined : `SYSTEM PROMPT:\nYou are an expert YouTube thumbnail designer and AI prompt engineer. Create ONE detailed, eye-catching image prompt in English for generating a YouTube thumbnail. Describe the subject, high-emotion facial expressions, vibrant color palette, dynamic lighting, and text overlays. CRITICAL INSTRUCTION: Output ONLY the plain text prompt itself. Do NOT include markdown headers, bold asterisks (**), hashtags (#), code block ticks (\`\`\`), emojis, or introductory labels like 'Thumbnail Prompt:'.\n\nUSER PROMPT:\nCreate a thumbnail image prompt for a video titled: 'Your Video Title Here'.`}
+            promptPair={prompts}
+            responsePlaceholder='Paste AI response here...\n\nAccepts JSON array of prompts or plain text list.'
+            onParseResponse={(text) => {
+              try {
+                const jsonMatch = text.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                  const parsed = JSON.parse(jsonMatch[0]);
+                  if (Array.isArray(parsed)) {
+                    const prompts = parsed.map((item: any) => item.prompt || item.text || "").filter(Boolean);
+                    if (prompts.length > 0) {
+                      prompts.forEach((p: string) => {
+                        navigator.clipboard.writeText(p);
+                      });
+                    }
+                  }
+                }
+              } catch {
+                navigator.clipboard.writeText(text);
+              }
+            }}
+          />
+        </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.85rem" }}>
           {thumbnails.map((thumb) => {

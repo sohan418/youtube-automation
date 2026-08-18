@@ -13,8 +13,11 @@ import {
   Star,
   Timer,
   X,
+  Image,
+  Video,
 } from "lucide-react";
 import type { Scene } from "../../types";
+import FreeAIGuide from "../editors/FreeAIGuide";
 
 export interface DragMedia {
   kind: "image" | "video";
@@ -80,6 +83,7 @@ interface Props {
   handleTileDrop: (e: React.DragEvent, scene: Scene, target: MediaTile) => void;
   handleSceneDrop: (e: React.DragEvent, sceneId: number) => void;
   handleUploadTileDrop: (e: React.DragEvent, sceneId: number) => void;
+  imagePrompts?: { system: string; user: string };
 }
 
 export default function ImagesStep({
@@ -111,6 +115,7 @@ export default function ImagesStep({
   handleTileDrop,
   handleSceneDrop,
   handleUploadTileDrop,
+  imagePrompts,
 }: Props) {
   const [copiedImagePromptId, setCopiedImagePromptId] = useState<number | null>(null);
   const [copiedVideoPromptId, setCopiedVideoPromptId] = useState<number | null>(null);
@@ -177,9 +182,20 @@ export default function ImagesStep({
           </button>
         </div>
         {scenes.length === 0 ? (
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-            No scenes yet. Generate scenes first.
-          </p>
+          <div>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+              No scenes yet. Generate scenes first.
+            </p>
+            <FreeAIGuide
+              title="Generate Image Prompts with Free AI"
+              prompt={imagePrompts ? undefined : `SYSTEM PROMPT:\nYou are an expert image prompt engineer for AI art generation. Create ONE detailed image prompt in English that visually shows what the scene's narration is describing. Describe concrete visual imagery: setting, subject, objects, mood, and lighting. Output only the prompt itself. No text, no words, no watermarks, no labels. Cinematic, ultra detailed, 16:9 aspect ratio.\n\nUSER PROMPT:\nScene narration: [paste your scene narration here]\nCreate a detailed cinematic image prompt that visualizes this scene. Always include the 16:9 aspect ratio.`}
+              promptPair={imagePrompts}
+              responsePlaceholder="Paste AI-generated image prompt here..."
+              onParseResponse={(text) => {
+                navigator.clipboard.writeText(text.trim());
+              }}
+            />
+          </div>
         ) : (
           <div style={{ display: "grid", gap: "0.5rem" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", width: "100%" }}>
@@ -271,75 +287,91 @@ export default function ImagesStep({
                         marginBottom: "0.5rem",
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0, display: "grid", gap: "0.55rem" }}>
                           {scene.image_prompt && (
-                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "0.35rem" }}>
-                              <p
-                                style={{
-                                  fontSize: "0.8rem",
-                                  color: "var(--text-muted)",
-                                  fontStyle: "italic",
-                                  lineHeight: 1.45,
-                                  margin: 0,
-                                  flex: 1
-                                }}
-                              >
-                                <strong>Image Prompt:</strong> {scene.image_prompt}
+                            <div
+                              className="card"
+                              style={{
+                                padding: "0.6rem 0.8rem",
+                                background: "rgba(255, 255, 255, 0.015)",
+                                border: "1px solid var(--border)",
+                                borderRadius: "6px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.35rem",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                  <Image size={12} />
+                                  Image Prompt
+                                </span>
+                                <button
+                                  className="btn-secondary"
+                                  onClick={() => handleCopyImagePrompt(scene)}
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    padding: "0.15rem 0.4rem",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.2rem",
+                                    color: copiedImagePromptId === scene.id ? "var(--success)" : "var(--text)",
+                                    borderColor: copiedImagePromptId === scene.id ? "var(--success)" : "var(--border)",
+                                    background: "transparent",
+                                    borderRadius: "4px"
+                                  }}
+                                  title="Copy image prompt to clipboard"
+                                >
+                                  {copiedImagePromptId === scene.id ? <Check size={10} /> : <Copy size={10} />}
+                                  {copiedImagePromptId === scene.id ? "Copied" : "Copy"}
+                                </button>
+                              </div>
+                              <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.45 }}>
+                                {scene.image_prompt}
                               </p>
-                              <button
-                                className="btn-secondary"
-                                onClick={() => handleCopyImagePrompt(scene)}
-                                style={{
-                                  fontSize: "0.68rem",
-                                  padding: "0.15rem 0.4rem",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "0.2rem",
-                                  color: copiedImagePromptId === scene.id ? "var(--success)" : "var(--text)",
-                                  borderColor: copiedImagePromptId === scene.id ? "var(--success)" : "var(--border)",
-                                  background: "transparent",
-                                  borderRadius: "4px"
-                                }}
-                                title="Copy image prompt to clipboard"
-                              >
-                                {copiedImagePromptId === scene.id ? <Check size={10} /> : <Copy size={10} />}
-                                {copiedImagePromptId === scene.id ? "Copied" : "Copy"}
-                              </button>
                             </div>
                           )}
                           {scene.video_prompt && (
-                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "0.35rem" }}>
-                              <p
-                                style={{
-                                  fontSize: "0.8rem",
-                                  color: "var(--text-muted)",
-                                  fontStyle: "italic",
-                                  lineHeight: 1.45,
-                                  margin: 0,
-                                  flex: 1
-                                }}
-                              >
-                                <strong>Video Prompt:</strong> {scene.video_prompt}
+                            <div
+                              className="card"
+                              style={{
+                                padding: "0.6rem 0.8rem",
+                                background: "rgba(255, 255, 255, 0.015)",
+                                border: "1px solid var(--border)",
+                                borderRadius: "6px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.35rem",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                  <Video size={12} />
+                                  Video Prompt
+                                </span>
+                                <button
+                                  className="btn-secondary"
+                                  onClick={() => handleCopyVideoPrompt(scene)}
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    padding: "0.15rem 0.4rem",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.2rem",
+                                    color: copiedVideoPromptId === scene.id ? "var(--success)" : "var(--text)",
+                                    borderColor: copiedVideoPromptId === scene.id ? "var(--success)" : "var(--border)",
+                                    background: "transparent",
+                                    borderRadius: "4px"
+                                  }}
+                                  title="Copy video prompt to clipboard"
+                                >
+                                  {copiedVideoPromptId === scene.id ? <Check size={10} /> : <Copy size={10} />}
+                                  {copiedVideoPromptId === scene.id ? "Copied" : "Copy"}
+                                </button>
+                              </div>
+                              <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.45 }}>
+                                {scene.video_prompt}
                               </p>
-                              <button
-                                className="btn-secondary"
-                                onClick={() => handleCopyVideoPrompt(scene)}
-                                style={{
-                                  fontSize: "0.68rem",
-                                  padding: "0.15rem 0.4rem",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "0.2rem",
-                                  color: copiedVideoPromptId === scene.id ? "var(--success)" : "var(--text)",
-                                  borderColor: copiedVideoPromptId === scene.id ? "var(--success)" : "var(--border)",
-                                  background: "transparent",
-                                  borderRadius: "4px"
-                                }}
-                                title="Copy video prompt to clipboard"
-                              >
-                                {copiedVideoPromptId === scene.id ? <Check size={10} /> : <Copy size={10} />}
-                                {copiedVideoPromptId === scene.id ? "Copied" : "Copy"}
-                              </button>
                             </div>
                           )}
                         </div>

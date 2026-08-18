@@ -5,8 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import Base, engine
-from app.routers import ai, export, ideas, images, media, projects, scenes, scene_videos, scripts, seo, thumbnails, timeline, video, voice
+from app.database import Base, SessionLocal, engine
+from app.models import PromptTemplate
+from app.routers import admin, ai, export, ideas, images, media, projects, prompts, scenes, scene_videos, scripts, seo, thumbnails, timeline, video, voice
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,7 +18,28 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _seed_default_prompts()
     yield
+
+
+def _seed_default_prompts():
+    from app.routers.admin import DEFAULT_PROMPTS
+    db = SessionLocal()
+    try:
+        for key, defaults in DEFAULT_PROMPTS.items():
+            existing = db.query(PromptTemplate).filter(PromptTemplate.key == key).first()
+            if not existing:
+                db.add(PromptTemplate(
+                    key=key,
+                    label=defaults["label"],
+                    system=defaults["system"],
+                    user=defaults["user"],
+                ))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 app = FastAPI(
@@ -35,6 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(ideas.router, prefix="/api")
 app.include_router(scripts.router, prefix="/api")
@@ -49,6 +72,7 @@ app.include_router(seo.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
+app.include_router(prompts.router, prefix="/api")
 
 
 @app.get("/api/health")

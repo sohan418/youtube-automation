@@ -4,6 +4,7 @@ import { Clapperboard, Trash2 } from "lucide-react";
 import { api, mediaUrl } from "../api/client";
 import type { Project, SEOCategory } from "../types";
 import ToastNotification from "../components/studio/ToastNotification";
+import NewProjectDialog from "../components/editors/NewProjectDialog";
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`badge badge-${status}`}>{status}</span>;
@@ -14,8 +15,7 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<SEOCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", category: "", language: "en" });
+  const [showDialog, setShowDialog] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const loadProjects = useCallback(async () => {
@@ -47,8 +47,7 @@ export default function Dashboard() {
     }
   }, [error]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreate = async (form: { name: string; description: string; category: string; language: string; ratio: string }) => {
     if (!form.name.trim()) return;
     try {
       setCreating(true);
@@ -58,9 +57,9 @@ export default function Dashboard() {
         description: form.description || undefined,
         category: form.category || undefined,
         language: form.language,
+        ratio: form.ratio,
       });
-      setForm({ name: "", description: "", category: "", language: "en" });
-      setShowForm(false);
+      setShowDialog(false);
       await loadProjects();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project");
@@ -111,7 +110,18 @@ export default function Dashboard() {
           </div>
           <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text)" }}>YouTube Content Studio</span>
         </Link>
-        <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>Local MVP</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>Local MVP</span>
+          <Link
+            to="/admin/prompts"
+            style={{
+              color: "var(--text-muted)", fontSize: "0.75rem", textDecoration: "none",
+              padding: "0.3rem 0.6rem", border: "1px solid var(--border)", borderRadius: "var(--radius)",
+            }}
+          >
+            Prompt Manager
+          </Link>
+        </div>
       </header>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
@@ -121,8 +131,8 @@ export default function Dashboard() {
             Manage your AI-powered video production pipeline
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "+ New Project"}
+        <button className="btn-primary" onClick={() => setShowDialog(true)}>
+          + New Project
         </button>
       </div>
 
@@ -135,115 +145,66 @@ export default function Dashboard() {
         />
       )}
 
-      {showForm && (
-        <form onSubmit={handleCreate} className="card" style={{ marginBottom: "1.5rem" }}>
-          <h3 style={{ marginBottom: "1rem" }}>Create New Project</h3>
-          <div className="grid-2" style={{ marginBottom: "1rem" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                Project Name *
-              </label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="My Awesome Video"
-                required
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                Category
-              </label>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-              >
-                <option value="">Uncategorized</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="grid-2" style={{ marginBottom: "1rem" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                Language
-              </label>
-              <select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })}>
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="hinglish">Hinglish</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                Description
-              </label>
-              <input
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Brief project description"
-              />
-            </div>
-          </div>
-          <button type="submit" className="btn-primary" disabled={creating}>
-            {creating ? "Creating..." : "Create Project"}
-          </button>
-        </form>
-      )}
+      <NewProjectDialog
+        isOpen={showDialog}
+        categories={categories}
+        creating={creating}
+        onClose={() => setShowDialog(false)}
+        onCreate={handleCreate}
+      />
 
       {loading ? (
         <div className="loading"><span className="spinner" /> Loading projects...</div>
       ) : projects.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
           <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>No projects yet. Create your first one!</p>
-          <button className="btn-primary" onClick={() => setShowForm(true)}>+ New Project</button>
+          <button className="btn-primary" onClick={() => setShowDialog(true)}>+ New Project</button>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gridAutoRows: "1fr", gap: "1rem" }}>
           {projects.map((project) => (
-            <div key={project.id} className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden", padding: 0 }}>
-              <Link to={`/projects/${project.id}`} style={{ textDecoration: "none", display: "block" }}>
-                <div
-                  style={{
-                    aspectRatio: "16 / 9",
-                    background: "linear-gradient(135deg, #1a1a24, #2a2a3a)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "var(--text-muted)", position: "relative", overflow: "hidden",
-                  }}
-                >
-                  {project.thumbnail ? (
-                    <img src={mediaUrl(project.thumbnail)} alt={project.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  ) : (
-                    <Clapperboard size={40} style={{ opacity: 0.4 }} />
-                  )}
+            <div key={project.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+              <Link to={`/projects/${project.id}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column", flex: 1 }}>
+                <div className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden", padding: 0, cursor: "pointer", flex: 1 }}>
+                  <div
+                    style={{
+                      aspectRatio: "16 / 9",
+                      background: "linear-gradient(135deg, #1a1a24, #2a2a3a)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "var(--text-muted)", position: "relative", overflow: "hidden",
+                    }}
+                  >
+                    {project.thumbnail ? (
+                      <img src={mediaUrl(project.thumbnail)} alt={project.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    ) : (
+                      <Clapperboard size={40} style={{ opacity: 0.4 }} />
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.9rem", flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
+                      <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.25 }}>
+                        {project.name}
+                      </span>
+                      <StatusBadge status={project.status} />
+                    </div>
+                    {project.description && (
+                      <p style={{ color: "var(--text-muted)", fontSize: "0.78rem", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                        {project.description}
+                      </p>
+                    )}
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: "auto" }}>
+                      {project.category || "Uncategorized"} · {project.language.toUpperCase()} · Updated {new Date(project.updated_at).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
               </Link>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.9rem", flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
-                  <Link to={`/projects/${project.id}`} style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", textDecoration: "none", lineHeight: 1.25 }}>
-                    {project.name}
-                  </Link>
-                  <StatusBadge status={project.status} />
-                </div>
-                {project.description && (
-                  <p style={{ color: "var(--text-muted)", fontSize: "0.78rem", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    {project.description}
-                  </p>
-                )}
-                <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: "auto" }}>
-                  {project.category || "Uncategorized"} · {project.language.toUpperCase()} · Updated {new Date(project.updated_at).toLocaleDateString()}
-                </p>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <Link to={`/projects/${project.id}`} style={{ flex: 1 }}>
-                    <button className="btn-accent" style={{ width: "100%" }}>Open</button>
-                  </Link>
-                  <button className="btn-secondary" onClick={() => handleDelete(project.id)} title="Delete project">
-                    <Trash2 size={14} style={{ verticalAlign: "-2px" }} />
-                  </button>
-                </div>
-              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
+                title="Delete project"
+                style={{ position: "absolute", top: "0.5rem", right: "0.5rem", background: "rgba(0,0,0,0.6)", border: "none", borderRadius: "6px", padding: "6px", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>

@@ -206,3 +206,16 @@ class SEOMetadata(Base):
     )
 
     project: Mapped["Project"] = relationship(back_populates="seo_metadata")
+
+
+class PromptTemplate(Base):
+    __tablename__ = "prompt_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    system: Mapped[str] = mapped_column(Text, nullable=False)
+    user: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

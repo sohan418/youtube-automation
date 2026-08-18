@@ -33,6 +33,7 @@ export const api = {
     description?: string;
     category?: string;
     language?: string;
+    ratio?: string;
   }) =>
     request<import("../types").Project>("/projects", {
       method: "POST",
@@ -66,6 +67,14 @@ export const api = {
   selectIdea: (ideaId: number) =>
     request<import("../types").Idea>(`/ideas/${ideaId}/select`, {
       method: "POST",
+    }),
+  importIdeas: (
+    projectId: number,
+    ideas: { title: string; description?: string; category?: string }[],
+  ) =>
+    request<import("../types").Idea[]>(`/ideas/project/${projectId}/import`, {
+      method: "POST",
+      body: JSON.stringify({ ideas }),
     }),
 
   listScripts: (projectId: number) =>
@@ -355,9 +364,34 @@ export const api = {
       `/seo/project/${projectId}/category`,
       { method: "PATCH", body: JSON.stringify({ category_id: categoryId }) },
     ),
+  updateSEO: (projectId: number, data: { title?: string; description?: string; tags?: string; hashtags?: string }) =>
+    request<import("../types").SEOMetadata>(`/seo/project/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 
   exportProject: (projectId: number) =>
     request<import("../types").ExportResult>(`/export/project/${projectId}`, {
+      method: "POST",
+    }),
+
+  getPrompts: (projectId: number) =>
+    request<Record<string, { system: string; user: string }>>(`/prompts/project/${projectId}`),
+
+  listAdminPrompts: () =>
+    request<import("../types").PromptTemplate[]>("/admin/prompts"),
+  updateAdminPrompt: (key: string, data: { system: string; user: string }) =>
+    request<import("../types").PromptTemplate>(`/admin/prompts/${key}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  bulkUpdateAdminPrompts: (prompts: Record<string, { system: string; user: string }>) =>
+    request<{ updated: string[] }>("/admin/prompts", {
+      method: "PUT",
+      body: JSON.stringify({ prompts }),
+    }),
+  resetAdminPrompts: () =>
+    request<{ status: string; reset: number }>("/admin/prompts/reset", {
       method: "POST",
     }),
 };
