@@ -84,6 +84,7 @@ interface Props {
   handleSceneDrop: (e: React.DragEvent, sceneId: number) => void;
   handleUploadTileDrop: (e: React.DragEvent, sceneId: number) => void;
   imagePrompts?: { system: string; user: string };
+  onUpdateSceneEffect?: (sceneId: number, effect: string) => void;
 }
 
 export default function ImagesStep({
@@ -116,6 +117,7 @@ export default function ImagesStep({
   handleSceneDrop,
   handleUploadTileDrop,
   imagePrompts,
+  onUpdateSceneEffect,
 }: Props) {
   const [copiedImagePromptId, setCopiedImagePromptId] = useState<number | null>(null);
   const [copiedVideoPromptId, setCopiedVideoPromptId] = useState<number | null>(null);
@@ -151,6 +153,16 @@ export default function ImagesStep({
   };
   return (
     <div style={{ display: "grid", gap: "0.5rem" }}>
+      <style>{`
+        @keyframes scene-zoom-in {
+          0% { transform: scale(1); }
+          100% { transform: scale(1.2); }
+        }
+        @keyframes scene-pan-right {
+          0% { transform: scale(1.2) translateX(-4%); }
+          100% { transform: scale(1.2) translateX(4%); }
+        }
+      `}</style>
       <div className="card" style={{ padding: "0.6rem 0.85rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem", gap: "0.5rem" }}>
           <div>
@@ -374,6 +386,61 @@ export default function ImagesStep({
                               </p>
                             </div>
                           )}
+                        </div>
+
+                        {/* Motion Animation selector */}
+                        <div
+                          style={{
+                            paddingLeft: "2.3rem",
+                            marginBottom: "0.65rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.6rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            Motion Animation (FX):
+                          </span>
+                          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                            {[
+                              { value: "none", label: "Static 📷" },
+                              { value: "zoom_in", label: "Zoom In 🎬" },
+                              { value: "zoom_out", label: "Zoom Out 🎬" },
+                              { value: "pan_right", label: "Pan Right 🎬" },
+                              { value: "pan_left", label: "Pan Left 🎬" },
+                              { value: "pan_up", label: "Pan Up 🎬" },
+                              { value: "pan_down", label: "Pan Down 🎬" }
+                            ].map((opt) => {
+                              const active = (scene.motion_effect || "none") === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => onUpdateSceneEffect && onUpdateSceneEffect(scene.id, opt.value)}
+                                  style={{
+                                    padding: "0.3rem 0.6rem",
+                                    fontSize: "0.74rem",
+                                    fontWeight: 600,
+                                    borderRadius: "4px",
+                                    border: active ? "1px solid var(--primary)" : "1px solid var(--border)",
+                                    background: active ? "rgba(255, 0, 60, 0.08)" : "transparent",
+                                    color: active ? "var(--primary)" : "var(--text-muted)",
+                                    cursor: "pointer",
+                                    transition: "all 0.1s ease",
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
 
                       <div
@@ -674,7 +741,7 @@ export default function ImagesStep({
                               cursor: "zoom-in",
                             }}
                           >
-                            <img
+                             <img
                               src={mediaUrl(tile.file_path)}
                               alt={`Scene ${scene.order_index} image`}
                               loading="lazy"
@@ -684,6 +751,12 @@ export default function ImagesStep({
                                 objectFit: "cover",
                                 display: "block",
                                 pointerEvents: "none",
+                                animation: tile.isPrimary && scene.motion_effect === "zoom_in"
+                                  ? "scene-zoom-in 10s ease-in-out infinite alternate"
+                                  : tile.isPrimary && scene.motion_effect === "pan_right"
+                                  ? "scene-pan-right 12s ease-in-out infinite alternate"
+                                  : "none",
+                                transformOrigin: "center",
                               }}
                             />
                             <div

@@ -327,6 +327,12 @@ export const api = {
       resolution?: string;
       ratio?: string;
       timeline?: import("../types").TimelineData | null;
+      subtitles?: boolean;
+      subtitle_style?: string;
+      subtitle_position?: string;
+      subtitle_color?: string;
+      subtitle_outline_color?: string;
+      subtitle_outline?: number;
     },
   ) =>
     request<{ message: string; detail: string }>(

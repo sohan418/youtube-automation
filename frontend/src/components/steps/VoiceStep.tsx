@@ -332,13 +332,13 @@ export default function VoiceStep({
             Speed
             <select
               value={selectedVoiceRate}
-              disabled={!!actionLoading || currentProvider?.id !== "edgetts"}
+              disabled={!!actionLoading}
               onChange={(e) => onVoiceRateChange(e.target.value)}
               style={{ padding: "0.35rem 0.5rem", fontSize: "0.78rem" }}
-              title="Only Microsoft Edge TTS supports speed control"
+              title={currentProvider?.id === "gemini" ? "Gemini TTS does not support speed control" : "Adjust speech speed"}
             >
               {["-50%", "-25%", "+0%", "+10%", "+20%", "+30%", "+40%", "+50%", "+75%", "+100%"].map((rate) => (
-                <option key={rate} value={rate}>
+                <option key={rate} value={rate} disabled={currentProvider?.id === "gemini" && rate !== "+0%"}>
                   {rate}
                 </option>
               ))}

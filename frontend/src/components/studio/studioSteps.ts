@@ -6,9 +6,8 @@ import {
   Image as ImageIcon,
   Lightbulb,
   Mic,
-  Package,
   Search,
-  Timer,
+  Subtitles,
   Video,
 } from "lucide-react";
 import type { ExportResult, Scene, Script, SEOMetadata, Thumbnail, TimelineData, VideoStatus } from "../../types";
@@ -19,6 +18,7 @@ export type StudioStep =
   | "scenes"
   | "images"
   | "voice"
+  | "captions"
   | "timeline"
   | "video"
   | "thumbnail"
@@ -36,13 +36,12 @@ export const STUDIO_STEPS: StepDef[] = [
   { key: "ideas", label: "Ideas", icon: Lightbulb, hint: "Brainstorm video topics" },
   { key: "script", label: "Script", icon: FileText, hint: "Generate or write the script" },
   { key: "scenes", label: "Scenes", icon: Clapperboard, hint: "Split the script into scenes" },
-  { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene" },
   { key: "voice", label: "Voice", icon: Mic, hint: "Add narration (AI or recorded)" },
-  { key: "timeline", label: "Timeline", icon: Timer, hint: "Reorder and trim clips" },
-  { key: "video", label: "Video", icon: Video, hint: "Render the final video" },
+  { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene" },
+  { key: "captions", label: "Captions", icon: Subtitles, hint: "Subtitle and caption settings" },
+  { key: "video", label: "Video & Export", icon: Video, hint: "Render and package final video" },
   { key: "thumbnail", label: "Thumbnail", icon: Camera, hint: "Pick a cover image" },
   { key: "seo", label: "SEO", icon: Search, hint: "Title, tags and description" },
-  { key: "export", label: "Export", icon: Package, hint: "Package everything for upload" },
 ];
 
 export interface StepStatusData {
@@ -64,11 +63,12 @@ export function getDoneMap(d: StepStatusData): Record<StudioStep, boolean> {
     scenes: scenesReady,
     images: scenesReady && d.scenes.every((s) => !!s.image_path),
     voice: scenesReady && d.scenes.every((s) => !!s.audio_path),
-    timeline: scenesReady && (d.timeline?.clips.length ?? 0) > 0,
+    captions: true,
+    timeline: true,
     video:
       !!d.videoStatus && !d.videoStatus.running && !d.videoStatus.error && !!d.videoStatus.output,
     thumbnail: d.thumbnails.length > 0,
     seo: !!d.seo,
-    export: !!d.exportInfo,
+    export: true,
   };
 }

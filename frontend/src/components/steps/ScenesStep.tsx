@@ -111,12 +111,14 @@ interface Props {
     narration: string;
     image_prompt: string;
     video_prompt: string;
+    motion_effect: string;
   };
   onEditFormChange: (
     patch: Partial<{
       narration: string;
       image_prompt: string;
       video_prompt: string;
+      motion_effect: string;
     }>,
   ) => void;
   onStartEdit: (scene: Scene) => void;
@@ -367,8 +369,54 @@ export default function ScenesStep({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const currentEffect = activeScene
+    ? editingSceneId === activeScene.id
+      ? sceneEditForm.motion_effect
+      : (activeScene.motion_effect || "none")
+    : "none";
+
+  const animationStyle = currentEffect === "zoom_in"
+    ? "scene-zoom-in 10s ease-in-out infinite alternate"
+    : currentEffect === "zoom_out"
+    ? "scene-zoom-out 10s ease-in-out infinite alternate"
+    : currentEffect === "pan_right"
+    ? "scene-pan-right 12s ease-in-out infinite alternate"
+    : currentEffect === "pan_left"
+    ? "scene-pan-left 12s ease-in-out infinite alternate"
+    : currentEffect === "pan_up"
+    ? "scene-pan-up 12s ease-in-out infinite alternate"
+    : currentEffect === "pan_down"
+    ? "scene-pan-down 12s ease-in-out infinite alternate"
+    : "none";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", height: "100%", overflow: "hidden" }}>
+      <style>{`
+        @keyframes scene-zoom-in {
+          0% { transform: scale(1); }
+          100% { transform: scale(1.2); }
+        }
+        @keyframes scene-zoom-out {
+          0% { transform: scale(1.2); }
+          100% { transform: scale(1); }
+        }
+        @keyframes scene-pan-right {
+          0% { transform: scale(1.2) translateX(-4%); }
+          100% { transform: scale(1.2) translateX(4%); }
+        }
+        @keyframes scene-pan-left {
+          0% { transform: scale(1.2) translateX(4%); }
+          100% { transform: scale(1.2) translateX(-4%); }
+        }
+        @keyframes scene-pan-up {
+          0% { transform: scale(1.2) translateY(4%); }
+          100% { transform: scale(1.2) translateY(-4%); }
+        }
+        @keyframes scene-pan-down {
+          0% { transform: scale(1.2) translateY(-4%); }
+          100% { transform: scale(1.2) translateY(4%); }
+        }
+      `}</style>
       {/* 1. Header Toolbar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
         <div>
@@ -936,7 +984,13 @@ export default function ScenesStep({
                         <img
                           src={`${mediaUrl(activeScene.image_path)}`}
                           alt={`Scene ${activeIdx + 1}`}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            animation: animationStyle,
+                            transformOrigin: "center",
+                          }}
                         />
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.35rem", color: "var(--text-muted)" }}>
@@ -954,6 +1008,65 @@ export default function ScenesStep({
                       <span style={{ fontSize: "0.65rem", padding: "0.15rem 0.5rem", borderRadius: "12px", background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", border: "1px solid var(--border)", fontWeight: 600 }}>
                         Duration: ~{formatDurationText(calculateDuration(activeScene.narration))} sec
                       </span>
+                    </div>
+
+                    {/* Motion Graphic Selector */}
+                    <div style={{ marginTop: "0.6rem", borderTop: "1px solid var(--border)", paddingTop: "0.6rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                      <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)" }}>
+                        Motion Animation (FX)
+                      </span>
+                      {editingSceneId === activeScene.id ? (
+                        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                          {[
+                             { value: "none", label: "Static 📷" },
+                             { value: "zoom_in", label: "Zoom In 🎬" },
+                             { value: "zoom_out", label: "Zoom Out 🎬" },
+                             { value: "pan_right", label: "Pan Right 🎬" },
+                             { value: "pan_left", label: "Pan Left 🎬" },
+                             { value: "pan_up", label: "Pan Up 🎬" },
+                             { value: "pan_down", label: "Pan Down 🎬" }
+                           ].map((opt) => {
+                            const active = (sceneEditForm.motion_effect || "none") === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => onEditFormChange({ motion_effect: opt.value })}
+                                style={{
+                                  flex: 1,
+                                  padding: "0.38rem 0.5rem",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  borderRadius: "4px",
+                                  border: active ? "1px solid var(--primary)" : "1px solid var(--border)",
+                                  background: active ? "rgba(255, 0, 60, 0.08)" : "transparent",
+                                  color: active ? "var(--primary)" : "var(--text-muted)",
+                                  cursor: "pointer",
+                                  transition: "all 0.1s ease",
+                                }}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: "0.75rem", color: "var(--text)", fontWeight: 600, textTransform: "capitalize", padding: "0.2rem 0" }}>
+                          {activeScene.motion_effect === "zoom_in"
+                            ? "Slow Zoom In 🎬"
+                            : activeScene.motion_effect === "zoom_out"
+                            ? "Slow Zoom Out 🎬"
+                            : activeScene.motion_effect === "pan_right"
+                            ? "Slow Pan Right 🎬"
+                            : activeScene.motion_effect === "pan_left"
+                            ? "Slow Pan Left 🎬"
+                            : activeScene.motion_effect === "pan_up"
+                            ? "Slow Pan Up 🎬"
+                            : activeScene.motion_effect === "pan_down"
+                            ? "Slow Pan Down 🎬"
+                            : "Static (No Motion) 📷"}
+                        </div>
+                      )}
                     </div>
                   </div>
 

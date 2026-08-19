@@ -172,6 +172,12 @@ def _run_build(
                 music_volume=payload.music_volume,
                 ratio=payload.ratio,
                 resolution=payload.resolution,
+                subtitles=payload.subtitles,
+                subtitle_style=payload.subtitle_style,
+                subtitle_position=payload.subtitle_position,
+                subtitle_color=payload.subtitle_color,
+                subtitle_outline_color=payload.subtitle_outline_color,
+                subtitle_outline=payload.subtitle_outline,
             )
         else:
             video_path = video_service.build_video(
@@ -181,6 +187,12 @@ def _run_build(
                 music_volume=payload.music_volume,
                 ratio=payload.ratio,
                 resolution=payload.resolution,
+                subtitles=payload.subtitles,
+                subtitle_style=payload.subtitle_style,
+                subtitle_position=payload.subtitle_position,
+                subtitle_color=payload.subtitle_color,
+                subtitle_outline_color=payload.subtitle_outline_color,
+                subtitle_outline=payload.subtitle_outline,
             )
         db = SessionLocal()
         try:
@@ -235,6 +247,8 @@ def build_video(
             ],
             "audio_path": s.audio_path,
             "duration_seconds": s.duration_seconds,
+            "motion_effect": s.motion_effect,
+            "narration": s.narration,
         }
         for s in scenes
     ]

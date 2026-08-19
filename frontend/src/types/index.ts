@@ -86,6 +86,7 @@ export interface Scene {
   video_path: string | null;
   audio_path: string | null;
   duration_seconds: number | null;
+  motion_effect?: string;
   images: SceneImage[];
   videos: SceneVideo[];
   created_at: string;
@@ -193,6 +194,7 @@ export interface TimelineClip {
   audio_in: number | null;
   audio_out: number | null;
   volume: number;
+  motion_effect?: string;
 }
 
 export interface TimelineData {

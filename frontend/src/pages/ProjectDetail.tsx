@@ -182,6 +182,20 @@ export default function ProjectDetail() {
           buildVideo={h.buildVideo}
           setTimeline={h.setTimeline}
           setExportInfo={h.setExportInfo}
+          updateSceneEffect={h.updateSceneEffect}
+          enableSubtitles={h.enableSubtitles}
+          setEnableSubtitles={h.setEnableSubtitles}
+          subtitleStyle={h.subtitleStyle}
+          setSubtitleStyle={h.setSubtitleStyle}
+          subtitlePosition={h.subtitlePosition}
+          setSubtitlePosition={h.setSubtitlePosition}
+          subtitleColor={h.subtitleColor}
+          setSubtitleColor={h.setSubtitleColor}
+          subtitleOutlineColor={h.subtitleOutlineColor}
+          setSubtitleOutlineColor={h.setSubtitleOutlineColor}
+          subtitleOutline={h.subtitleOutline}
+          setSubtitleOutline={h.setSubtitleOutline}
+          
         />
 
         {(h.activeTab === "images" || h.activeTab === "voice") && (

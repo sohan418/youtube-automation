@@ -523,18 +523,27 @@ class VoiceService:
 
     def _synthesize(self, provider: str, text: str, voice: str, key: str, rate: str = "+0%") -> bytes:
         if provider == "gemini":
-            return self._synthesize_gemini(text, voice, key)
+            return self._synthesize_gemini(text, voice, key, rate)
         if provider == "sarvam":
-            return self._synthesize_sarvam(text, voice, key)
+            return self._synthesize_sarvam(text, voice, key, rate)
         if provider == "deepgram":
-            return self._synthesize_deepgram(text, voice, key)
+            return self._synthesize_deepgram(text, voice, key, rate)
         if provider == "elevenlabs":
-            return self._synthesize_elevenlabs(text, voice, key)
+            return self._synthesize_elevenlabs(text, voice, key, rate)
         if provider == "edgetts":
             return self._synthesize_edgetts(text, voice, key, rate)
         raise ValueError(f"Unknown provider '{provider}'")
 
-    def _synthesize_gemini(self, text: str, voice: str, key: str) -> bytes:
+    @staticmethod
+    def _rate_to_float(rate: str) -> float:
+        """Convert rate string like '+20%' or '-10%' to a float multiplier."""
+        rate = rate.strip().replace("%", "")
+        try:
+            return 1.0 + int(rate) / 100.0
+        except (ValueError, TypeError):
+            return 1.0
+
+    def _synthesize_gemini(self, text: str, voice: str, key: str, rate: str = "+0%") -> bytes:
         from google import genai
         from google.genai import types
 
@@ -555,13 +564,14 @@ class VoiceService:
         )
         return self._pcm_to_wav(response)
 
-    def _synthesize_sarvam(self, text: str, voice: str, key: str) -> bytes:
+    def _synthesize_sarvam(self, text: str, voice: str, key: str, rate: str = "+0%") -> bytes:
+        pace = max(0.5, min(2.0, self._rate_to_float(rate)))
         payload = {
             "text": text,
             "target_language_code": "en-IN",
             "speaker": voice,
             "model": "bulbul:v3",
-            "pace": 1.0,
+            "pace": pace,
             "output_audio_codec": "wav",
         }
         response = httpx.post(
@@ -577,8 +587,9 @@ class VoiceService:
             raise ValueError("Sarvam returned no audio")
         return base64.b64decode(audios[0])
 
-    def _synthesize_deepgram(self, text: str, voice: str, key: str) -> bytes:
-        url = f"https://api.deepgram.com/v1/speak?model={voice}&encoding=mp3"
+    def _synthesize_deepgram(self, text: str, voice: str, key: str, rate: str = "+0%") -> bytes:
+        speed = max(0.5, min(2.0, self._rate_to_float(rate)))
+        url = f"https://api.deepgram.com/v1/speak?model={voice}&encoding=mp3&speed={speed}"
         response = httpx.post(
             url,
             json={"text": text},
@@ -588,11 +599,18 @@ class VoiceService:
         response.raise_for_status()
         return response.content
 
-    def _synthesize_elevenlabs(self, text: str, voice: str, key: str) -> bytes:
+    def _synthesize_elevenlabs(self, text: str, voice: str, key: str, rate: str = "+0%") -> bytes:
+        speed = max(0.5, min(2.0, self._rate_to_float(rate)))
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}"
+        payload = {
+            "text": text,
+            "model_id": ELEVENLABS_MODEL,
+        }
+        if speed != 1.0:
+            payload["voice_settings"] = {"speed": speed}
         response = httpx.post(
             url,
-            json={"text": text, "model_id": ELEVENLABS_MODEL},
+            json=payload,
             headers={
                 "xi-api-key": key,
                 "Content-Type": "application/json",

@@ -118,6 +118,7 @@ class SceneCreate(BaseModel):
     narration: str = Field(min_length=1)
     image_prompt: str | None = None
     video_prompt: str | None = None
+    motion_effect: str | None = "zoom_in"
     script_id: int | None = None
     order_index: int | None = None
 
@@ -126,6 +127,7 @@ class SceneImportItem(BaseModel):
     narration: str
     image_prompt: str | None = None
     video_prompt: str | None = None
+    motion_effect: str | None = "zoom_in"
 
 
 class SceneImportRequest(BaseModel):
@@ -137,6 +139,7 @@ class SceneUpdate(BaseModel):
     narration: str | None = None
     image_prompt: str | None = None
     video_prompt: str | None = None
+    motion_effect: str | None = None
     order_index: int | None = None
 
 
@@ -172,6 +175,7 @@ class SceneResponse(BaseModel):
     narration: str
     image_prompt: str | None
     video_prompt: str | None
+    motion_effect: str | None = "zoom_in"
     image_path: str | None
     video_path: str | None
     audio_path: str | None
@@ -234,6 +238,7 @@ class TimelineClip(BaseModel):
     audio_in: float | None = None
     audio_out: float | None = None
     volume: float = 1.0
+    motion_effect: str | None = "none"
 
 
 class TimelineMusic(BaseModel):
@@ -261,6 +266,12 @@ class VideoBuildRequest(BaseModel):
     resolution: str | None = None
     ratio: str = "16:9"
     timeline: TimelineData | None = None
+    subtitles: bool = False
+    subtitle_style: str = "default"
+    subtitle_position: str = "bottom"
+    subtitle_color: str = "#FFFF00"
+    subtitle_outline_color: str = "#000000"
+    subtitle_outline: float = Field(default=2.0, ge=0.0, le=10.0)
 
 
 class MusicTrackResponse(BaseModel):

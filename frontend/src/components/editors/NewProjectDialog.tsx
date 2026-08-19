@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import type { SEOCategory } from "../../types";
 
@@ -12,6 +12,13 @@ interface Props {
 
 export default function NewProjectDialog({ isOpen, categories, creating, onClose, onCreate }: Props) {
   const [form, setForm] = useState({ name: "", description: "", category: "", language: "en", ratio: "16:9" });
+
+  useEffect(() => {
+    if (isOpen) {
+      const autoName = `Project ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+      setForm({ name: autoName, description: "", category: "", language: "en", ratio: "16:9" });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

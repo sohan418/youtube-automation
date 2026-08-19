@@ -22,6 +22,7 @@ function buildDefaultTimeline(scenes: Scene[]): TimelineData {
       audio_in: 0,
       audio_out: null,
       volume: 1,
+      motion_effect: s.motion_effect || "zoom_in",
     });
     if (s.audio_path) {
       clips.push({

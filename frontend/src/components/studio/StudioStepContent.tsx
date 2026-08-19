@@ -18,11 +18,10 @@ import ScriptStep from "../steps/ScriptStep";
 import ScenesStep from "../steps/ScenesStep";
 import ImagesStep from "../steps/ImagesStep";
 import VoiceStep from "../steps/VoiceStep";
-import TimelineStep from "../steps/TimelineStep";
 import VideoStep from "../steps/VideoStep";
+import CaptionsStep from "../steps/CaptionsStep";
 import ThumbnailStep from "../steps/ThumbnailStep";
 import SeoStep from "../steps/SeoStep";
-import ExportStep from "../steps/ExportStep";
 
 interface PromptPair {
   system: string;
@@ -79,14 +78,15 @@ interface Props {
   openAddScene: (pos: number | null) => void;
   closeAddScene: () => void;
   editingSceneId: number | null;
-  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string };
-  setSceneEditForm: React.Dispatch<React.SetStateAction<{ narration: string; image_prompt: string; video_prompt: string }>>;
+  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string };
+  setSceneEditForm: React.Dispatch<React.SetStateAction<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string }>>;
   openSceneEdit: (scene: Scene) => void;
   cancelSceneEdit: () => void;
   saveSceneEdit: (id: number) => Promise<void>;
   removeScene: (id: number) => Promise<void>;
   generateScenes: () => Promise<void>;
   clearScenes: () => Promise<void>;
+  updateSceneEffect: (sceneId: number, effect: string) => Promise<void>;
 
   generatingSceneId: number | null;
   clipboardImageId: number | null;
@@ -110,7 +110,6 @@ interface Props {
   handleUploadTileDrop: (e: React.DragEvent, sceneId: number) => void;
   handlePaste: (sceneId: number) => Promise<void>;
   setPreviewMedia: (v: { path: string; kind: "image" | "video" } | null) => void;
-
   voiceProviders: VoiceProvider[];
   selectedProvider: string;
   selectedVoice: string;
@@ -133,12 +132,26 @@ interface Props {
   setSelectedProvider: (v: string) => void;
   setSelectedVoice: (v: string) => void;
   setSelectedVoiceRate: (v: string) => void;
-
+  
   selectedRatio: string;
-  buildVideo: (options?: { timeline?: TimelineData | null; ratio?: string }) => Promise<void>;
+  buildVideo: (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string }) => Promise<void>;
   setTimeline: (v: TimelineData | null) => void;
 
   setExportInfo: (v: ExportResult | null) => void;
+
+  enableSubtitles: boolean;
+  setEnableSubtitles: (v: boolean) => void;
+  subtitleStyle: string;
+  setSubtitleStyle: (v: string) => void;
+  subtitlePosition: string;
+  setSubtitlePosition: (v: string) => void;
+  subtitleColor: string;
+  setSubtitleColor: (v: string) => void;
+  subtitleOutlineColor: string;
+  setSubtitleOutlineColor: (v: string) => void;
+  subtitleOutline: number;
+  setSubtitleOutline: (v: number) => void;
+
 }
 
 export default function StudioStepContent(p: Props) {
@@ -261,6 +274,7 @@ export default function StudioStepContent(p: Props) {
           handleSceneDrop={p.handleSceneDrop}
           handleUploadTileDrop={p.handleUploadTileDrop}
           imagePrompts={p.prompts.image}
+          onUpdateSceneEffect={p.updateSceneEffect}
         />
       )}
 
@@ -300,16 +314,23 @@ export default function StudioStepContent(p: Props) {
         />
       )}
 
-      {p.activeTab === "timeline" && (
-        <TimelineStep
-          projectId={p.projectId}
+
+
+      {p.activeTab === "captions" && (
+        <CaptionsStep
           scenes={p.scenes}
-          actionLoading={p.actionLoading}
-          videoStatus={p.videoStatus}
-          ratio={p.selectedRatio}
-          mediaUrl={mediaUrl}
-          timeline={p.timeline}
-          onTimelineChange={p.setTimeline}
+          enableSubtitles={p.enableSubtitles}
+          setEnableSubtitles={p.setEnableSubtitles}
+          subtitleStyle={p.subtitleStyle}
+          setSubtitleStyle={p.setSubtitleStyle}
+          subtitlePosition={p.subtitlePosition}
+          setSubtitlePosition={p.setSubtitlePosition}
+          subtitleColor={p.subtitleColor}
+          setSubtitleColor={p.setSubtitleColor}
+          subtitleOutlineColor={p.subtitleOutlineColor}
+          setSubtitleOutlineColor={p.setSubtitleOutlineColor}
+          subtitleOutline={p.subtitleOutline}
+          setSubtitleOutline={p.setSubtitleOutline}
         />
       )}
 
@@ -322,6 +343,29 @@ export default function StudioStepContent(p: Props) {
           videoStatus={p.videoStatus}
           onBuild={p.buildVideo}
           mediaUrl={mediaUrl}
+          enableSubtitles={p.enableSubtitles}
+          subtitleStyle={p.subtitleStyle}
+          subtitlePosition={p.subtitlePosition}
+          subtitleColor={p.subtitleColor}
+          subtitleOutlineColor={p.subtitleOutlineColor}
+          subtitleOutline={p.subtitleOutline}
+          exportInfo={p.exportInfo}
+          onExport={() =>
+            p.runAction("export", async () => {
+              const result = await api.exportProject(p.projectId);
+              p.setExportInfo(result);
+              p.setSuccess(`${result.message} (${result.files.length} files)`);
+              if (result.files.includes("video/final.mp4")) {
+                const downloadUrl = mediaUrl(`${result.export_path}/video/final.mp4`);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.setAttribute("download", "final_video.mp4");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }
+            })
+          }
         />
       )}
 
@@ -379,20 +423,6 @@ export default function StudioStepContent(p: Props) {
         />
       )}
 
-      {p.activeTab === "export" && (
-        <ExportStep
-          exportInfo={p.exportInfo}
-          actionLoading={p.actionLoading}
-          mediaUrl={mediaUrl}
-          onExport={() =>
-            p.runAction("export", async () => {
-              const result = await api.exportProject(p.projectId);
-              p.setExportInfo(result);
-              p.setSuccess(`${result.message} (${result.files.length} files)`);
-            })
-          }
-        />
-      )}
     </div>
   );
 }

@@ -72,7 +72,7 @@ export function useProjectDetail(projectId: number) {
   const [sceneCount, setSceneCount] = useState("");
   const [ideaTopic, setIdeaTopic] = useState("");
   const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
-  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "" });
+  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in" });
   const [recordingSceneId, setRecordingSceneId] = useState<number | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordingPaused, setRecordingPaused] = useState(false);
@@ -93,6 +93,12 @@ export function useProjectDetail(projectId: number) {
   const [creatingScript, setCreatingScript] = useState(false);
   const [scriptForm, setScriptForm] = useState({ title: "", hook: "", body: "", ending: "" });
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [enableSubtitles, setEnableSubtitles] = useState(false);
+  const [subtitleStyle, setSubtitleStyle] = useState("shorts");
+  const [subtitlePosition, setSubtitlePosition] = useState("bottom");
+  const [subtitleColor, setSubtitleColor] = useState("#FFFF00");
+  const [subtitleOutlineColor, setSubtitleOutlineColor] = useState("#000000");
+  const [subtitleOutline, setSubtitleOutline] = useState(2.0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("studio_sidebar_collapsed") === "true";
@@ -149,6 +155,7 @@ export function useProjectDetail(projectId: number) {
         setThumbnails(thumbList);
         setSeo(seoData);
         setCategories(categoryList);
+        api.videoStatus(projectId).then(setVideoStatus).catch(() => {});
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load project");
       } finally {
@@ -538,10 +545,19 @@ export function useProjectDetail(projectId: number) {
     [projectId],
   );
 
-  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string }) => {
+  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number }) => {
     await runAction("video", async () => {
       setVideoStatus({ running: true, progress: 0, stage: "starting", message: "Starting video build...", output: null, error: null, updated_at: null });
-      const result = await api.buildVideo(projectId, { ratio: options?.ratio ?? selectedRatio, timeline: options?.timeline });
+      const result = await api.buildVideo(projectId, {
+        ratio: options?.ratio ?? selectedRatio,
+        timeline: options?.timeline,
+        subtitles: options?.subtitles ?? enableSubtitles,
+        subtitle_style: options?.subtitle_style ?? subtitleStyle,
+        subtitle_position: options?.subtitle_position ?? subtitlePosition,
+        subtitle_color: options?.subtitle_color ?? subtitleColor,
+        subtitle_outline_color: options?.subtitle_outline_color ?? subtitleOutlineColor,
+        subtitle_outline: options?.subtitle_outline ?? subtitleOutline,
+      });
       setSuccess(result.message);
       const finalStatus = await pollVideoStatus();
       if (finalStatus.error) throw new Error(finalStatus.error);
@@ -593,13 +609,18 @@ export function useProjectDetail(projectId: number) {
   };
 
   const openSceneEdit = (scene: Scene) => {
-    setSceneEditForm({ narration: scene.narration, image_prompt: scene.image_prompt ?? "", video_prompt: scene.video_prompt ?? "" });
+    setSceneEditForm({
+      narration: scene.narration,
+      image_prompt: scene.image_prompt ?? "",
+      video_prompt: scene.video_prompt ?? "",
+      motion_effect: scene.motion_effect ?? "zoom_in",
+    });
     setEditingSceneId(scene.id);
   };
 
   const cancelSceneEdit = () => {
     setEditingSceneId(null);
-    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "" });
+    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in" });
   };
 
   const saveSceneEdit = async (sceneId: number) => {
@@ -609,6 +630,7 @@ export function useProjectDetail(projectId: number) {
         narration: sceneEditForm.narration.trim(),
         image_prompt: sceneEditForm.image_prompt.trim() || null,
         video_prompt: sceneEditForm.video_prompt.trim() || null,
+        motion_effect: sceneEditForm.motion_effect,
       });
       cancelSceneEdit();
       setSuccess("Scene updated.");
@@ -621,6 +643,17 @@ export function useProjectDetail(projectId: number) {
       await api.clearScenes(projectId);
       setSuccess("All scenes cleared.");
     });
+  };
+
+  const updateSceneEffect = async (sceneId: number, motion_effect: string) => {
+    setScenes((prev) =>
+      prev.map((s) => (s.id === sceneId ? { ...s, motion_effect } : s))
+    );
+    try {
+      await api.updateScene(sceneId, { motion_effect });
+    } catch (e) {
+      console.error("Failed to persist motion effect", e);
+    }
   };
 
   const bumpAudioVersion = (sceneId: number) => setAudioVersion((v) => ({ ...v, [sceneId]: (v[sceneId] || 0) + 1 }));
@@ -857,6 +890,9 @@ export function useProjectDetail(projectId: number) {
     recordingSeconds, recordingPaused, micLevel, audioVersion, editingSettings,
     editingScript, creatingScript, scriptForm, showScrollTop, sidebarCollapsed,
     activeScript, doneMap: null as unknown as ReturnType<typeof import("../components/studio/studioSteps").getDoneMap>,
+    enableSubtitles, setEnableSubtitles, subtitleStyle, setSubtitleStyle,
+    subtitlePosition, setSubtitlePosition, subtitleColor, setSubtitleColor,
+    subtitleOutlineColor, setSubtitleOutlineColor, subtitleOutline, setSubtitleOutline,
     setActiveTab, setActiveSceneIdx, setError, setSuccess, setEditingSettings,
     setScriptTopic, setScriptForm, setCreatingScript, setEditingScript, setIdeaTopic, setSceneCount,
     setNewSceneNarration, setImageUrlInputs, setDragMedia, setDraggingOverScene,
@@ -871,7 +907,7 @@ export function useProjectDetail(projectId: number) {
     handleVideoFileSelected, applyVideoUpload, removeSceneVideo, removeSceneImage,
     makePrimaryImage, reorderSceneMedia, copySceneImageTo,
     addScene, openAddScene, closeAddScene, generateScenes, removeScene,
-    openSceneEdit, cancelSceneEdit, saveSceneEdit, clearScenes,
+    openSceneEdit, cancelSceneEdit, saveSceneEdit, clearScenes, updateSceneEffect,
     startRecording, toggleRecordingPause, stopRecording, handleAudioFileSelected,
     clearSceneAudio, formatRecordTime, buildVideo,
     handleTileDragOver, handleTileDrop, handleSceneDrop, handleUploadTileDrop, handlePaste,

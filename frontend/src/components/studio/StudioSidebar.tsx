@@ -83,7 +83,7 @@ export default function StudioSidebar({
     );
   };
 
-  const planningSteps = steps.filter(s => ["ideas", "script", "scenes", "images", "voice", "timeline"].includes(s.key));
+  const planningSteps = steps.filter(s => ["ideas", "script", "scenes", "images", "voice", "captions", "timeline"].includes(s.key));
   const productionSteps = steps.filter(s => ["video", "thumbnail", "seo"].includes(s.key));
   const exportSteps = steps.filter(s => ["export"].includes(s.key));
 

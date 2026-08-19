@@ -110,6 +110,7 @@ class Scene(Base):
     image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     audio_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    motion_effect: Mapped[str | None] = mapped_column(String(50), default="zoom_in", nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

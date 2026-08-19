@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.models import PromptTemplate
-from app.routers import admin, ai, export, ideas, images, media, projects, prompts, scenes, scene_videos, scripts, seo, thumbnails, timeline, video, voice
+from app.routers import admin, ai, export, ideas, images, media, projects, prompts, scenes, scene_videos, scripts, seo, thumbnails, video, voice
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,6 +18,22 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    
+    # Check if scenes table needs migration for motion_effect column
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT motion_effect FROM scenes LIMIT 1"))
+        except Exception:
+            logging.info("Migrating database: adding motion_effect column to scenes table")
+            conn.execute(text("ALTER TABLE scenes ADD COLUMN motion_effect VARCHAR(50) DEFAULT 'zoom_in'"))
+            conn.commit()
+        try:
+            conn.execute(text("UPDATE scenes SET motion_effect = 'zoom_in' WHERE motion_effect IS NULL OR motion_effect = 'none'"))
+            conn.commit()
+        except Exception:
+            pass
+
     _seed_default_prompts()
     yield
 
@@ -66,7 +82,6 @@ app.include_router(scene_videos.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(voice.router, prefix="/api")
 app.include_router(video.router, prefix="/api")
-app.include_router(timeline.router, prefix="/api")
 app.include_router(thumbnails.router, prefix="/api")
 app.include_router(seo.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
