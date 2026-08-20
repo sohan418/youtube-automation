@@ -2,12 +2,63 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Project, ProjectStatus, Script, SEOMetadata
+from app.models import Project, ProjectStatus, Scene, Script, SEOMetadata
 from app.schemas import SEOCategory, SEOCategoryUpdate, SEOGenerateRequest, SEOResponse, SEOUpdate
 from app.services.ai import ai_service
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/seo", tags=["SEO"])
+
+# ---------------------------------------------------------------------------
+# Marker constants — served to the frontend via GET /seo/constants so the
+# frontend never needs to duplicate them.
+# ---------------------------------------------------------------------------
+SECTION_SEP = "─────────────────────────────"
+DISCLAIMER_MARKER = "⚠️ DISCLAIMER"
+TIMESTAMPS_MARKER = "⏱️ TIMESTAMPS"
+
+DEFAULT_DISCLAIMER = (
+    "This video is for educational and informational purposes only. "
+    "All content is AI-generated and intended for general audiences. "
+    "Views expressed do not constitute professional advice. "
+    "Music and media used are either original, royalty-free, or used under "
+    "fair use. No copyright infringement is intended. "
+    "If you have any concerns, please contact us before filing a claim."
+)
+
+# Full block appended to every generated description
+YOUTUBE_DISCLAIMER = (
+    f"\n\n{SECTION_SEP}\n"
+    f"{DISCLAIMER_MARKER}\n"
+    f"{DEFAULT_DISCLAIMER}\n"
+    f"{SECTION_SEP}"
+)
+
+
+def _format_timestamp(seconds: float) -> str:
+    """Convert seconds to MM:SS or HH:MM:SS string."""
+    total = int(seconds)
+    h = total // 3600
+    m = (total % 3600) // 60
+    s = total % 60
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def _build_timestamps(scenes: list) -> str:
+    """Build a timestamps block from a list of Scene ORM objects."""
+    if not scenes:
+        return ""
+    lines = [TIMESTAMPS_MARKER]
+    current = 0.0
+    for scene in sorted(scenes, key=lambda sc: sc.order_index):
+        ts = _format_timestamp(current)
+        narration = (scene.narration or "").strip()
+        label = narration.split("\n")[0][:60] if narration else f"Scene {scene.order_index}"
+        lines.append(f"{ts} – {label}")
+        current += scene.duration_seconds or 5.0
+    return "\n".join(lines)
 
 YOUTUBE_CATEGORIES: list[dict[str, int | str]] = [
     {"id": 1, "name": "Film & Animation"},
@@ -43,6 +94,18 @@ YOUTUBE_CATEGORIES: list[dict[str, int | str]] = [
     {"id": 43, "name": "Shows"},
     {"id": 44, "name": "Trailers"},
 ]
+
+
+@router.get("/constants")
+def get_seo_constants():
+    """Return the marker strings and default disclaimer used when building
+    SEO descriptions so the frontend never needs to hard-code them."""
+    return {
+        "disclaimer_marker": DISCLAIMER_MARKER,
+        "timestamps_marker": TIMESTAMPS_MARKER,
+        "section_sep": SECTION_SEP,
+        "default_disclaimer": DEFAULT_DISCLAIMER,
+    }
 
 
 @router.get("/categories", response_model=list[SEOCategory])
@@ -115,6 +178,13 @@ def generate_seo(
     if not script:
         raise HTTPException(status_code=400, detail="Generate a script first")
 
+    scenes = (
+        db.query(Scene)
+        .filter(Scene.project_id == project_id)
+        .order_by(Scene.order_index)
+        .all()
+    )
+
     try:
         raw = ai_service.generate_seo(
             script.title, script.body, payload.language or project.language
@@ -130,7 +200,16 @@ def generate_seo(
         db.add(seo)
 
     seo.title = raw.get("title")
-    seo.description = raw.get("description")
+
+    # Build description with timestamps + disclaimer appended
+    base_description = raw.get("description") or ""
+    timestamps_block = _build_timestamps(scenes)
+    full_description = base_description
+    if timestamps_block:
+        full_description += f"\n\n{timestamps_block}"
+    full_description += YOUTUBE_DISCLAIMER
+
+    seo.description = full_description
     seo.tags = raw.get("tags")
     seo.hashtags = raw.get("hashtags")
 

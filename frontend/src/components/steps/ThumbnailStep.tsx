@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { Sparkles, Copy, Check, Eye } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { Sparkles, Check, Upload, Copy } from "lucide-react";
 import type { Thumbnail } from "../../types";
-import FreeAIGuide from "../editors/FreeAIGuide";
 
 interface Props {
   thumbnails: Thumbnail[];
@@ -9,23 +8,26 @@ interface Props {
   mediaUrl: (p: string) => string;
   onGenerate: () => void;
   onSelect: (id: number) => void;
-  prompts?: { system: string; user: string };
+  onUpload: (file: File) => Promise<void>;
 }
 
-function cleanPromptText(raw: string | null | undefined): string {
-  if (!raw) return "";
-  let text = raw.replace(/```[a-z]*/gi, "").replace(/```/g, "");
-  text = text.replace(/^\s*[#*•📌:-]+\s*/gm, "");
-  text = text.replace(/\*{1,3}(.*?)\*{1,3}/g, "$1");
-  text = text.replace(/#{1,6}\s*/g, "");
-  text = text.replace(/^(?:YouTube\s+)?Thumbnail\s+Prompt(?:\s*\([^)]*\))?\s*[-–:]*\s*/gi, "");
-  text = text.replace(/^Prompt\s*[-–:]*\s*/gi, "");
-  return text.replace(/\s+/g, " ").trim();
-}
-
-export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onGenerate, onSelect, prompts }: Props) {
+export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onGenerate, onSelect, onUpload }: Props) {
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = useCallback(async (files: FileList | null) => {
+    if (!files || uploading) return;
+    const file = files[0];
+    if (!file.type.startsWith("image/")) return;
+    setUploading(true);
+    try {
+      await onUpload(file);
+    } finally {
+      setUploading(false);
+    }
+  }, [onUpload, uploading]);
 
   const handleCopy = (id: number, text: string) => {
     navigator.clipboard.writeText(text);
@@ -33,167 +35,104 @@ export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onG
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const cardStyle: React.CSSProperties = {
+    borderRadius: "8px",
+    border: "1px solid var(--border)",
+    overflow: "hidden",
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const imgStyle: React.CSSProperties = {
+    width: "100%",
+    aspectRatio: "16/9",
+    objectFit: "cover",
+    display: "block",
+  };
+
   return (
-    <div className="card" style={{ padding: "0.85rem 1rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-        <div>
-          <h3 style={{ fontSize: "1.1rem" }}>Thumbnails</h3>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>
-            Generate 3 AI thumbnail options and select the best one for your video.
-          </p>
-        </div>
-        <button className="btn-accent" disabled={!!actionLoading} onClick={onGenerate} style={{ padding: "0.35rem 0.8rem", fontSize: "0.8rem" }}>
-          {actionLoading === "thumbnails" ? "Generating..." : <><Sparkles size={13} style={{ verticalAlign: "middle" }} /> Generate Thumbnails</>}
+    <div className="card" style={{ padding: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <h3>Thumbnail</h3>
+        <button className="btn-accent" disabled={!!actionLoading} onClick={onGenerate}>
+          {actionLoading === "thumbnails" ? "Generating..." : <><Sparkles size={14} /> Generate</>}
         </button>
       </div>
 
-      {thumbnails.length === 0 ? (
-        <div>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", padding: "1rem 0" }}>No thumbnails yet. Click "Generate Thumbnails" to create options.</p>
-          <FreeAIGuide
-            title="Generate Thumbnail Prompts with Free AI"
-            prompt={prompts ? undefined : `SYSTEM PROMPT:\nYou are an expert YouTube thumbnail designer and AI prompt engineer. Create ONE detailed, eye-catching image prompt in English for generating a YouTube thumbnail. Describe the subject, high-emotion facial expressions, vibrant color palette, dynamic lighting, and text overlays. CRITICAL INSTRUCTION: Output ONLY the plain text prompt itself. Do NOT include markdown headers, bold asterisks (**), hashtags (#), code block ticks (\`\`\`), emojis, or introductory labels like 'Thumbnail Prompt:'.\n\nUSER PROMPT:\nCreate a thumbnail image prompt for a video titled: 'Your Video Title Here'.`}
-            promptPair={prompts}
-            responsePlaceholder='Paste AI response here...\n\nAccepts JSON array of prompts or plain text list.'
-            onParseResponse={(text) => {
-              try {
-                const jsonMatch = text.match(/\[[\s\S]*\]/);
-                if (jsonMatch) {
-                  const parsed = JSON.parse(jsonMatch[0]);
-                  if (Array.isArray(parsed)) {
-                    const prompts = parsed.map((item: any) => item.prompt || item.text || "").filter(Boolean);
-                    if (prompts.length > 0) {
-                      prompts.forEach((p: string) => {
-                        navigator.clipboard.writeText(p);
-                      });
-                    }
-                  }
-                }
-              } catch {
-                navigator.clipboard.writeText(text);
-              }
-            }}
-          />
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.85rem" }}>
-          {thumbnails.map((thumb) => {
-            const cleanedPrompt = cleanPromptText(thumb.prompt);
-            const isExpanded = expandedId === thumb.id;
-            const filename = thumb.file_path.split(/[\\/]/).pop();
-
-            return (
-              <div
-                key={thumb.id}
-                className="card"
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.75rem" }}>
+        {/* Thumbnail cards */}
+        {thumbnails.map((thumb) => (
+          <div key={thumb.id} style={cardStyle}>
+            <img src={mediaUrl(thumb.file_path)} alt="Thumbnail" loading="lazy" style={imgStyle} />
+            {thumb.is_selected && (
+              <span style={{
+                position: "absolute", top: 6, right: 6, background: "var(--accent)", color: "#000",
+                fontSize: "0.65rem", fontWeight: 700, padding: "0.15rem 0.4rem", borderRadius: "999px",
+              }}>
+                <Check size={11} /> Selected
+              </span>
+            )}
+            {thumb.prompt && (
+              <button
+                onClick={() => handleCopy(thumb.id, thumb.prompt!)}
+                title="Copy prompt"
                 style={{
-                  borderColor: thumb.is_selected ? "var(--accent)" : "var(--border)",
-                  borderWidth: thumb.is_selected ? "2px" : "1px",
-                  background: thumb.is_selected ? "rgba(62, 166, 255, 0.05)" : "var(--bg)",
-                  display: "flex",
-                  flexDirection: "column",
-                  padding: "0.6rem",
-                  position: "relative",
+                  position: "absolute", bottom: 36, right: 6, background: "rgba(0,0,0,0.6)", color: copiedId === thumb.id ? "var(--success)" : "#fff",
+                  fontSize: "0.65rem", padding: "0.2rem 0.4rem", borderRadius: "4px", border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "0.2rem",
                 }}
               >
-                {thumb.file_path && (
-                  <div style={{ position: "relative", marginBottom: "0.5rem", borderRadius: "var(--radius)", overflow: "hidden" }}>
-                    <img
-                      src={mediaUrl(thumb.file_path)}
-                      alt="Thumbnail Option"
-                      loading="lazy"
-                      style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }}
-                    />
-                    {thumb.is_selected && (
-                      <span
-                        style={{
-                          position: "absolute", top: 6, right: 6, background: "var(--accent)", color: "#000",
-                          fontSize: "0.65rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "999px",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
-                        }}
-                      >
-                        <Check size={12} style={{ verticalAlign: "-2px" }} /> SELECTED
-                      </span>
-                    )}
-                  </div>
-                )}
+                <Copy size={10} /> {copiedId === thumb.id ? "Copied" : "Prompt"}
+              </button>
+            )}
+            <button
+              className={thumb.is_selected ? "btn-accent" : "btn-secondary"}
+              disabled={!!actionLoading}
+              onClick={() => onSelect(thumb.id)}
+              style={{ width: "100%", border: "none", borderRadius: 0, fontSize: "0.78rem" }}
+            >
+              {thumb.is_selected ? "Selected" : "Use this"}
+            </button>
+          </div>
+        ))}
 
-                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.4rem", fontWeight: 600 }}>
-                  {filename}
-                </div>
-
-                {cleanedPrompt && (
-                  <div
-                    style={{
-                      fontSize: "0.78rem",
-                      color: "var(--text)",
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "6px",
-                      padding: "0.5rem 0.6rem",
-                      marginBottom: "0.6rem",
-                      lineHeight: 1.4,
-                      flex: 1,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                      <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                        Prompt
-                      </span>
-                      <div style={{ display: "flex", gap: "0.3rem" }}>
-                        <button
-                          onClick={() => handleCopy(thumb.id, cleanedPrompt)}
-                          title="Copy prompt text"
-                          style={{
-                            background: "transparent", color: copiedId === thumb.id ? "var(--success)" : "var(--text-muted)",
-                            padding: "0.15rem 0.35rem", fontSize: "0.7rem", cursor: "pointer", border: "1px solid var(--border)",
-                            borderRadius: "4px", display: "flex", alignItems: "center", gap: "0.2rem",
-                          }}
-                        >
-                          {copiedId === thumb.id ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
-                        </button>
-                        {cleanedPrompt.length > 90 && (
-                          <button
-                            onClick={() => setExpandedId(isExpanded ? null : thumb.id)}
-                            title={isExpanded ? "Collapse prompt" : "Expand prompt"}
-                            style={{
-                              background: "transparent", color: "var(--accent)",
-                              padding: "0.15rem 0.35rem", fontSize: "0.7rem", cursor: "pointer", border: "1px solid var(--border)",
-                              borderRadius: "4px", display: "flex", alignItems: "center", gap: "0.2rem",
-                            }}
-                          >
-                            <Eye size={11} /> {isExpanded ? "Less" : "More"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: isExpanded ? "unset" : 3,
-                        WebkitBoxOrient: "vertical",
-                        overflow: isExpanded ? "visible" : "hidden",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {cleanedPrompt}
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  className={thumb.is_selected ? "btn-accent" : "btn-secondary"}
-                  disabled={!!actionLoading}
-                  onClick={() => onSelect(thumb.id)}
-                  style={{ width: "100%", padding: "0.4rem", fontSize: "0.8rem", fontWeight: 600 }}
-                >
-                  {thumb.is_selected ? <><Check size={13} style={{ verticalAlign: "-2px" }} /> Primary Thumbnail</> : "Select Thumbnail"}
-                </button>
-              </div>
-            );
-          })}
+        {/* Drop card */}
+        <div
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            ...cardStyle,
+            borderStyle: "dashed",
+            borderColor: dragOver ? "var(--accent)" : "var(--border)",
+            background: dragOver ? "rgba(62, 166, 255, 0.05)" : "transparent",
+            cursor: "pointer",
+            transition: "all 0.15s",
+            opacity: uploading ? 0.5 : 1,
+            pointerEvents: uploading ? "none" : "auto",
+            minHeight: "120px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            gap: "0.3rem",
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+          />
+          <Upload size={18} style={{ color: dragOver ? "var(--accent)" : "var(--text-muted)" }} />
+          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+            {uploading ? "Uploading..." : "Drop image"}
+          </span>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -15,6 +15,9 @@ interface Props {
   setSubtitleOutlineColor: (v: string) => void;
   subtitleOutline: number;
   setSubtitleOutline: (v: number) => void;
+  subtitleFontSize: number | null;
+  setSubtitleFontSize: (v: number | null) => void;
+  onSave?: (patch: Record<string, unknown>) => Promise<void>;
 }
 
 const STYLES = [
@@ -77,10 +80,18 @@ export default function CaptionsStep({
   setSubtitleOutlineColor,
   subtitleOutline,
   setSubtitleOutline,
+  subtitleFontSize,
+  setSubtitleFontSize,
+  onSave,
 }: Props) {
   const totalWords = scenes.reduce((sum, s) => sum + (s.narration?.split(/\s+/).length || 0), 0);
   const hasNarration = scenes.some((s) => s.narration);
   const activeStyle = STYLES.find((s) => s.value === subtitleStyle) || STYLES[0];
+
+  const update = (patch: Record<string, unknown>, local?: () => void) => {
+    if (local) local();
+    onSave?.(patch);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -128,7 +139,7 @@ export default function CaptionsStep({
         </div>
         <button
           type="button"
-          onClick={() => setEnableSubtitles(!enableSubtitles)}
+          onClick={() => update({ captions_enabled: !enableSubtitles }, () => setEnableSubtitles(!enableSubtitles))}
           style={{
             minWidth: "48px",
             height: "26px",
@@ -170,7 +181,7 @@ export default function CaptionsStep({
                 <button
                   key={style.value}
                   type="button"
-                  onClick={() => setSubtitleStyle(style.value)}
+                  onClick={() => update({ caption_style: style.value }, () => setSubtitleStyle(style.value))}
                   style={{
                     display: "flex",
                     flexDirection: "column",
@@ -249,7 +260,7 @@ export default function CaptionsStep({
                   <button
                     key={pos.value}
                     type="button"
-                    onClick={() => setSubtitlePosition(pos.value)}
+                    onClick={() => update({ caption_position: pos.value }, () => setSubtitlePosition(pos.value))}
                     style={{
                       flex: 1,
                       padding: "0.45rem 0",
@@ -279,7 +290,7 @@ export default function CaptionsStep({
                   <button
                     key={c}
                     type="button"
-                    onClick={() => setSubtitleColor(c)}
+                    onClick={() => update({ caption_color: c }, () => setSubtitleColor(c))}
                     title={c}
                     style={{
                       width: "28px",
@@ -309,7 +320,7 @@ export default function CaptionsStep({
                   <input
                     type="color"
                     value={subtitleColor}
-                    onChange={(e) => setSubtitleColor(e.target.value)}
+                    onChange={(e) => update({ caption_color: e.target.value }, () => setSubtitleColor(e.target.value))}
                     style={{ position: "absolute", width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
                   />
                 </label>
@@ -329,7 +340,7 @@ export default function CaptionsStep({
                   <button
                     key={c}
                     type="button"
-                    onClick={() => setSubtitleOutlineColor(c)}
+                    onClick={() => update({ caption_outline_color: c }, () => setSubtitleOutlineColor(c))}
                     title={c}
                     style={{
                       width: "28px",
@@ -359,7 +370,7 @@ export default function CaptionsStep({
                   <input
                     type="color"
                     value={subtitleOutlineColor}
-                    onChange={(e) => setSubtitleOutlineColor(e.target.value)}
+                    onChange={(e) => update({ caption_outline_color: e.target.value }, () => setSubtitleOutlineColor(e.target.value))}
                     style={{ position: "absolute", width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
                   />
                 </label>
@@ -381,12 +392,50 @@ export default function CaptionsStep({
                 max={6}
                 step={0.5}
                 value={subtitleOutline}
-                onChange={(e) => setSubtitleOutline(parseFloat(e.target.value))}
+                onChange={(e) => update({ caption_outline: parseFloat(e.target.value) }, () => setSubtitleOutline(parseFloat(e.target.value)))}
                 style={{ width: "100%", marginTop: "0.3rem", accentColor: "var(--primary)", cursor: "pointer" }}
               />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.65rem", color: "var(--text-muted)" }}>
                 <span>None</span>
                 <span>Thick</span>
+              </div>
+            </div>
+
+            {/* Font Size */}
+            <div>
+              <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Font Size</span>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  {subtitleFontSize === null ? (
+                    <span style={{ fontFamily: "monospace", color: "var(--text-muted)", fontSize: "0.7rem" }}>Auto</span>
+                  ) : (
+                    <span style={{ fontFamily: "monospace", color: "var(--text)" }}>{subtitleFontSize}px</span>
+                  )}
+                  {subtitleFontSize !== null && (
+                    <button
+                      type="button"
+                      onClick={() => update({ caption_font_size: null }, () => setSubtitleFontSize(null))}
+                      title="Reset to auto"
+                      style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.7rem", padding: "0 2px", lineHeight: 1 }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </span>
+              </label>
+              <input
+                type="range"
+                min={16}
+                max={120}
+                step={2}
+                value={subtitleFontSize ?? 40}
+                onChange={(e) => update({ caption_font_size: parseInt(e.target.value, 10) }, () => setSubtitleFontSize(parseInt(e.target.value, 10)))}
+                style={{ width: "100%", marginTop: "0.3rem", accentColor: "var(--primary)", cursor: "pointer" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.65rem", color: "var(--text-muted)" }}>
+                <span>Small (16px)</span>
+                <span>Auto</span>
+                <span>Large (120px)</span>
               </div>
             </div>
 
@@ -427,7 +476,7 @@ export default function CaptionsStep({
                 >
                   <span
                     style={{
-                      fontSize: "0.7rem",
+                      fontSize: subtitleFontSize ? `${Math.round(subtitleFontSize * 0.36)}px` : "0.7rem",
                       fontWeight: 700,
                       color: subtitleColor,
                       fontFamily: subtitleStyle === "shorts" ? "Impact, sans-serif" : "Arial, sans-serif",

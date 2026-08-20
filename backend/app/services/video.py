@@ -311,6 +311,7 @@ class VideoService:
         subtitle_color: str = "#FFFF00",
         subtitle_outline_color: str = "#000000",
         subtitle_outline: float = 2.0,
+        subtitle_font_size: int | None = None,
     ) -> str:
         resolution = self.resolve_resolution(ratio, resolution)
         project_path = storage_service.get_project_path(slug)
@@ -409,10 +410,34 @@ class VideoService:
                     self._create_segment_silent(item["path"], segment, duration, resolution, motion_effect)
             else:
                 sub_segments: list[Path] = []
-                part = max(duration / len(media), 0.5)
                 audio_len = None
                 if audio_ok:
                     audio_len = self._probe_audio_duration(full_audio)
+
+                # Build a per-item duration list that respects natural video clip
+                # lengths. Video clips own their probed duration; images share the
+                # remaining time equally. The sum is always clamped to `duration`
+                # (the scene's audio length) so nothing runs over.
+                video_durations: dict[int, float] = {}
+                for k, item in enumerate(media):
+                    if item["kind"] == "video":
+                        probed = self._probe_audio_duration(item["path"]) or (
+                            self._probe_video_info(item["path"]) or {}
+                        ).get("duration") or 0.0
+                        video_durations[k] = probed
+
+                total_video_time = sum(video_durations.values())
+                image_indices = [k for k in range(len(media)) if k not in video_durations]
+                remaining = max(duration - total_video_time, 0.0)
+                image_part = (remaining / len(image_indices)) if image_indices else 0.0
+                image_part = max(image_part, 0.5)
+
+                item_durations = [
+                    video_durations[k] if k in video_durations else image_part
+                    for k in range(len(media))
+                ]
+
+                start = 0.0
                 for k, item in enumerate(media):
                     done_images += 1
                     self.set_progress(
@@ -422,7 +447,7 @@ class VideoService:
                         f"Rendering scene {order} media {k + 1}/{len(media)} ({done_images}/{total_images} media)...",
                     )
                     seg = video_dir / f"scene_{order:03d}_media{k:02d}.mp4"
-                    start = k * part
+                    part = item_durations[k]
                     has_audio = audio_ok and (audio_len is None or start < audio_len)
                     if item["kind"] == "video":
                         audio_for_video = full_audio if has_audio else None
@@ -443,6 +468,7 @@ class VideoService:
                         self._create_segment_silent(item["path"], seg, part, resolution, motion_effect)
                     if seg.exists():
                         sub_segments.append(seg)
+                    start += part
 
                 if sub_segments:
                     self.set_progress(slug, 91, "joining", f"Joining scene {order} media...")
@@ -459,178 +485,45 @@ class VideoService:
         output_path = video_dir / "final.mp4"
         self._concat_segments(concat_file, output_path)
 
-        if background_music and output_path.exists():
-            music_path = self._resolve_scene_path(background_music)
-            if music_path.exists():
-                self.set_progress(slug, 96, "music", "Mixing background music...")
-                output_path = self._add_background_music(
-                    output_path, music_path, video_dir, volume=music_volume
-                )
+        # Resolve music path once so we can pass it to the combined pass
+        music_path: Path | None = None
+        if background_music:
+            candidate = self._resolve_scene_path(background_music)
+            if candidate.exists():
+                music_path = candidate
 
-        if subtitles and output_path.exists():
-            self.set_progress(slug, 98, "subtitles", "Burning in subtitles...")
+        # Resolve subtitle ASS file once (generate it even if we decide not to burn)
+        ass_path: Path | None = None
+        if subtitles and subtitle_entries and output_path.exists():
             ass_path = video_dir / "subtitles.ass"
             self._generate_ass_subtitles(
                 subtitle_entries, ass_path, style=subtitle_style,
                 position=subtitle_position, color=subtitle_color,
                 outline_color=subtitle_outline_color, outline_thickness=subtitle_outline,
+                font_size=subtitle_font_size,
             )
-            if ass_path.exists():
-                sub_output = video_dir / "final_subtitled.mp4"
-                try:
-                    self._burn_subtitles(output_path, ass_path, sub_output)
-                    if sub_output.exists():
-                        output_path.unlink()
-                        sub_output.rename(output_path)
-                except Exception as e:
-                    logger.exception("Failed to burn subtitles")
+            if not ass_path.exists():
+                ass_path = None
+
+        # Single combined FFmpeg pass: music + subtitles (or either alone)
+        if (music_path or ass_path) and output_path.exists():
+            stage_msg = (
+                "Mixing music and burning subtitles..." if music_path and ass_path
+                else ("Mixing background music..." if music_path else "Burning in subtitles...")
+            )
+            self.set_progress(slug, 96, "finishing", stage_msg)
+            try:
+                self._add_music_and_subtitles(
+                    output_path, video_dir, music_path, music_volume, ass_path
+                )
+            except Exception:
+                logger.exception("Combined music+subtitles pass failed")
 
         relative = str(output_path.relative_to(storage_service.root.parent))
         self.set_progress(
             slug, 100, "done", "Video built successfully", running=False, output=relative
         )
         return relative
-
-    def build_timeline(
-        self,
-        slug: str,
-        timeline: dict,
-        background_music: str | None = None,
-        music_volume: float = 0.12,
-        ratio: str = "16:9",
-        resolution: str | None = None,
-        subtitles: bool = False,
-        subtitle_style: str = "default",
-        subtitle_position: str = "bottom",
-        subtitle_color: str = "#FFFF00",
-        subtitle_outline_color: str = "#000000",
-        subtitle_outline: float = 2.0,
-    ) -> str:
-        resolution = self.resolve_resolution(ratio, resolution)
-        project_path = storage_service.get_project_path(slug)
-        video_dir = project_path / "video"
-        video_dir.mkdir(exist_ok=True)
-
-        from app.database import SessionLocal
-        from app.models import Project, Scene
-        db = SessionLocal()
-        scene_map = {}
-        try:
-            project = db.query(Project).filter(Project.slug == slug).first()
-            if project:
-                scenes_list = db.query(Scene).filter(Scene.project_id == project.id).all()
-                scene_map = {s.id: s.narration for s in scenes_list}
-        finally:
-            db.close()
-
-        clips = [c for c in timeline.get("clips") or [] if c.get("track") == "video"]
-        if not clips:
-            return self._create_placeholder_video(slug, resolution)
-
-        ordered = sorted(clips, key=lambda c: c.get("start", 0.0))
-        concat_file = video_dir / "concat_list_timeline.txt"
-        segment_files: list[Path] = []
-        subtitle_entries = []
-        total = len(ordered)
-
-        self.set_progress(slug, 2, "preparing", f"Rendering {total} timeline clip(s)...")
-        for idx, clip in enumerate(ordered, start=1):
-            image = self._resolve_timeline_asset(clip.get("image_path"), project_path)
-            video = self._resolve_timeline_asset(clip.get("video_path"), project_path)
-            audio = self._resolve_timeline_asset(clip.get("audio_path"), project_path)
-            duration = max(0.5, float(clip.get("duration") or 5.0))
-            audio_in = max(0.0, float(clip.get("audio_in") or 0.0))
-            motion_effect = clip.get("motion_effect", "none")
-            segment = video_dir / f"timeline_clip_{idx:03d}.mp4"
-
-            # Subtitle tracking
-            start = float(clip.get("start", 0.0))
-            scene_id = clip.get("scene_id")
-            narration = scene_map.get(scene_id)
-            if narration:
-                subtitle_entries.append({
-                    "start": start,
-                    "end": start + duration,
-                    "text": narration
-                })
-
-            self.set_progress(
-                slug,
-                int(2 + 90 * idx / total),
-                "rendering",
-                f"Rendering timeline clip {idx}/{total} ({duration:.1f}s)...",
-            )
-            if video and video.exists() and self._is_valid_video(video):
-                audio_for_video = audio if audio and audio.exists() else None
-                self._create_video_segment(
-                    video,
-                    audio_for_video,
-                    audio_in,
-                    duration,
-                    segment,
-                    resolution,
-                    volume=float(clip.get("volume") or 1.0),
-                )
-            elif audio and audio.exists() and self._is_valid_audio(audio):
-                self._create_segment_with_audio_slice(
-                    image, audio, audio_in, duration, segment, resolution, motion_effect
-                )
-            else:
-                self._create_segment_silent(image, segment, duration, resolution, motion_effect)
-            if segment.exists():
-                segment_files.append(segment)
-
-        if not segment_files:
-            return self._create_placeholder_video(slug, resolution)
-
-        self.set_progress(slug, 93, "joining", "Joining timeline clips...")
-        with concat_file.open("w", encoding="utf-8") as f:
-            for seg in segment_files:
-                f.write(f"file '{seg.as_posix()}'\n")
-
-        output_path = video_dir / "final.mp4"
-        self._concat_segments(concat_file, output_path)
-
-        if background_music and output_path.exists():
-            music_path = self._resolve_scene_path(background_music)
-            if music_path.exists():
-                self.set_progress(slug, 96, "music", "Mixing background music...")
-                output_path = self._add_background_music(
-                    output_path, music_path, video_dir, volume=music_volume
-                )
-
-        if subtitles and output_path.exists():
-            self.set_progress(slug, 98, "subtitles", "Burning in subtitles...")
-            ass_path = video_dir / "subtitles.ass"
-            self._generate_ass_subtitles(
-                subtitle_entries, ass_path, style=subtitle_style,
-                position=subtitle_position, color=subtitle_color,
-                outline_color=subtitle_outline_color, outline_thickness=subtitle_outline,
-            )
-            if ass_path.exists():
-                sub_output = video_dir / "final_subtitled.mp4"
-                try:
-                    self._burn_subtitles(output_path, ass_path, sub_output)
-                    if sub_output.exists():
-                        output_path.unlink()
-                        sub_output.rename(output_path)
-                except Exception as e:
-                    logger.exception("Failed to burn subtitles")
-
-        relative = str(output_path.relative_to(storage_service.root.parent))
-        self.set_progress(
-            slug, 100, "done", "Video built successfully", running=False, output=relative
-        )
-        return relative
-
-    @staticmethod
-    def _resolve_timeline_asset(path_str: str | None, project_path: Path) -> Path:
-        if not path_str:
-            return Path()
-        path = Path(path_str)
-        if path.is_absolute():
-            return path
-        return (storage_service.root.parent / path).resolve()
 
     @staticmethod
     def _split_into_word_chunks(text: str, max_words: int = 4) -> list[str]:
@@ -669,6 +562,7 @@ class VideoService:
         color: str = "#FFFF00",
         outline_color: str = "#000000",
         outline_thickness: float = 2.0,
+        font_size: int | None = None,
     ) -> None:
         width, height = 1920, 1080
         if resolution:
@@ -685,17 +579,20 @@ class VideoService:
 
         style_lines = []
         if style == "shorts":
-            font_size = int(height * 0.032) if is_vertical else int(height * 0.045)
+            auto_size = int(height * 0.032) if is_vertical else int(height * 0.045)
+            fs = font_size if font_size is not None else auto_size
             margin_v = int(height * 0.12) if position == "bottom" else int(height * 0.04)
-            style_lines.append(f"Style: Default,Impact,{font_size},{primary_colour},&H000000FF,{outline_colour},&H00000000,-1,0,0,0,100,100,0,0,1,{max(outline_thickness, 3.5):.1f},0,{alignment},20,20,{margin_v},1")
+            style_lines.append(f"Style: Default,Impact,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,-1,0,0,0,100,100,0,0,1,{max(outline_thickness, 3.5):.1f},0,{alignment},20,20,{margin_v},1")
         elif style == "classic":
-            font_size = int(height * 0.024) if is_vertical else int(height * 0.035)
+            auto_size = int(height * 0.024) if is_vertical else int(height * 0.035)
+            fs = font_size if font_size is not None else auto_size
             margin_v = int(height * 0.08) if position == "bottom" else int(height * 0.04)
-            style_lines.append(f"Style: Default,Arial,{font_size},{primary_colour},&H000000FF,{outline_colour},&H00000000,0,0,0,0,100,100,0,0,1,{max(outline_thickness, 1.8):.1f},1.8,{alignment},20,20,{margin_v},1")
+            style_lines.append(f"Style: Default,Arial,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,0,0,0,0,100,100,0,0,1,{max(outline_thickness, 1.8):.1f},1.8,{alignment},20,20,{margin_v},1")
         else:
-            font_size = int(height * 0.026) if is_vertical else int(height * 0.038)
+            auto_size = int(height * 0.026) if is_vertical else int(height * 0.038)
+            fs = font_size if font_size is not None else auto_size
             margin_v = int(height * 0.08) if position == "bottom" else int(height * 0.04)
-            style_lines.append(f"Style: Default,Arial,{font_size},{primary_colour},&H000000FF,{outline_colour},&H00000000,-1,0,0,0,100,100,0,0,1,{max(outline_thickness, 2.0):.1f},1,{alignment},20,20,{margin_v},1")
+            style_lines.append(f"Style: Default,Arial,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,-1,0,0,0,100,100,0,0,1,{max(outline_thickness, 2.0):.1f},1,{alignment},20,20,{margin_v},1")
 
         header = f"""[Script Info]
 Title: Auto-Generated Subtitles
@@ -757,11 +654,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     def _burn_subtitles(self, input_video: Path, ass_path: Path, output_video: Path) -> None:
         escaped_path = ass_path.as_posix().replace(":", "\\:")
         cmd = [
-            "ffmpeg", "-y",
+            settings.ffmpeg_path,
+            "-y",
             "-i", str(input_video),
             "-vf", f"ass='{escaped_path}'",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
             "-c:a", "copy",
-            str(output_video)
+            str(output_video),
         ]
         self._run_ffmpeg(cmd)
 
@@ -996,6 +897,95 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 Path(tmp_path).unlink()
             except OSError:
                 pass
+
+    def _add_music_and_subtitles(
+        self,
+        input_video: Path,
+        video_dir: Path,
+        music_path: Path | None,
+        music_volume: float,
+        ass_path: Path | None,
+    ) -> None:
+        """Single FFmpeg pass that optionally mixes background music and/or burns
+        ASS subtitles.  The result always replaces *input_video* (final.mp4).
+        Any leftover final_with_music.mp4 / final_subtitled.mp4 temp files are
+        cleaned up at the end.
+        """
+        safe_volume = max(0.01, min(1.0, float(music_volume)))
+        has_music = music_path is not None
+        has_subs = ass_path is not None
+        has_video_audio = self._has_audio_stream(input_video)
+
+        # Build inputs
+        cmd = [settings.ffmpeg_path, "-y", "-i", str(input_video)]
+        if has_music:
+            cmd += ["-stream_loop", "-1", "-i", str(music_path)]
+
+        # When music is present we must use -filter_complex for audio.
+        # If subtitles are also present we include the ass filter inside the
+        # same filter_complex so that -vf and -filter_complex are never mixed
+        # (FFmpeg does not allow both in the same command).
+        music_idx = 1 if has_music else None
+
+        if has_music:
+            escaped = ass_path.as_posix().replace(":", "\\:") if has_subs else None
+
+            if has_video_audio:
+                audio_part = (
+                    f"[{music_idx}:a]volume={safe_volume:.3f}[bg];"
+                    f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[mix]"
+                )
+                audio_map = "[mix]"
+            else:
+                audio_part = f"[{music_idx}:a]volume={safe_volume:.3f}[bg]"
+                audio_map = "[bg]"
+
+            if has_subs:
+                # chain: [0:v] -> ass filter -> [vout], plus audio mix
+                fc = f"[0:v]ass='{escaped}'[vout];{audio_part}"
+                cmd += [
+                    "-filter_complex", fc,
+                    "-map", "[vout]", "-map", audio_map,
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:a", "aac", "-b:a", "192k",
+                ]
+            else:
+                cmd += [
+                    "-filter_complex", audio_part,
+                    "-map", "0:v", "-map", audio_map,
+                    "-c:v", "copy",
+                    "-c:a", "aac", "-b:a", "192k",
+                ]
+        else:
+            # No music: subtitles only (caller already guards against neither case)
+            if has_subs:
+                escaped = ass_path.as_posix().replace(":", "\\:")
+                cmd += [
+                    "-vf", f"ass='{escaped}'",
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:a", "copy",
+                ]
+            else:
+                cmd += ["-c:v", "copy", "-c:a", "copy"]
+
+        tmp_output = video_dir / "final_combined_tmp.mp4"
+        cmd += ["-shortest", str(tmp_output)]
+
+        if self._run_ffmpeg(cmd) and tmp_output.exists():
+            input_video.unlink(missing_ok=True)
+            tmp_output.rename(input_video)
+        else:
+            logger.error("Combined music+subtitles pass failed; original video kept.")
+            tmp_output.unlink(missing_ok=True)
+
+        # Clean up any orphaned temp files from old code paths
+        for orphan in ("final_with_music.mp4", "final_subtitled.mp4"):
+            p = video_dir / orphan
+            if p.exists():
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
 
     def _add_background_music(
         self, video: Path, music: Path, video_dir: Path, volume: float = 0.12

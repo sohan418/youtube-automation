@@ -99,6 +99,7 @@ export function useProjectDetail(projectId: number) {
   const [subtitleColor, setSubtitleColor] = useState("#FFFF00");
   const [subtitleOutlineColor, setSubtitleOutlineColor] = useState("#000000");
   const [subtitleOutline, setSubtitleOutline] = useState(2.0);
+  const [subtitleFontSize, setSubtitleFontSize] = useState<number | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("studio_sidebar_collapsed") === "true";
@@ -147,6 +148,13 @@ export function useProjectDetail(projectId: number) {
         api.getTimeline(projectId).then((t) => setTimeline((prev) => prev ?? t.data)).catch(() => {});
         setProject(proj);
         if (proj.ratio) setSelectedRatio(proj.ratio);
+        setEnableSubtitles(proj.captions_enabled);
+        setSubtitleStyle(proj.caption_style);
+        setSubtitlePosition(proj.caption_position);
+        setSubtitleColor(proj.caption_color);
+        setSubtitleOutlineColor(proj.caption_outline_color);
+        setSubtitleOutline(proj.caption_outline);
+        setSubtitleFontSize(proj.caption_font_size);
         setIdeas(ideaList);
         const selectedIdea = ideaList.find((i) => i.is_selected);
         setScriptTopic((prev) => prev || selectedIdea?.title || proj.name);
@@ -242,6 +250,21 @@ export function useProjectDetail(projectId: number) {
       setEditingSettings(false);
       setSuccess("Project settings saved.");
     });
+  };
+
+  const saveCaptions = async (patch: {
+    captions_enabled?: boolean;
+    caption_style?: string;
+    caption_position?: string;
+    caption_color?: string;
+    caption_outline_color?: string;
+    caption_outline?: number;
+    caption_font_size?: number | null;
+  }) => {
+    try {
+      const updated = await api.updateProject(projectId, patch);
+      setProject(updated);
+    } catch {}
   };
 
   const generateIdeas = async () => {
@@ -545,7 +568,7 @@ export function useProjectDetail(projectId: number) {
     [projectId],
   );
 
-  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number }) => {
+  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number; subtitle_font_size?: number | null }) => {
     await runAction("video", async () => {
       setVideoStatus({ running: true, progress: 0, stage: "starting", message: "Starting video build...", output: null, error: null, updated_at: null });
       const result = await api.buildVideo(projectId, {
@@ -557,6 +580,7 @@ export function useProjectDetail(projectId: number) {
         subtitle_color: options?.subtitle_color ?? subtitleColor,
         subtitle_outline_color: options?.subtitle_outline_color ?? subtitleOutlineColor,
         subtitle_outline: options?.subtitle_outline ?? subtitleOutline,
+        subtitle_font_size: options?.subtitle_font_size !== undefined ? options.subtitle_font_size : subtitleFontSize,
       });
       setSuccess(result.message);
       const finalStatus = await pollVideoStatus();
@@ -880,7 +904,7 @@ export function useProjectDetail(projectId: number) {
   };
 
   return {
-    project, ideas, scripts, scriptTopic, scenes, thumbnails, seo, categories,
+    project, ideas, scripts, scriptTopic, scenes, thumbnails, seo, setSeo, categories,
     activeTab, activeSceneIdx, prompts, loading, actionLoading, error, success,
     exportInfo, voiceProviders, selectedProvider, selectedVoice, selectedVoiceRate,
     voiceConfig, voiceProgress, selectedRatio, videoStatus, timeline,
@@ -893,6 +917,7 @@ export function useProjectDetail(projectId: number) {
     enableSubtitles, setEnableSubtitles, subtitleStyle, setSubtitleStyle,
     subtitlePosition, setSubtitlePosition, subtitleColor, setSubtitleColor,
     subtitleOutlineColor, setSubtitleOutlineColor, subtitleOutline, setSubtitleOutline,
+    subtitleFontSize, setSubtitleFontSize,
     setActiveTab, setActiveSceneIdx, setError, setSuccess, setEditingSettings,
     setScriptTopic, setScriptForm, setCreatingScript, setEditingScript, setIdeaTopic, setSceneCount,
     setNewSceneNarration, setImageUrlInputs, setDragMedia, setDraggingOverScene,
@@ -900,7 +925,7 @@ export function useProjectDetail(projectId: number) {
     setExportInfo, setSidebarCollapsed, setSelectedProvider, setSelectedVoice,
     setSelectedVoiceRate, setClipboardImageId,
     toggleSidebarCollapse,
-    runAction, openSettings, saveSettings, loadAll,
+    runAction, openSettings, saveSettings, saveCaptions, loadAll,
     generateIdeas, selectIdea, importFreeIdeas, generateScript, openScriptEdit,
     saveScript, createScript, generateAllVoice, generateSceneVoice,
     addSceneImageUrl, handleImageFileSelected, applyImageCrop, generateSceneImage,

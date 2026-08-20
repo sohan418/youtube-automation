@@ -163,37 +163,21 @@ def _run_build(
     from app.services.video import video_service
 
     try:
-        timeline_data = payload.timeline.model_dump() if payload.timeline is not None else None
-        if timeline_data is not None:
-            video_path = video_service.build_timeline(
-                slug=slug,
-                timeline=timeline_data,
-                background_music=payload.background_music,
-                music_volume=payload.music_volume,
-                ratio=payload.ratio,
-                resolution=payload.resolution,
-                subtitles=payload.subtitles,
-                subtitle_style=payload.subtitle_style,
-                subtitle_position=payload.subtitle_position,
-                subtitle_color=payload.subtitle_color,
-                subtitle_outline_color=payload.subtitle_outline_color,
-                subtitle_outline=payload.subtitle_outline,
-            )
-        else:
-            video_path = video_service.build_video(
-                slug=slug,
-                scenes=scene_data,
-                background_music=payload.background_music,
-                music_volume=payload.music_volume,
-                ratio=payload.ratio,
-                resolution=payload.resolution,
-                subtitles=payload.subtitles,
-                subtitle_style=payload.subtitle_style,
-                subtitle_position=payload.subtitle_position,
-                subtitle_color=payload.subtitle_color,
-                subtitle_outline_color=payload.subtitle_outline_color,
-                subtitle_outline=payload.subtitle_outline,
-            )
+        video_path = video_service.build_video(
+            slug=slug,
+            scenes=scene_data,
+            background_music=payload.background_music,
+            music_volume=payload.music_volume,
+            ratio=payload.ratio,
+            resolution=payload.resolution,
+            subtitles=payload.subtitles,
+            subtitle_style=payload.subtitle_style,
+            subtitle_position=payload.subtitle_position,
+            subtitle_color=payload.subtitle_color,
+            subtitle_outline_color=payload.subtitle_outline_color,
+            subtitle_outline=payload.subtitle_outline,
+            subtitle_font_size=payload.subtitle_font_size,
+        )
         db = SessionLocal()
         try:
             project = db.query(Project).filter(Project.id == project_id).first()

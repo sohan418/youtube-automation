@@ -89,6 +89,7 @@ export default function ProjectDetail() {
           scenes={h.scenes}
           thumbnails={h.thumbnails}
           seo={h.seo}
+          setSeo={h.setSeo}
           categories={h.categories}
           exportInfo={h.exportInfo}
           videoStatus={h.videoStatus}
@@ -195,7 +196,9 @@ export default function ProjectDetail() {
           setSubtitleOutlineColor={h.setSubtitleOutlineColor}
           subtitleOutline={h.subtitleOutline}
           setSubtitleOutline={h.setSubtitleOutline}
-          
+          subtitleFontSize={h.subtitleFontSize}
+          setSubtitleFontSize={h.setSubtitleFontSize}
+          saveCaptions={h.saveCaptions}
         />
 
         {(h.activeTab === "images" || h.activeTab === "voice") && (

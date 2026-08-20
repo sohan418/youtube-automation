@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -6,6 +6,7 @@ from app.models import Project, ProjectStatus, Script, Thumbnail
 from app.schemas import ThumbnailGenerateRequest, ThumbnailResponse
 from app.services.ai import ai_service
 from app.services.image import image_service
+from app.services.storage import storage_service
 
 router = APIRouter(prefix="/thumbnails", tags=["Thumbnails"])
 
@@ -61,6 +62,45 @@ def select_thumbnail(thumbnail_id: int, db: Session = Depends(get_db)):
     ).update({"is_selected": False})
 
     thumb.is_selected = True
+    db.commit()
+    db.refresh(thumb)
+    return thumb
+
+
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "bmp"}
+
+
+@router.post("/project/{project_id}/upload", response_model=ThumbnailResponse)
+def upload_thumbnail(
+    project_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported image type. Use PNG/JPG/WebP/GIF/BMP.")
+
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    count = db.query(Thumbnail).filter(Thumbnail.project_id == project_id).count()
+    filename = f"thumbnail_upload_{count + 1}.{ext}"
+    file_path = storage_service.save_binary(project.slug, "thumbnail", filename, data)
+
+    first = count == 0
+    thumb = Thumbnail(
+        project_id=project_id,
+        file_path=file_path,
+        prompt=None,
+        is_selected=first,
+    )
+    db.add(thumb)
+    project.status = ProjectStatus.THUMBNAIL
     db.commit()
     db.refresh(thumb)
     return thumb

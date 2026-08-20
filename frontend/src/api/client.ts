@@ -333,6 +333,7 @@ export const api = {
       subtitle_color?: string;
       subtitle_outline_color?: string;
       subtitle_outline?: number;
+      subtitle_font_size?: number | null;
     },
   ) =>
     request<{ message: string; detail: string }>(
@@ -355,9 +356,19 @@ export const api = {
     request<import("../types").Thumbnail>(`/thumbnails/${thumbnailId}/select`, {
       method: "POST",
     }),
+  uploadThumbnail: (projectId: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request<import("../types").Thumbnail>(
+      `/thumbnails/project/${projectId}/upload`,
+      { method: "POST", body: form },
+    );
+  },
 
   getSEO: (projectId: number) =>
     request<import("../types").SEOMetadata | null>(`/seo/project/${projectId}`),
+  getSEOConstants: () =>
+    request<import("../types").SEOConstants>("/seo/constants"),
   generateSEO: (projectId: number, language?: string) =>
     request<import("../types").SEOMetadata>(
       `/seo/project/${projectId}/generate`,

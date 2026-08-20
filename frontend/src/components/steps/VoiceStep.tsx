@@ -6,7 +6,6 @@ import {
   Sparkles,
   X,
   Volume2,
-  MoreVertical,
   CheckCircle2,
   Upload,
 } from "lucide-react";
@@ -17,6 +16,8 @@ const WAVEFORM_HEIGHTS = [
   12, 20, 28, 24, 16, 8, 12, 24, 32, 28, 20, 12, 8, 16, 24, 16, 8, 4, 8, 12
 ];
 
+
+// ── Task #4: Compact Audio Player ────────────────────────────────────────────
 function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersionKey: number }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -67,18 +68,18 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
   };
 
   return (
+    // Removed marginTop/marginBottom — parent gap handles spacing (#4)
+    // Tightened padding from 0.55rem 0.85rem → 0.4rem 0.7rem (#4)
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "0.85rem",
+        gap: "0.75rem",
         background: "rgba(255, 255, 255, 0.02)",
         border: "1px solid var(--border)",
         borderRadius: "10px",
-        padding: "0.55rem 0.85rem",
+        padding: "0.4rem 0.7rem",
         width: "100%",
-        marginTop: "0.5rem",
-        marginBottom: "0.5rem",
       }}
     >
       <audio
@@ -95,8 +96,8 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
       <button
         onClick={togglePlay}
         style={{
-          width: "36px",
-          height: "36px",
+          width: "32px",
+          height: "32px",
           borderRadius: "50%",
           background: "var(--primary)",
           border: "none",
@@ -106,17 +107,17 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
           justifyContent: "center",
           cursor: "pointer",
           flexShrink: 0,
-          boxShadow: "0 0 10px rgba(255, 0, 60, 0.2)",
+          boxShadow: "0 0 8px rgba(255, 0, 60, 0.2)",
           transition: "transform 0.15s ease",
         }}
         onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
         onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
       >
-        {isPlaying ? <Pause size={16} fill="white" /> : <Play size={16} fill="white" style={{ marginLeft: "2px" }} />}
+        {isPlaying ? <Pause size={14} fill="white" /> : <Play size={14} fill="white" style={{ marginLeft: "2px" }} />}
       </button>
 
       {/* Current Time */}
-      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", width: "30px", textAlign: "right", flexShrink: 0 }}>
+      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", width: "28px", textAlign: "right", flexShrink: 0 }}>
         {formatTime(currentTime)}
       </span>
 
@@ -127,7 +128,7 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
           display: "flex",
           alignItems: "center",
           gap: "2px",
-          height: "30px",
+          height: "26px",
           cursor: "pointer",
         }}
       >
@@ -151,15 +152,13 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
       </div>
 
       {/* Duration */}
-      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", width: "30px", flexShrink: 0 }}>
+      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", width: "28px", flexShrink: 0 }}>
         {formatTime(duration)}
       </span>
 
       {/* Volume Icon */}
-      <Volume2 size={16} color="var(--text-muted)" style={{ cursor: "pointer", flexShrink: 0 }} />
-
-      {/* Extra actions */}
-      <MoreVertical size={16} color="var(--text-muted)" style={{ cursor: "pointer", flexShrink: 0 }} />
+      <Volume2 size={15} color="var(--text-muted)" style={{ cursor: "pointer", flexShrink: 0 }} />
+      {/* MoreVertical removed — was non-functional decoration */}
     </div>
   );
 }
@@ -245,7 +244,7 @@ export default function VoiceStep({
   const hasVoiceKeys = currentProvider?.key_configured;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", height: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", height: "100%", overflow: "hidden" }}>
       <input
         ref={audioInputRef}
         type="file"
@@ -260,121 +259,115 @@ export default function VoiceStep({
         }}
       />
 
-      {/* 1. Voice Settings Top Card */}
-      <div className="card" style={{ padding: "0.8rem 1rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <h3 style={{ fontSize: "1rem", margin: 0, fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              🎙️ Voice Settings
-            </h3>
-          </div>
+      {/* ── Task #1: Voice Settings Card — single row, no label stacking ─── */}
+      <div className="card" style={{ padding: "0.55rem 0.85rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
+          {/* Title */}
+          <span style={{ fontSize: "0.85rem", fontWeight: 700, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+            🎙️ Voice
+          </span>
+
+          {/* Provider select */}
+          <select
+            value={selectedProvider}
+            disabled={!!actionLoading}
+            onChange={(e) => onProviderChange(e.target.value)}
+            title="Provider"
+            style={{ padding: "0.3rem 0.45rem", fontSize: "0.78rem", flex: 1, minWidth: "110px" }}
+          >
+            {voiceProviders.length === 0 ? (
+              <option value="gemini">Google Gemini</option>
+            ) : (
+              voiceProviders.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))
+            )}
+          </select>
+
+          {/* Voice select */}
+          <select
+            value={selectedVoice}
+            disabled={!!actionLoading}
+            onChange={(e) => onVoiceChange(e.target.value)}
+            title="Voice"
+            style={{ padding: "0.3rem 0.45rem", fontSize: "0.78rem", flex: 1, minWidth: "120px" }}
+          >
+            {currentVoices.length === 0 ? (
+              <option value="Kore">Kore</option>
+            ) : (
+              [...(currentVoices.includes(selectedVoice) ? [] : [selectedVoice]), ...currentVoices].map((voice) => (
+                <option key={voice} value={voice}>
+                  {currentProvider?.voice_labels?.[voice] ?? voice}
+                </option>
+              ))
+            )}
+          </select>
+
+          {/* Speed select */}
+          <select
+            value={selectedVoiceRate}
+            disabled={!!actionLoading}
+            onChange={(e) => onVoiceRateChange(e.target.value)}
+            title={currentProvider?.id === "gemini" ? "Gemini TTS does not support speed control" : "Speed"}
+            style={{ padding: "0.3rem 0.45rem", fontSize: "0.78rem", width: "72px" }}
+          >
+            {["-50%", "-25%", "+0%", "+10%", "+20%", "+30%", "+40%", "+50%", "+75%", "+100%"].map((rate) => (
+              <option key={rate} value={rate} disabled={currentProvider?.id === "gemini" && rate !== "+0%"}>
+                {rate}
+              </option>
+            ))}
+          </select>
+
+          {/* Status badge */}
           <span
             style={{
-              fontSize: "0.68rem",
+              fontSize: "0.67rem",
               background: "rgba(46, 204, 113, 0.15)",
               color: "var(--success)",
               border: "1px solid rgba(46, 204, 113, 0.25)",
-              padding: "0.15rem 0.5rem",
+              padding: "0.15rem 0.45rem",
               borderRadius: "20px",
               fontWeight: 600,
               display: "inline-flex",
               alignItems: "center",
-              gap: "0.25rem",
+              gap: "0.2rem",
+              whiteSpace: "nowrap",
             }}
           >
-            <CheckCircle2 size={11} />
-            Voice Ready
+            <CheckCircle2 size={10} /> Ready
           </span>
-        </div>
 
-        <div style={{ display: "flex", gap: "0.85rem", alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.72rem", color: "var(--text-muted)", flex: 1, minWidth: "120px" }}>
-            Provider
-            <select
-              value={selectedProvider}
-              disabled={!!actionLoading}
-              onChange={(e) => onProviderChange(e.target.value)}
-              style={{ padding: "0.35rem 0.5rem", fontSize: "0.78rem" }}
-            >
-              {voiceProviders.length === 0 ? (
-                <option value="gemini">Google Gemini</option>
-              ) : (
-                voiceProviders.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-
-          <label style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.72rem", color: "var(--text-muted)", flex: 1, minWidth: "140px" }}>
-            Voice
-            <select
-              value={selectedVoice}
-              disabled={!!actionLoading}
-              onChange={(e) => onVoiceChange(e.target.value)}
-              style={{ padding: "0.35rem 0.5rem", fontSize: "0.78rem" }}
-            >
-              {currentVoices.length === 0 ? (
-                <option value="Kore">Kore</option>
-              ) : (
-                [...(currentVoices.includes(selectedVoice) ? [] : [selectedVoice]), ...currentVoices].map((voice) => (
-                  <option key={voice} value={voice}>
-                    {currentProvider?.voice_labels?.[voice] ?? voice}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-
-          <label style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.72rem", color: "var(--text-muted)", width: "85px" }}>
-            Speed
-            <select
-              value={selectedVoiceRate}
-              disabled={!!actionLoading}
-              onChange={(e) => onVoiceRateChange(e.target.value)}
-              style={{ padding: "0.35rem 0.5rem", fontSize: "0.78rem" }}
-              title={currentProvider?.id === "gemini" ? "Gemini TTS does not support speed control" : "Adjust speech speed"}
-            >
-              {["-50%", "-25%", "+0%", "+10%", "+20%", "+30%", "+40%", "+50%", "+75%", "+100%"].map((rate) => (
-                <option key={rate} value={rate} disabled={currentProvider?.id === "gemini" && rate !== "+0%"}>
-                  {rate}
-                </option>
-              ))}
-            </select>
-          </label>
-
+          {/* Generate All button */}
           <button
             className="btn-primary"
             disabled={!!actionLoading || scenes.length === 0}
             onClick={onGenerateAll}
             style={{
-              fontSize: "0.78rem",
-              padding: "0.45rem 1rem",
+              fontSize: "0.76rem",
+              padding: "0.35rem 0.85rem",
               display: "flex",
               alignItems: "center",
-              gap: "0.35rem",
-              alignSelf: "flex-end",
+              gap: "0.3rem",
               background: "var(--primary)",
               color: "white",
               fontWeight: 600,
-              boxShadow: "0 0 10px rgba(255, 0, 60, 0.15)",
+              whiteSpace: "nowrap",
+              boxShadow: "0 0 8px rgba(255, 0, 60, 0.15)",
             }}
           >
-            <Sparkles size={13} />
-            {actionLoading === "voice" ? "Generating..." : "Generate All Voice"}
+            <Sparkles size={12} />
+            {actionLoading === "voice" ? "Generating..." : "Generate All"}
           </button>
         </div>
 
         {voiceProgress && (
-          <p style={{ color: "var(--accent)", fontSize: "0.75rem", margin: "0.4rem 0 0 0", fontWeight: 500 }}>
+          <p style={{ color: "var(--accent)", fontSize: "0.72rem", margin: "0.3rem 0 0 0", fontWeight: 500 }}>
             {voiceProgress}
           </p>
         )}
       </div>
 
-      {/* 2. Active Scene Card */}
+      {/* ── Active Scene Card ─────────────────────────────────────────────── */}
       {scenes.length > 0 && activeScene && (
         <div
           className="card"
@@ -382,82 +375,51 @@ export default function VoiceStep({
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            gap: "0.75rem",
-            padding: "0.85rem 1rem",
+            gap: "0.55rem",
+            padding: "0.7rem 0.85rem",
             minHeight: 0,
             overflowY: "auto",
           }}
         >
-          {/* Header */}
+          {/* ── Task #7: Header — MoreVertical removed ────────────────────── */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "var(--text)" }}>
+            <h3 style={{ fontSize: "0.9rem", fontWeight: 700, margin: 0, color: "var(--text)" }}>
               Scene {(activeIdx + 1).toString().padStart(2, "0")} / {scenes.length.toString().padStart(2, "0")}
             </h3>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span
-                style={{
-                  fontSize: "0.68rem",
-                  background: activeScene.audio_path ? "rgba(46, 204, 113, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                  color: activeScene.audio_path ? "var(--success)" : "var(--text-muted)",
-                  border: `1px solid ${activeScene.audio_path ? "rgba(46, 204, 113, 0.25)" : "var(--border)"}`,
-                  padding: "0.15rem 0.5rem",
-                  borderRadius: "20px",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.25rem",
-                }}
-              >
-                {activeScene.audio_path && <CheckCircle2 size={11} />}
-                {activeScene.audio_path ? "Audio Ready" : "No Audio"}
-              </span>
-              <button
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  padding: "0.2rem",
-                }}
-              >
-                <MoreVertical size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* Hindi Narration Quote Container */}
-          <div
-            style={{
-              position: "relative",
-              background: "rgba(255, 255, 255, 0.012)",
-              border: "1px solid var(--border)",
-              borderRadius: "10px",
-              padding: "1rem 1.25rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
             <span
               style={{
-                position: "absolute",
-                left: "0.5rem",
-                top: "-0.25rem",
-                fontSize: "2.5rem",
-                color: "rgba(255, 0, 60, 0.15)",
-                fontFamily: "Georgia, serif",
-                lineHeight: 1,
+                fontSize: "0.67rem",
+                background: activeScene.audio_path ? "rgba(46, 204, 113, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                color: activeScene.audio_path ? "var(--success)" : "var(--text-muted)",
+                border: `1px solid ${activeScene.audio_path ? "rgba(46, 204, 113, 0.25)" : "var(--border)"}`,
+                padding: "0.15rem 0.45rem",
+                borderRadius: "20px",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.2rem",
               }}
             >
-              “
+              {activeScene.audio_path && <CheckCircle2 size={10} />}
+              {activeScene.audio_path ? "Audio Ready" : "No Audio"}
             </span>
+          </div>
+
+          {/* ── Task #2: Narration Block — no decorative quote, less padding ─ */}
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.012)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              padding: "0.55rem 0.8rem",
+            }}
+          >
             <p
               style={{
-                fontSize: "0.95rem",
+                fontSize: "0.85rem",
                 color: "var(--text)",
-                lineHeight: 1.6,
+                lineHeight: 1.5,
                 margin: 0,
-                paddingLeft: "0.85rem",
                 fontWeight: 500,
               }}
             >
@@ -465,36 +427,38 @@ export default function VoiceStep({
             </p>
           </div>
 
-          {/* Custom Audio Waveform Player */}
+          {/* ── Task #4 + #6: Audio Player or No-Audio empty state ─────────── */}
           {activeScene.audio_path ? (
             <CustomAudioPlayer
               src={`${mediaUrl(activeScene.audio_path)}?v=${audioVersion[activeScene.id] || 0}`}
               audioVersionKey={audioVersion[activeScene.id] || 0}
             />
           ) : (
+            // Task #6: Smaller padding, tighter text
             <div
               style={{
                 textAlign: "center",
-                padding: "1rem",
+                padding: "0.45rem 0.75rem",
                 border: "1px dashed var(--border)",
-                borderRadius: "10px",
+                borderRadius: "8px",
                 color: "var(--text-muted)",
-                fontSize: "0.78rem",
+                fontSize: "0.73rem",
               }}
             >
-              Choose an audio source below to add voiceover for this scene
+              Choose an audio source below to add voiceover
             </div>
           )}
 
-          {/* Audio Source Options Grid */}
-          <div style={{ marginTop: "0.35rem" }}>
+          {/* ── Task #3: Audio Source Cards — horizontal, no waveform graphics */}
+          <div>
             <h4
               style={{
-                fontSize: "0.75rem",
+                fontSize: "0.68rem",
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
                 color: "var(--text-muted)",
-                marginBottom: "0.55rem",
+                marginBottom: "0.4rem",
+                marginTop: 0,
                 fontWeight: 700,
               }}
             >
@@ -506,35 +470,35 @@ export default function VoiceStep({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.85rem",
+                  gap: "0.75rem",
                   background: "rgba(255,0,60,0.03)",
                   border: "1px solid rgba(255,0,60,0.2)",
-                  borderRadius: "10px",
-                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  padding: "0.6rem 0.85rem",
                 }}
               >
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", flex: 1 }}>
-                  <div style={{ width: "100%", height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", flex: 1 }}>
+                  <div style={{ width: "100%", height: 5, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
                     <div style={{ width: `${micLevel}%`, height: "100%", background: micLevel > 4 ? "var(--accent)" : "var(--primary)", transition: "width 100ms linear" }} />
                   </div>
-                  <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
-                    {recordingPaused ? "Recording Paused" : "Listening for voice input..."}
+                  <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>
+                    {recordingPaused ? "Recording Paused" : "Listening…"}
                   </span>
                 </div>
 
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-                  <Pause size={12} />
+                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                  <Pause size={11} />
                   {formatRecordTime(recordingSeconds)}
                 </span>
 
-                <button className="btn-secondary" onClick={onToggleRecordingPause} style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}>
+                <button className="btn-secondary" onClick={onToggleRecordingPause} style={{ fontSize: "0.72rem", padding: "0.2rem 0.45rem" }}>
                   {recordingPaused ? "Resume" : "Pause"}
                 </button>
                 <button
                   onClick={onStopRecording}
                   style={{
-                    fontSize: "0.75rem",
-                    padding: "0.25rem 0.6rem",
+                    fontSize: "0.72rem",
+                    padding: "0.2rem 0.55rem",
                     background: "var(--primary)",
                     color: "white",
                     border: "none",
@@ -547,48 +511,41 @@ export default function VoiceStep({
                 </button>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.85rem" }}>
-                {/* 1. Record Card */}
+              // Horizontal layout, no waveform graphics, compact padding
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
+                {/* Record Card */}
                 <div
                   onClick={() => onStartRecording(activeScene.id)}
                   style={{
                     background: "rgba(255, 255, 255, 0.015)",
                     border: "1px solid var(--border)",
-                    borderRadius: "10px",
-                    padding: "0.85rem",
-                    textAlign: "center",
+                    borderRadius: "8px",
+                    padding: "0.5rem 0.7rem",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                     display: "flex",
-                    flexDirection: "column",
                     alignItems: "center",
-                    gap: "0.4rem",
+                    gap: "0.5rem",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = "var(--primary)";
-                    e.currentTarget.style.background = "rgba(255, 0, 60, 0.02)";
+                    e.currentTarget.style.background = "rgba(255, 0, 60, 0.04)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = "var(--border)";
                     e.currentTarget.style.background = "rgba(255, 255, 255, 0.015)";
                   }}
                 >
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255, 0, 60, 0.15)", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", color: "var(--primary)" }}>
-                    <Mic size={16} />
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255, 0, 60, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", flexShrink: 0 }}>
+                    <Mic size={14} />
                   </div>
                   <div>
-                    <h5 style={{ fontSize: "0.78rem", fontWeight: 700, margin: 0, color: "var(--text)" }}>Record Voice</h5>
-                    <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>Record your own voice</p>
-                  </div>
-                  {/* soundwave graphics */}
-                  <div style={{ display: "flex", gap: "2px", alignItems: "center", height: "8px", marginTop: "0.2rem" }}>
-                    {[6, 12, 8, 4, 10, 6, 8, 12, 4, 6].map((h, i) => (
-                      <div key={i} style={{ width: "2px", height: `${h}px`, background: "var(--primary)", opacity: 0.4 }} />
-                    ))}
+                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>Record Voice</div>
+                    <div style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>Use microphone</div>
                   </div>
                 </div>
 
-                {/* 2. Upload Card */}
+                {/* Upload Card */}
                 <div
                   onClick={() => {
                     setAudioTargetSceneId(activeScene.id);
@@ -597,114 +554,96 @@ export default function VoiceStep({
                   style={{
                     background: "rgba(255, 255, 255, 0.015)",
                     border: "1px solid var(--border)",
-                    borderRadius: "10px",
-                    padding: "0.85rem",
-                    textAlign: "center",
+                    borderRadius: "8px",
+                    padding: "0.5rem 0.7rem",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                     display: "flex",
-                    flexDirection: "column",
                     alignItems: "center",
-                    gap: "0.4rem",
+                    gap: "0.5rem",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = "var(--accent)";
-                    e.currentTarget.style.background = "rgba(0, 184, 212, 0.02)";
+                    e.currentTarget.style.background = "rgba(0, 184, 212, 0.04)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = "var(--border)";
                     e.currentTarget.style.background = "rgba(255, 255, 255, 0.015)";
                   }}
                 >
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(0, 184, 212, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)" }}>
-                    <Upload size={15} />
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(0, 184, 212, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)", flexShrink: 0 }}>
+                    <Upload size={13} />
                   </div>
                   <div>
-                    <h5 style={{ fontSize: "0.78rem", fontWeight: 700, margin: 0, color: "var(--text)" }}>Upload Audio</h5>
-                    <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>Upload MP3 / WAV</p>
-                  </div>
-                  {/* graphics */}
-                  <div style={{ display: "flex", gap: "2px", alignItems: "center", height: "8px", marginTop: "0.2rem" }}>
-                    {[4, 6, 8, 12, 10, 6, 4, 8, 12, 6].map((h, i) => (
-                      <div key={i} style={{ width: "2px", height: `${h}px`, background: "var(--accent)", opacity: 0.4 }} />
-                    ))}
+                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>Upload Audio</div>
+                    <div style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>MP3 / WAV</div>
                   </div>
                 </div>
 
-                {/* 3. AI TTS Generation Card */}
+                {/* AI TTS Card */}
                 <div
                   onClick={() => onGenerateScene(activeScene.id)}
                   style={{
                     background: "rgba(255, 255, 255, 0.015)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "10px",
-                    padding: "0.85rem",
-                    textAlign: "center",
+                    border: `1px solid ${hasVoiceKeys ? "rgba(46, 204, 113, 0.3)" : "var(--border)"}`,
+                    borderRadius: "8px",
+                    padding: "0.5rem 0.7rem",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                     display: "flex",
-                    flexDirection: "column",
                     alignItems: "center",
-                    gap: "0.4rem",
-                    borderColor: hasVoiceKeys ? "rgba(46, 204, 113, 0.3)" : "var(--border)",
+                    gap: "0.5rem",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = "var(--primary)";
-                    e.currentTarget.style.background = "rgba(255, 0, 60, 0.02)";
+                    e.currentTarget.style.background = "rgba(255, 0, 60, 0.04)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = hasVoiceKeys ? "rgba(46, 204, 113, 0.3)" : "var(--border)";
                     e.currentTarget.style.background = "rgba(255, 255, 255, 0.015)";
                   }}
                 >
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255, 0, 60, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }}>
-                    <Sparkles size={14} />
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255, 0, 60, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", flexShrink: 0 }}>
+                    <Sparkles size={13} />
                   </div>
                   <div>
-                    <h5 style={{ fontSize: "0.78rem", fontWeight: 700, margin: 0, color: "var(--text)" }}>Generate with AI</h5>
-                    <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>{providerLabel} TTS</p>
-                  </div>
-                  {/* graphics */}
-                  <div style={{ display: "flex", gap: "2px", alignItems: "center", height: "8px", marginTop: "0.2rem" }}>
-                    {[12, 10, 6, 8, 4, 12, 8, 6, 10, 12].map((h, i) => (
-                      <div key={i} style={{ width: "2px", height: `${h}px`, background: "var(--primary)", opacity: 0.4 }} />
-                    ))}
+                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>Generate AI</div>
+                    <div style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>{providerLabel} TTS</div>
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Delete active audio button if present */}
+          {/* Clear audio button */}
           {activeScene.audio_path && (
             <button
               onClick={() => onClearAudio(activeScene.id)}
               disabled={!!actionLoading}
               style={{
                 alignSelf: "center",
-                fontSize: "0.7rem",
+                fontSize: "0.68rem",
                 color: "var(--danger)",
                 border: "1px solid rgba(255, 0, 60, 0.25)",
                 background: "rgba(255, 0, 60, 0.05)",
-                padding: "0.25rem 0.65rem",
+                padding: "0.2rem 0.55rem",
                 borderRadius: "4px",
                 cursor: "pointer",
-                marginTop: "0.35rem",
                 fontWeight: 600,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.25rem",
+                gap: "0.2rem",
               }}
             >
-              <X size={12} /> Clear Scene Audio
+              <X size={11} /> Clear Audio
             </button>
           )}
 
-          {/* 3. Bottom Pager Actions */}
+          {/* ── Task #5: Scene Pager — smaller buttons, no keyboard hint ───── */}
           <div
             style={{
               borderTop: "1px solid var(--border)",
-              paddingTop: "0.75rem",
+              paddingTop: "0.4rem",
               marginTop: "auto",
               display: "flex",
               justifyContent: "space-between",
@@ -716,34 +655,30 @@ export default function VoiceStep({
               disabled={activeIdx <= 0}
               onClick={() => setActiveIdx(activeIdx - 1)}
               style={{
-                fontSize: "0.78rem",
-                padding: "0.35rem 0.8rem",
+                fontSize: "0.74rem",
+                padding: "0.25rem 0.65rem",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.3rem",
+                gap: "0.25rem",
               }}
             >
-              ← Previous Scene
+              ← Prev
             </button>
 
-            <div style={{ textAlign: "center" }}>
-              <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text)" }}>
-                Scene {(activeIdx + 1).toString().padStart(2, "0")} of {scenes.length.toString().padStart(2, "0")}
-              </span>
-              <span style={{ display: "block", fontSize: "0.62rem", color: "var(--text-muted)", marginTop: "1px" }}>
-                Use ← / → keys to switch scenes
-              </span>
-            </div>
+            {/* Scene counter only — keyboard hint removed */}
+            <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>
+              {(activeIdx + 1).toString().padStart(2, "0")} / {scenes.length.toString().padStart(2, "0")}
+            </span>
 
             <button
               disabled={activeIdx >= scenes.length - 1}
               onClick={() => setActiveIdx(activeIdx + 1)}
               style={{
-                fontSize: "0.78rem",
-                padding: "0.35rem 0.8rem",
+                fontSize: "0.74rem",
+                padding: "0.25rem 0.65rem",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.3rem",
+                gap: "0.25rem",
                 background: activeIdx >= scenes.length - 1 ? "var(--border)" : "var(--primary)",
                 color: activeIdx >= scenes.length - 1 ? "var(--text-muted)" : "white",
                 border: "none",
@@ -752,7 +687,7 @@ export default function VoiceStep({
                 fontWeight: 600,
               }}
             >
-              Next Scene →
+              Next →
             </button>
           </div>
         </div>

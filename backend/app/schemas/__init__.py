@@ -24,6 +24,13 @@ class ProjectUpdate(BaseModel):
     language: str | None = None
     status: ProjectStatus | None = None
     ratio: str | None = None
+    captions_enabled: bool | None = None
+    caption_style: str | None = None
+    caption_position: str | None = None
+    caption_color: str | None = None
+    caption_outline_color: str | None = None
+    caption_outline: float | None = None
+    caption_font_size: int | None = None
 
 
 class ProjectResponse(ProjectBase):
@@ -35,6 +42,13 @@ class ProjectResponse(ProjectBase):
     folder_path: str
     ratio: str = "16:9"
     thumbnail: str | None = None
+    captions_enabled: bool = False
+    caption_style: str = "shorts"
+    caption_position: str = "bottom"
+    caption_color: str = "#FFFF00"
+    caption_outline_color: str = "#000000"
+    caption_outline: float = 2.0
+    caption_font_size: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -265,13 +279,13 @@ class VideoBuildRequest(BaseModel):
     music_volume: float = Field(default=0.12, ge=0.0, le=1.0)
     resolution: str | None = None
     ratio: str = "16:9"
-    timeline: TimelineData | None = None
     subtitles: bool = False
     subtitle_style: str = "default"
     subtitle_position: str = "bottom"
     subtitle_color: str = "#FFFF00"
     subtitle_outline_color: str = "#000000"
     subtitle_outline: float = Field(default=2.0, ge=0.0, le=10.0)
+    subtitle_font_size: int | None = Field(default=None, ge=8, le=200)
 
 
 class MusicTrackResponse(BaseModel):

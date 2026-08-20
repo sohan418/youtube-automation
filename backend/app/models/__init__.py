@@ -45,6 +45,13 @@ class Project(Base):
     )
     folder_path: Mapped[str] = mapped_column(String(500), nullable=False)
     ratio: Mapped[str] = mapped_column(String(10), default="16:9")
+    captions_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    caption_style: Mapped[str] = mapped_column(String(50), default="shorts")
+    caption_position: Mapped[str] = mapped_column(String(20), default="bottom")
+    caption_color: Mapped[str] = mapped_column(String(20), default="#FFFF00")
+    caption_outline_color: Mapped[str] = mapped_column(String(20), default="#000000")
+    caption_outline: Mapped[float] = mapped_column(Float, default=2.0)
+    caption_font_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

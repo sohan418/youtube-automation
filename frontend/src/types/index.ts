@@ -22,6 +22,13 @@ export interface Project {
   folder_path: string;
   ratio: string;
   thumbnail: string | null;
+  captions_enabled: boolean;
+  caption_style: string;
+  caption_position: string;
+  caption_color: string;
+  caption_outline_color: string;
+  caption_outline: number;
+  caption_font_size: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -215,4 +222,11 @@ export interface PromptTemplate {
   label: string;
   system: string;
   user: string;
+}
+
+export interface SEOConstants {
+  disclaimer_marker: string;
+  timestamps_marker: string;
+  section_sep: string;
+  default_disclaimer: string;
 }

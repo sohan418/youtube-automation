@@ -38,6 +38,7 @@ interface Props {
   scenes: Scene[];
   thumbnails: Thumbnail[];
   seo: SEOMetadata | null;
+  setSeo: (v: SEOMetadata | null) => void;
   categories: SEOCategory[];
   exportInfo: ExportResult | null;
   videoStatus: VideoStatus | null;
@@ -134,7 +135,7 @@ interface Props {
   setSelectedVoiceRate: (v: string) => void;
   
   selectedRatio: string;
-  buildVideo: (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string }) => Promise<void>;
+  buildVideo: (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number; subtitle_font_size?: number | null }) => Promise<void>;
   setTimeline: (v: TimelineData | null) => void;
 
   setExportInfo: (v: ExportResult | null) => void;
@@ -151,6 +152,17 @@ interface Props {
   setSubtitleOutlineColor: (v: string) => void;
   subtitleOutline: number;
   setSubtitleOutline: (v: number) => void;
+  subtitleFontSize: number | null;
+  setSubtitleFontSize: (v: number | null) => void;
+  saveCaptions: (patch: {
+    captions_enabled?: boolean;
+    caption_style?: string;
+    caption_position?: string;
+    caption_color?: string;
+    caption_outline_color?: string;
+    caption_outline?: number;
+    caption_font_size?: number | null;
+  }) => Promise<void>;
 
 }
 
@@ -331,6 +343,9 @@ export default function StudioStepContent(p: Props) {
           setSubtitleOutlineColor={p.setSubtitleOutlineColor}
           subtitleOutline={p.subtitleOutline}
           setSubtitleOutline={p.setSubtitleOutline}
+          subtitleFontSize={p.subtitleFontSize}
+          setSubtitleFontSize={p.setSubtitleFontSize}
+          onSave={p.saveCaptions}
         />
       )}
 
@@ -349,6 +364,7 @@ export default function StudioStepContent(p: Props) {
           subtitleColor={p.subtitleColor}
           subtitleOutlineColor={p.subtitleOutlineColor}
           subtitleOutline={p.subtitleOutline}
+          subtitleFontSize={p.subtitleFontSize}
           exportInfo={p.exportInfo}
           onExport={() =>
             p.runAction("export", async () => {
@@ -386,13 +402,19 @@ export default function StudioStepContent(p: Props) {
               p.setSuccess("Thumbnail selected");
             })
           }
-          prompts={p.prompts.thumbnail}
+          onUpload={(file) =>
+            p.runAction("upload-thumb", async () => {
+              await api.uploadThumbnail(p.projectId, file);
+              p.setSuccess("Thumbnail uploaded!");
+            })
+          }
         />
       )}
 
       {p.activeTab === "seo" && (
         <SeoStep
           seo={p.seo}
+          scenes={p.scenes}
           categories={p.categories}
           activeScript={p.activeScript}
           actionLoading={p.actionLoading}
@@ -408,6 +430,13 @@ export default function StudioStepContent(p: Props) {
               p.setSuccess("YouTube category saved");
             })
           }
+          onSave={async (data) => {
+            await p.runAction("seo-save", async () => {
+              const updated = await api.updateSEO(p.projectId, data);
+              p.setSeo(updated);
+              p.setSuccess("SEO saved");
+            });
+          }}
           onFreeAIResponse={(data) =>
             p.runAction("seo-import", async () => {
               const update: { title?: string; description?: string; tags?: string; hashtags?: string } = {};

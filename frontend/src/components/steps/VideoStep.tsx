@@ -11,6 +11,7 @@ interface Props {
     ratio?: string; subtitles?: boolean; subtitle_style?: string;
     subtitle_position?: string; subtitle_color?: string;
     subtitle_outline_color?: string; subtitle_outline?: number;
+    subtitle_font_size?: number | null;
   }) => Promise<void>;
   mediaUrl: (path: string | null | undefined) => string;
   enableSubtitles: boolean;
@@ -19,6 +20,7 @@ interface Props {
   subtitleColor: string;
   subtitleOutlineColor: string;
   subtitleOutline: number;
+  subtitleFontSize: number | null;
   exportInfo: ExportResult | null;
   onExport: () => void;
 }
@@ -37,7 +39,7 @@ export default function VideoStep({
   subtitleColor,
   subtitleOutlineColor,
   subtitleOutline,
-  exportInfo,
+  subtitleFontSize,
   onExport,
 }: Props) {
   const building = actionLoading === "video" || videoStatus?.running;
@@ -84,6 +86,7 @@ export default function VideoStep({
                   subtitle_color: subtitleColor,
                   subtitle_outline_color: subtitleOutlineColor,
                   subtitle_outline: subtitleOutline,
+                  subtitle_font_size: subtitleFontSize,
                 })}
                 style={{ padding: "0.45rem 1rem", fontWeight: 600 }}
               >

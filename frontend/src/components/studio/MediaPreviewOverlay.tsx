@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { ExternalLink, X } from "lucide-react";
 import { mediaUrl } from "../../api/client";
 
@@ -7,6 +8,16 @@ interface Props {
 }
 
 export default function MediaPreviewOverlay({ previewMedia, onClose }: Props) {
+  // Task #5: Close on ESC key
+  useEffect(() => {
+    if (!previewMedia) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewMedia, onClose]);
+
   if (!previewMedia) return null;
 
   return (
@@ -52,6 +63,8 @@ export default function MediaPreviewOverlay({ previewMedia, onClose }: Props) {
           }}
         />
       )}
+
+      {/* Close button */}
       <button
         onClick={onClose}
         aria-label="Close preview"
@@ -68,10 +81,31 @@ export default function MediaPreviewOverlay({ previewMedia, onClose }: Props) {
           color: "#fff",
           fontSize: "1.1rem",
           lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
         <X size={20} />
       </button>
+
+      {/* ESC hint */}
+      <span
+        style={{
+          position: "fixed",
+          top: 20,
+          left: "50%",
+          transform: "translateX(-50%)",
+          fontSize: "0.68rem",
+          color: "rgba(255,255,255,0.4)",
+          pointerEvents: "none",
+          letterSpacing: "0.04em",
+        }}
+      >
+        Press ESC or click outside to close
+      </span>
+
+      {/* Open in new tab */}
       <a
         href={mediaUrl(previewMedia.path)}
         target="_blank"

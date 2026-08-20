@@ -44,6 +44,13 @@ def _serialize_project(db: Session, project: Project) -> ProjectResponse:
         folder_path=project.folder_path,
         ratio=project.ratio or "16:9",
         thumbnail=_project_thumbnail(db, project.id),
+        captions_enabled=project.captions_enabled,
+        caption_style=project.caption_style,
+        caption_position=project.caption_position,
+        caption_color=project.caption_color,
+        caption_outline_color=project.caption_outline_color,
+        caption_outline=project.caption_outline,
+        caption_font_size=project.caption_font_size,
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
