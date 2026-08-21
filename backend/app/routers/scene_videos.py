@@ -1,8 +1,11 @@
 import logging
+import subprocess
+import tempfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import Project, ProjectStatus, Scene, SceneImage, SceneVideo
 from app.schemas import SceneMediaReorderRequest, SceneResponse
@@ -17,6 +20,38 @@ ALLOWED_EXTENSIONS = {"mp4", "mov", "m4v", "webm", "mkv", "avi"}
 
 MIN_ITEM_SECONDS = 0.5
 DURATION_TOLERANCE = 0.3
+
+
+def _auto_crop_video(file_path: str, max_duration: float) -> str:
+    """Trim video to max_duration using ffmpeg. Returns the same or new path."""
+    full_path = storage_service.root.parent / file_path
+    info = video_service._probe_video_info(full_path)
+    clip_duration = (info or {}).get("duration")
+    if not clip_duration or clip_duration <= max_duration + DURATION_TOLERANCE:
+        return file_path
+
+    cropped_path = full_path.with_name(full_path.stem + "_cropped" + full_path.suffix)
+    try:
+        cmd = [
+            settings.ffmpeg_path, "-y",
+            "-i", str(full_path),
+            "-t", str(round(max_duration, 3)),
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
+            str(cropped_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode == 0 and cropped_path.exists() and cropped_path.stat().st_size > 0:
+            full_path.unlink(missing_ok=True)
+            cropped_path.rename(full_path)
+            logger.info("Auto-cropped %s to %.1fs", file_path, max_duration)
+        else:
+            logger.warning("Auto-crop failed, keeping original: %s", result.stderr[:200])
+            cropped_path.unlink(missing_ok=True)
+    except Exception as exc:
+        logger.warning("Auto-crop error, keeping original: %s", exc)
+        cropped_path.unlink(missing_ok=True)
+    return file_path
 
 
 def _max_fit_items(scene: Scene) -> int:
@@ -105,15 +140,7 @@ def upload_scene_video(
         and scene.duration_seconds
         and clip_duration > scene.duration_seconds + DURATION_TOLERANCE
     ):
-        _cleanup_saved_file(file_path)
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"This video clip is {clip_duration:.1f}s long but the scene narration "
-                f"is only {scene.duration_seconds:.1f}s. A clip can't be longer than the "
-                "narration — trim the clip or shorten the narration first."
-            ),
-        )
+        file_path = _auto_crop_video(file_path, scene.duration_seconds)
 
     video = SceneVideo(
         scene_id=scene.id,

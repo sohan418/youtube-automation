@@ -290,6 +290,7 @@ class VideoService:
             cmd += ["-map", "0:v"]
         cmd += [
             "-vf", vf,
+            "-r", "25",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-t", f"{duration:.3f}",
@@ -318,6 +319,19 @@ class VideoService:
         video_dir = project_path / "video"
         video_dir.mkdir(exist_ok=True)
 
+        # Clean stale segment files from previous builds to prevent
+        # phantom segments being picked up by the concat step.
+        for old in video_dir.glob("segment_*.mp4"):
+            try:
+                old.unlink()
+            except OSError:
+                pass
+        for old in video_dir.glob("scene_*_media*.mp4"):
+            try:
+                old.unlink()
+            except OSError:
+                pass
+
         concat_file = video_dir / "concat_list.txt"
 
         self.set_progress(slug, 1, "preparing", "Preparing video scenes...")
@@ -330,6 +344,7 @@ class VideoService:
 
             media = self._resolve_scene_media(scene, project_path)
             if not media:
+                logger.warning("Scene %d has no resolvable media — skipping", order)
                 continue
 
             audio_path = scene.get("audio_path")
@@ -468,14 +483,28 @@ class VideoService:
                         self._create_segment_silent(item["path"], seg, part, resolution, motion_effect)
                     if seg.exists():
                         sub_segments.append(seg)
+                    else:
+                        logger.warning(
+                            "Scene %d media %d segment failed to create (kind=%s, path=%s)",
+                            order, k, item["kind"], item["path"],
+                        )
                     start += part
 
                 if sub_segments:
                     self.set_progress(slug, 91, "joining", f"Joining scene {order} media...")
-                    self._concat_list(sub_segments, segment)
+                    # Re-encode when joining sub-segments because they may have
+                    # mismatched streams (some with audio, some without).
+                    self._concat_list(sub_segments, segment, reencode=True)
 
             if segment.exists():
                 segment_files.append(segment)
+            else:
+                logger.warning("Scene %d segment file not created — skipped", order)
+
+        if not segment_files:
+            logger.error("No scene segments were created — video cannot be built")
+            self.set_progress(slug, 100, "failed", "No scene segments produced")
+            return ""
 
         self.set_progress(slug, 92, "joining", "Joining all scene segments...")
         with concat_file.open("w", encoding="utf-8") as f:
@@ -483,7 +512,9 @@ class VideoService:
                 f.write(f"file '{seg.as_posix()}'\n")
 
         output_path = video_dir / "final.mp4"
-        self._concat_segments(concat_file, output_path)
+        ok = self._concat_segments(concat_file, output_path, reencode=False)
+        if not ok or not output_path.exists():
+            logger.error("Final concat failed — %d segments were not joined", len(segment_files))
 
         # Resolve music path once so we can pass it to the combined pass
         music_path: Path | None = None
@@ -869,19 +900,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             ]
         self._run_ffmpeg(cmd)
 
-    def _concat_segments(self, concat_file: Path, output: Path) -> None:
+    def _concat_segments(self, concat_file: Path, output: Path, reencode: bool = False) -> bool:
         cmd = [
             settings.ffmpeg_path,
             "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_file),
-            "-c", "copy",
-            str(output),
         ]
-        self._run_ffmpeg(cmd)
+        if reencode:
+            cmd += ["-c:v", "libx264", "-r", "25", "-c:a", "aac", "-pix_fmt", "yuv420p", "-b:a", "192k"]
+        else:
+            cmd += ["-c", "copy"]
+        cmd.append(str(output))
+        ok = self._run_ffmpeg(cmd)
+        if not ok:
+            logger.error("Concat failed for %s (reencode=%s)", output.name, reencode)
+        return ok
 
-    def _concat_list(self, segments: list[Path], output: Path) -> None:
+    def _concat_list(self, segments: list[Path], output: Path, reencode: bool = False) -> None:
         import tempfile
 
         lines = "\n".join(f"file '{seg.as_posix()}'" for seg in segments)
@@ -891,7 +928,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             tmp.write(lines)
             tmp_path = tmp.name
         try:
-            self._concat_segments(Path(tmp_path), output)
+            self._concat_segments(Path(tmp_path), output, reencode=reencode)
         finally:
             try:
                 Path(tmp_path).unlink()
@@ -1092,7 +1129,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     def _run_ffmpeg(self, cmd: list[str]) -> bool:
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300, check=False
+                cmd, capture_output=True, text=True, timeout=600, check=False
             )
             if result.returncode != 0:
                 logger.error("FFmpeg error: %s", result.stderr)
@@ -1102,7 +1139,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.error("FFmpeg not found. Install FFmpeg and add to PATH.")
             return False
         except subprocess.TimeoutExpired:
-            logger.error("FFmpeg timed out")
+            logger.error("FFmpeg timed out after 600s: %s", " ".join(cmd[:6]))
             return False
 
 

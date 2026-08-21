@@ -216,7 +216,12 @@ export default function ProjectDetail() {
       )}
 
       {h.trimFile && (
-        <VideoTrimDialog file={h.trimFile.file} onCancel={() => h.setTrimFile(null)} onConfirm={h.applyVideoUpload} />
+        <VideoTrimDialog
+          file={h.trimFile.file}
+          maxDuration={h.scenes.find((s) => s.id === h.trimFile!.sceneId)?.duration_seconds}
+          onCancel={() => h.setTrimFile(null)}
+          onConfirm={h.applyVideoUpload}
+        />
       )}
 
       <MediaPreviewOverlay previewMedia={h.previewMedia} onClose={() => h.setPreviewMedia(null)} />

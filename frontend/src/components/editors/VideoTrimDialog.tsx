@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Clock } from "lucide-react";
 
 declare global {
   interface HTMLVideoElement {
@@ -9,6 +9,7 @@ declare global {
 
 interface Props {
   file: File;
+  maxDuration?: number | null;
   onCancel: () => void;
   onConfirm: (blob: Blob, name: string) => void;
 }
@@ -70,7 +71,7 @@ function trimVideo(video: HTMLVideoElement, start: number, end: number): Promise
   });
 }
 
-export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
+export default function VideoTrimDialog({ file, maxDuration, onCancel, onConfirm }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const objectUrlRef = useRef("");
   const [duration, setDuration] = useState(0);
@@ -98,7 +99,8 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
       const d = v.duration;
       if (Number.isFinite(d) && d > 0) {
         setDuration(d);
-        setEnd(d);
+        const max = maxDuration && maxDuration > 0 ? Math.min(d, maxDuration) : d;
+        setEnd(max);
         setStart(0);
       }
     };
@@ -107,7 +109,7 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
       v.removeEventListener("loadedmetadata", onLoaded);
       URL.revokeObjectURL(objectUrlRef.current);
     };
-  }, [file]);
+  }, [file, maxDuration]);
 
   const onTimeUpdate = () => {
     const v = videoRef.current;
@@ -116,10 +118,10 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
     if (t < start) {
       v.currentTime = start;
       t = start;
-    } else if (t > end) {
+    } else if (t > effectiveEnd) {
       v.pause();
-      v.currentTime = end;
-      t = end;
+      v.currentTime = effectiveEnd;
+      t = effectiveEnd;
     }
   };
 
@@ -127,7 +129,7 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
     const v = videoRef.current;
     if (!v || !duration) return;
     if (v.paused) {
-      if (v.currentTime < start || v.currentTime >= end) v.currentTime = start;
+      if (v.currentTime < start || v.currentTime >= effectiveEnd) v.currentTime = start;
       v.play().catch(() => {});
     } else {
       v.pause();
@@ -143,7 +145,7 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
     }
     setSaving(true);
     setError("");
-    trimVideo(v, start, end)
+    trimVideo(v, start, effectiveEnd)
       .then((blob) => {
         const base = file.name.replace(/\.[^.]+$/, "") || "clip";
         onConfirm(blob, `${base}.webm`);
@@ -154,8 +156,9 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
       });
   };
 
+  const effectiveEnd = maxDuration && maxDuration > 0 ? Math.min(end, maxDuration) : end;
   const selStart = ((start / Math.max(duration, 1)) * 100).toFixed(1);
-  const selWidth = (((end - start) / Math.max(duration, 1)) * 100).toFixed(1);
+  const selWidth = (((effectiveEnd - start) / Math.max(duration, 1)) * 100).toFixed(1);
 
   return (
     <div
@@ -172,11 +175,18 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
           <h3 style={{ margin: 0, fontSize: "1.05rem" }}>Trim Video Clip</h3>
-          {duration > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            {maxDuration && maxDuration > 0 && (
+              <span style={{ fontSize: "0.72rem", color: "var(--accent)", display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600 }}>
+                <Clock size={12} /> Voice: {fmt(maxDuration)}
+              </span>
+            )}
+            {duration > 0 && (
               <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
                 {fmt(start)} <ChevronRight size={13} /> {fmt(end)} <span style={{ opacity: 0.6 }}>/</span> {fmt(duration)}
               </span>
-          )}
+            )}
+          </div>
         </div>
 
         <video
@@ -216,13 +226,13 @@ export default function VideoTrimDialog({ file, onCancel, onConfirm }: Props) {
                 />
               </label>
               <label style={{ flex: 1, fontSize: "0.7rem", color: "var(--text-muted)", display: "block" }}>
-                End {fmt(end)}
+                End {fmt(effectiveEnd)}
                 <input
                   type="range"
                   min={start + MIN_TRIM}
-                  max={duration}
+                  max={maxDuration && maxDuration > 0 ? Math.min(duration, maxDuration) : duration}
                   step={0.1}
-                  value={Math.max(end, start + MIN_TRIM)}
+                  value={Math.max(effectiveEnd, start + MIN_TRIM)}
                   onChange={(e) => setEnd(Number(e.target.value))}
                   style={{ width: "100%" }}
                 />
