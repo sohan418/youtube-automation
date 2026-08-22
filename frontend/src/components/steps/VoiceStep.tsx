@@ -109,6 +109,7 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
           flexShrink: 0,
           boxShadow: "0 0 8px rgba(255, 0, 60, 0.2)",
           transition: "transform 0.15s ease",
+          padding: 0,
         }}
         onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
         onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
@@ -243,8 +244,33 @@ export default function VoiceStep({
   const activeScene = scenes[activeIdx];
   const hasVoiceKeys = currentProvider?.key_configured;
 
+  const sourceCardBase: React.CSSProperties = {
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+    borderRadius: "10px",
+    padding: "0.9rem 1.1rem",
+    minHeight: "78px",
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.85rem",
+  };
+
+  const sourceChip = (color: string): React.CSSProperties => ({
+    width: 38,
+    height: 38,
+    borderRadius: "50%",
+    background: "var(--bg)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color,
+    flexShrink: 0,
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", height: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", height: "100%", overflow: "hidden" }}>
       <input
         ref={audioInputRef}
         type="file"
@@ -259,21 +285,18 @@ export default function VoiceStep({
         }}
       />
 
-      {/* ── Task #1: Voice Settings Card — single row, no label stacking ─── */}
-      <div className="card" style={{ padding: "0.55rem 0.85rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
-          {/* Title */}
-          <span style={{ fontSize: "0.85rem", fontWeight: 700, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-            🎙️ Voice
+      <div className="card" style={{ padding: "0.45rem 0.7rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.78rem", fontWeight: 700, whiteSpace: "nowrap" }}>
+            <Mic size={13} /> Voice
           </span>
 
-          {/* Provider select */}
           <select
             value={selectedProvider}
             disabled={!!actionLoading}
             onChange={(e) => onProviderChange(e.target.value)}
             title="Provider"
-            style={{ padding: "0.3rem 0.45rem", fontSize: "0.78rem", flex: 1, minWidth: "110px" }}
+            style={{ padding: "0.25rem 0.4rem", fontSize: "0.74rem", flex: 1, minWidth: "105px" }}
           >
             {voiceProviders.length === 0 ? (
               <option value="gemini">Google Gemini</option>
@@ -284,13 +307,12 @@ export default function VoiceStep({
             )}
           </select>
 
-          {/* Voice select */}
           <select
             value={selectedVoice}
             disabled={!!actionLoading}
             onChange={(e) => onVoiceChange(e.target.value)}
             title="Voice"
-            style={{ padding: "0.3rem 0.45rem", fontSize: "0.78rem", flex: 1, minWidth: "120px" }}
+            style={{ padding: "0.25rem 0.4rem", fontSize: "0.74rem", flex: 1, minWidth: "110px" }}
           >
             {currentVoices.length === 0 ? (
               <option value="Kore">Kore</option>
@@ -303,13 +325,12 @@ export default function VoiceStep({
             )}
           </select>
 
-          {/* Speed select */}
           <select
             value={selectedVoiceRate}
             disabled={!!actionLoading}
             onChange={(e) => onVoiceRateChange(e.target.value)}
             title={currentProvider?.id === "gemini" ? "Gemini TTS does not support speed control" : "Speed"}
-            style={{ padding: "0.3rem 0.45rem", fontSize: "0.78rem", width: "72px" }}
+            style={{ padding: "0.25rem 0.4rem", fontSize: "0.74rem", width: "66px" }}
           >
             {["-50%", "-25%", "+0%", "+10%", "+20%", "+30%", "+40%", "+50%", "+75%", "+100%"].map((rate) => (
               <option key={rate} value={rate} disabled={currentProvider?.id === "gemini" && rate !== "+0%"}>
@@ -318,56 +339,32 @@ export default function VoiceStep({
             ))}
           </select>
 
-          {/* Status badge */}
-          <span
-            style={{
-              fontSize: "0.67rem",
-              background: "rgba(46, 204, 113, 0.15)",
-              color: "var(--success)",
-              border: "1px solid rgba(46, 204, 113, 0.25)",
-              padding: "0.15rem 0.45rem",
-              borderRadius: "20px",
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.2rem",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <CheckCircle2 size={10} /> Ready
-          </span>
-
-          {/* Generate All button */}
           <button
             className="btn-primary"
             disabled={!!actionLoading || scenes.length === 0}
             onClick={onGenerateAll}
             style={{
-              fontSize: "0.76rem",
-              padding: "0.35rem 0.85rem",
+              fontSize: "0.72rem",
+              padding: "0.28rem 0.7rem",
               display: "flex",
               alignItems: "center",
-              gap: "0.3rem",
-              background: "var(--primary)",
-              color: "white",
+              gap: "0.25rem",
               fontWeight: 600,
               whiteSpace: "nowrap",
-              boxShadow: "0 0 8px rgba(255, 0, 60, 0.15)",
             }}
           >
-            <Sparkles size={12} />
+            <Sparkles size={11} />
             {actionLoading === "voice" ? "Generating..." : "Generate All"}
           </button>
         </div>
 
         {voiceProgress && (
-          <p style={{ color: "var(--accent)", fontSize: "0.72rem", margin: "0.3rem 0 0 0", fontWeight: 500 }}>
+          <p style={{ color: "var(--primary)", fontSize: "0.68rem", margin: "0.25rem 0 0 0", fontWeight: 500 }}>
             {voiceProgress}
           </p>
         )}
       </div>
 
-      {/* ── Active Scene Card ─────────────────────────────────────────────── */}
       {scenes.length > 0 && activeScene && (
         <div
           className="card"
@@ -375,50 +372,48 @@ export default function VoiceStep({
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            gap: "0.55rem",
-            padding: "0.7rem 0.85rem",
+            gap: "0.5rem",
+            padding: "0.55rem 0.7rem",
             minHeight: 0,
             overflowY: "auto",
           }}
         >
-          {/* ── Task #7: Header — MoreVertical removed ────────────────────── */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ fontSize: "0.9rem", fontWeight: 700, margin: 0, color: "var(--text)" }}>
-              Scene {(activeIdx + 1).toString().padStart(2, "0")} / {scenes.length.toString().padStart(2, "0")}
+            <h3 style={{ fontSize: "0.82rem", fontWeight: 700, margin: 0, color: "var(--text)" }}>
+              Scene {(activeIdx + 1).toString().padStart(2, "0")} <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>/ {scenes.length.toString().padStart(2, "0")}</span>
             </h3>
             <span
               style={{
-                fontSize: "0.67rem",
-                background: activeScene.audio_path ? "rgba(46, 204, 113, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                fontSize: "0.62rem",
+                background: activeScene.audio_path ? "var(--bg)" : "transparent",
                 color: activeScene.audio_path ? "var(--success)" : "var(--text-muted)",
-                border: `1px solid ${activeScene.audio_path ? "rgba(46, 204, 113, 0.25)" : "var(--border)"}`,
-                padding: "0.15rem 0.45rem",
+                border: `1px solid ${activeScene.audio_path ? "var(--success)" : "var(--border)"}`,
+                padding: "0.12rem 0.4rem",
                 borderRadius: "20px",
                 fontWeight: 600,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.2rem",
+                gap: "0.18rem",
               }}
             >
-              {activeScene.audio_path && <CheckCircle2 size={10} />}
+              {activeScene.audio_path && <CheckCircle2 size={9} />}
               {activeScene.audio_path ? "Audio Ready" : "No Audio"}
             </span>
           </div>
 
-          {/* ── Task #2: Narration Block — no decorative quote, less padding ─ */}
           <div
             style={{
-              background: "rgba(255, 255, 255, 0.012)",
+              background: "var(--bg)",
               border: "1px solid var(--border)",
               borderRadius: "8px",
-              padding: "0.55rem 0.8rem",
+              padding: "0.4rem 0.6rem",
             }}
           >
             <p
               style={{
-                fontSize: "0.85rem",
+                fontSize: "0.8rem",
                 color: "var(--text)",
-                lineHeight: 1.5,
+                lineHeight: 1.45,
                 margin: 0,
                 fontWeight: 500,
               }}
@@ -427,37 +422,34 @@ export default function VoiceStep({
             </p>
           </div>
 
-          {/* ── Task #4 + #6: Audio Player or No-Audio empty state ─────────── */}
           {activeScene.audio_path ? (
             <CustomAudioPlayer
               src={`${mediaUrl(activeScene.audio_path)}?v=${audioVersion[activeScene.id] || 0}`}
               audioVersionKey={audioVersion[activeScene.id] || 0}
             />
           ) : (
-            // Task #6: Smaller padding, tighter text
             <div
               style={{
                 textAlign: "center",
-                padding: "0.45rem 0.75rem",
+                padding: "0.35rem 0.6rem",
                 border: "1px dashed var(--border)",
                 borderRadius: "8px",
                 color: "var(--text-muted)",
-                fontSize: "0.73rem",
+                fontSize: "0.7rem",
               }}
             >
               Choose an audio source below to add voiceover
             </div>
           )}
 
-          {/* ── Task #3: Audio Source Cards — horizontal, no waveform graphics */}
           <div>
             <h4
               style={{
-                fontSize: "0.68rem",
+                fontSize: "0.62rem",
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
                 color: "var(--text-muted)",
-                marginBottom: "0.4rem",
+                marginBottom: "0.3rem",
                 marginTop: 0,
                 fontWeight: 700,
               }}
@@ -470,36 +462,36 @@ export default function VoiceStep({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.75rem",
-                  background: "rgba(255,0,60,0.03)",
-                  border: "1px solid rgba(255,0,60,0.2)",
+                  gap: "0.6rem",
+                  background: "var(--bg)",
+                  border: "1px solid var(--danger)",
                   borderRadius: "8px",
-                  padding: "0.6rem 0.85rem",
+                  padding: "0.4rem 0.6rem",
                 }}
               >
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", flex: 1 }}>
-                  <div style={{ width: "100%", height: 5, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ width: `${micLevel}%`, height: "100%", background: micLevel > 4 ? "var(--accent)" : "var(--primary)", transition: "width 100ms linear" }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.18rem", flex: 1 }}>
+                  <div style={{ width: "100%", height: 4, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ width: `${micLevel}%`, height: "100%", background: micLevel > 4 ? "var(--success)" : "var(--primary)", transition: "width 100ms linear" }} />
                   </div>
-                  <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>
+                  <span style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>
                     {recordingPaused ? "Recording Paused" : "Listening…"}
                   </span>
                 </div>
 
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
-                  <Pause size={11} />
+                <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--danger)", display: "inline-flex", alignItems: "center", gap: "0.18rem" }}>
+                  <Pause size={10} />
                   {formatRecordTime(recordingSeconds)}
                 </span>
 
-                <button className="btn-secondary" onClick={onToggleRecordingPause} style={{ fontSize: "0.72rem", padding: "0.2rem 0.45rem" }}>
+                <button className="btn-secondary" onClick={onToggleRecordingPause} style={{ fontSize: "0.68rem", padding: "0.18rem 0.4rem" }}>
                   {recordingPaused ? "Resume" : "Pause"}
                 </button>
                 <button
                   onClick={onStopRecording}
                   style={{
-                    fontSize: "0.72rem",
-                    padding: "0.2rem 0.55rem",
-                    background: "var(--primary)",
+                    fontSize: "0.68rem",
+                    padding: "0.18rem 0.5rem",
+                    background: "var(--danger)",
                     color: "white",
                     border: "none",
                     borderRadius: "4px",
@@ -511,139 +503,106 @@ export default function VoiceStep({
                 </button>
               </div>
             ) : (
-              // Horizontal layout, no waveform graphics, compact padding
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
-                {/* Record Card */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.4rem" }}>
                 <div
                   onClick={() => onStartRecording(activeScene.id)}
-                  style={{
-                    background: "rgba(255, 255, 255, 0.015)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "8px",
-                    padding: "0.5rem 0.7rem",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
+                  style={sourceCardBase}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "var(--primary)";
-                    e.currentTarget.style.background = "rgba(255, 0, 60, 0.04)";
+                    e.currentTarget.style.borderColor = "var(--danger)";
+                    e.currentTarget.style.background = "var(--bg)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = "var(--border)";
-                    e.currentTarget.style.background = "rgba(255, 255, 255, 0.015)";
+                    e.currentTarget.style.background = "var(--surface)";
                   }}
                 >
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255, 0, 60, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", flexShrink: 0 }}>
-                    <Mic size={14} />
+                  <div style={sourceChip("var(--danger)")}>
+                    <Mic size={18} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>Record Voice</div>
-                    <div style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>Use microphone</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap" }}>Record Voice</div>
+                    <div style={{ fontSize: "0.64rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Use microphone</div>
                   </div>
                 </div>
 
-                {/* Upload Card */}
                 <div
                   onClick={() => {
                     setAudioTargetSceneId(activeScene.id);
                     audioInputRef.current?.click();
                   }}
-                  style={{
-                    background: "rgba(255, 255, 255, 0.015)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "8px",
-                    padding: "0.5rem 0.7rem",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
+                  style={sourceCardBase}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "var(--accent)";
-                    e.currentTarget.style.background = "rgba(0, 184, 212, 0.04)";
+                    e.currentTarget.style.borderColor = "var(--success)";
+                    e.currentTarget.style.background = "var(--bg)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = "var(--border)";
-                    e.currentTarget.style.background = "rgba(255, 255, 255, 0.015)";
+                    e.currentTarget.style.background = "var(--surface)";
                   }}
                 >
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(0, 184, 212, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)", flexShrink: 0 }}>
-                    <Upload size={13} />
+                  <div style={sourceChip("var(--success)")}>
+                    <Upload size={16} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>Upload Audio</div>
-                    <div style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>MP3 / WAV</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap" }}>Upload Audio</div>
+                    <div style={{ fontSize: "0.64rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>MP3 / WAV</div>
                   </div>
                 </div>
 
-                {/* AI TTS Card */}
                 <div
                   onClick={() => onGenerateScene(activeScene.id)}
                   style={{
-                    background: "rgba(255, 255, 255, 0.015)",
-                    border: `1px solid ${hasVoiceKeys ? "rgba(46, 204, 113, 0.3)" : "var(--border)"}`,
-                    borderRadius: "8px",
-                    padding: "0.5rem 0.7rem",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
+                    ...sourceCardBase,
+                    border: `1px solid ${hasVoiceKeys ? "var(--success)" : "var(--border)"}`,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = "var(--primary)";
-                    e.currentTarget.style.background = "rgba(255, 0, 60, 0.04)";
+                    e.currentTarget.style.background = "var(--bg)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = hasVoiceKeys ? "rgba(46, 204, 113, 0.3)" : "var(--border)";
-                    e.currentTarget.style.background = "rgba(255, 255, 255, 0.015)";
+                    e.currentTarget.style.borderColor = hasVoiceKeys ? "var(--success)" : "var(--border)";
+                    e.currentTarget.style.background = "var(--surface)";
                   }}
                 >
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255, 0, 60, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", flexShrink: 0 }}>
-                    <Sparkles size={13} />
+                  <div style={sourceChip("var(--primary)")}>
+                    <Sparkles size={16} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>Generate AI</div>
-                    <div style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>{providerLabel} TTS</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap" }}>Generate AI</div>
+                    <div style={{ fontSize: "0.64rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{providerLabel} TTS</div>
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Clear audio button */}
           {activeScene.audio_path && (
             <button
               onClick={() => onClearAudio(activeScene.id)}
               disabled={!!actionLoading}
               style={{
                 alignSelf: "center",
-                fontSize: "0.68rem",
+                fontSize: "0.64rem",
                 color: "var(--danger)",
-                border: "1px solid rgba(255, 0, 60, 0.25)",
-                background: "rgba(255, 0, 60, 0.05)",
-                padding: "0.2rem 0.55rem",
+                border: "1px solid var(--danger)",
+                background: "transparent",
+                padding: "0.16rem 0.5rem",
                 borderRadius: "4px",
                 cursor: "pointer",
                 fontWeight: 600,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.2rem",
+                gap: "0.18rem",
               }}
             >
-              <X size={11} /> Clear Audio
+              <X size={10} /> Clear Audio
             </button>
           )}
 
-          {/* ── Task #5: Scene Pager — smaller buttons, no keyboard hint ───── */}
           <div
             style={{
               borderTop: "1px solid var(--border)",
-              paddingTop: "0.4rem",
+              paddingTop: "0.35rem",
               marginTop: "auto",
               display: "flex",
               justifyContent: "space-between",
@@ -655,18 +614,17 @@ export default function VoiceStep({
               disabled={activeIdx <= 0}
               onClick={() => setActiveIdx(activeIdx - 1)}
               style={{
-                fontSize: "0.74rem",
-                padding: "0.25rem 0.65rem",
+                fontSize: "0.7rem",
+                padding: "0.2rem 0.55rem",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.25rem",
+                gap: "0.2rem",
               }}
             >
               ← Prev
             </button>
 
-            {/* Scene counter only — keyboard hint removed */}
-            <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text)" }}>
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)" }}>
               {(activeIdx + 1).toString().padStart(2, "0")} / {scenes.length.toString().padStart(2, "0")}
             </span>
 
@@ -674,11 +632,11 @@ export default function VoiceStep({
               disabled={activeIdx >= scenes.length - 1}
               onClick={() => setActiveIdx(activeIdx + 1)}
               style={{
-                fontSize: "0.74rem",
-                padding: "0.25rem 0.65rem",
+                fontSize: "0.7rem",
+                padding: "0.2rem 0.55rem",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.25rem",
+                gap: "0.2rem",
                 background: activeIdx >= scenes.length - 1 ? "var(--border)" : "var(--primary)",
                 color: activeIdx >= scenes.length - 1 ? "var(--text-muted)" : "white",
                 border: "none",

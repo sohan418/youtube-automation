@@ -80,7 +80,7 @@ interface Props {
   prompts?: { system: string; user: string };
 }
 
-// ─── Editable field ───────────────────────────────────────────────────────────
+// ─── Editable field (compact) ────────────────────────────────────────────────
 function EditableField({
   label, value, multiline = false, rows = 3,
   onSave,
@@ -102,20 +102,22 @@ function EditableField({
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-        <strong style={{ fontSize: "0.78rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          {label}
-        </strong>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.2rem", minHeight: 18 }}>
+        {label && (
+          <strong style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            {label}
+          </strong>
+        )}
         {!editing ? (
-          <button onClick={() => setEditing(true)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.2rem", fontSize: "0.72rem" }}>
-            <Edit2 size={11} /> Edit
+          <button onClick={() => setEditing(true)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.15rem", fontSize: "0.65rem", padding: 0 }}>
+            <Edit2 size={10} /> Edit
           </button>
         ) : (
-          <div style={{ display: "flex", gap: "0.3rem" }}>
-            <button onClick={handleSave} disabled={saving} style={{ background: "none", border: "none", color: "var(--success)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.2rem", fontSize: "0.72rem" }}>
-              <Check size={11} /> {saving ? "Saving…" : "Save"}
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            <button onClick={handleSave} disabled={saving} style={{ background: "none", border: "none", color: "var(--success)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.15rem", fontSize: "0.65rem", padding: 0 }}>
+              <Check size={10} /> {saving ? "Saving…" : "Save"}
             </button>
-            <button onClick={() => { setDraft(value); setEditing(false); }} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.72rem" }}>
+            <button onClick={() => { setDraft(value); setEditing(false); }} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.65rem", padding: 0 }}>
               Cancel
             </button>
           </div>
@@ -124,13 +126,15 @@ function EditableField({
       {editing ? (
         multiline ? (
           <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={rows}
-            style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--primary)", background: "var(--surface)", color: "var(--text)", fontSize: "0.82rem", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
+            style={{ width: "100%", padding: "0.35rem 0.5rem", borderRadius: "5px", border: "1px solid var(--primary)", background: "var(--bg)", color: "var(--text)", fontSize: "0.76rem", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
         ) : (
           <input value={draft} onChange={(e) => setDraft(e.target.value)}
-            style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--primary)", background: "var(--surface)", color: "var(--text)", fontSize: "0.82rem", boxSizing: "border-box" }} />
+            style={{ width: "100%", padding: "0.35rem 0.5rem", borderRadius: "5px", border: "1px solid var(--primary)", background: "var(--bg)", color: "var(--text)", fontSize: "0.76rem", boxSizing: "border-box" }} />
         )
       ) : (
-        <p style={{ whiteSpace: "pre-wrap", fontSize: "0.85rem", margin: 0, lineHeight: 1.6 }}>{value || <span style={{ color: "var(--text-muted)" }}>—</span>}</p>
+        <p onClick={() => setEditing(true)} style={{ whiteSpace: "pre-wrap", fontSize: "0.78rem", margin: 0, lineHeight: 1.5, cursor: "text" }}>
+          {value || <span style={{ color: "var(--text-muted)" }}>—</span>}
+        </p>
       )}
     </div>
   );
@@ -164,6 +168,14 @@ function parseFreeAIResponse(text: string): Partial<SEOMetadata> {
   return result;
 }
 
+const compactBtnStyle: React.CSSProperties = {
+  fontSize: "0.68rem",
+  padding: "0.28rem 0.55rem",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.3rem",
+};
+
 export default function SeoStep({
   seo, scenes, categories, activeScript, actionLoading,
   onGenerate, onCategoryChange, onSave, onFreeAIResponse, prompts,
@@ -171,6 +183,7 @@ export default function SeoStep({
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [constants, setConstants] = useState<SEOConstants | null>(null);
+  const [showFreeAI, setShowFreeAI] = useState(false);
 
   // Fetch marker constants once from the backend — single source of truth
   useEffect(() => {
@@ -227,59 +240,81 @@ export default function SeoStep({
 
   return (
     <div className="card">
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h3>SEO Metadata</h3>
-        <div style={{ display: "flex", gap: "0.4rem" }}>
+      {/* Compact header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+        <h3 style={{ margin: 0, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--primary)", display: "inline-block" }} />
+          SEO
+        </h3>
+        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
           {seo && (
             <>
-              <button className="btn-secondary" onClick={handleExportJSON} title="Export JSON"><Download size={13} /></button>
-              <button className="btn-secondary" onClick={handleExportText} title="Export text"><Download size={13} /></button>
+              <button className="btn-secondary" style={compactBtnStyle} onClick={handleExportJSON} title="Export JSON">
+                <Download size={11} /> JSON
+              </button>
+              <button className="btn-secondary" style={compactBtnStyle} onClick={handleExportText} title="Export text">
+                <Download size={11} /> TXT
+              </button>
             </>
           )}
-          <button className="btn-secondary" onClick={() => setShowImport(!showImport)} title="Import SEO"><Upload size={13} /></button>
-          <button className="btn-accent" disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
-            {actionLoading === "seo" ? "Generating..." : <><Sparkles size={14} style={{ verticalAlign: "middle" }} /> Generate SEO</>}
+          <button className="btn-secondary" style={compactBtnStyle} onClick={() => setShowImport(!showImport)} title="Import SEO">
+            <Upload size={11} /> Import
+          </button>
+          <button className="btn-primary" style={compactBtnStyle} disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
+            {actionLoading === "seo" ? "Generating…" : <><Sparkles size={11} /> Generate</>}
           </button>
         </div>
       </div>
 
-      {/* Import panel */}
+      {/* Import panel (collapsible) */}
       {showImport && (
-        <div style={{ marginBottom: "1rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Paste AI Response</span>
-            <button onClick={() => setShowImport(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={14} /></button>
+        <div style={{
+          marginTop: "0.6rem",
+          padding: "0.6rem",
+          border: "1px solid var(--border)",
+          borderRadius: "6px",
+          background: "var(--surface)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+            <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Paste AI Response
+            </span>
+            <button onClick={() => setShowImport(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0, display: "flex" }}><X size={12} /></button>
           </div>
           <textarea value={importText} onChange={(e) => setImportText(e.target.value)}
             placeholder={'Paste AI response here...\n\nAccepts JSON or "Title: ... Description: ..." format.'}
-            rows={5} style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.75rem", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
-          <button className="btn-primary" onClick={handleImport} disabled={!importText.trim()} style={{ marginTop: "0.4rem", width: "100%" }}>
+            rows={4} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: "5px", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: "0.72rem", fontFamily: "monospace", resize: "vertical", boxSizing: "border-box" }} />
+          <button className="btn-primary" onClick={handleImport} disabled={!importText.trim()} style={{ ...compactBtnStyle, marginTop: "0.4rem", width: "100%", justifyContent: "center" }}>
             Import SEO Data
           </button>
         </div>
       )}
 
-      <FreeAIGuide
-        title="Generate SEO with Free AI"
-        prompt={prompts ? undefined : freeAIPrompt}
-        promptPair={prompts}
-        responsePlaceholder={'Paste AI response here...\n\nAccepts JSON or "Title: ..." format.'}
-        onParseResponse={handleFreeAIResponse}
-      />
+      <button className="btn-secondary" onClick={() => setShowFreeAI(!showFreeAI)} style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", alignSelf: "flex-start" }}>
+        {showFreeAI ? "Hide Free AI" : "Free AI"}
+      </button>
+      {showFreeAI && (
+        <FreeAIGuide
+          title="Generate SEO with Free AI"
+          prompt={prompts ? undefined : freeAIPrompt}
+          promptPair={prompts}
+          responsePlaceholder={'Paste AI response here...\n\nAccepts JSON or "Title: ..." format.'}
+          onParseResponse={handleFreeAIResponse}
+        />
+      )}
 
       {seo ? (
-        <div style={{ display: "grid", gap: "1.25rem", marginTop: "1rem" }}>
+        <div style={{ display: "grid", gap: "0.7rem", marginTop: "0.75rem" }}>
 
           {/* Category */}
-          <div>
-            <label style={{ fontSize: "0.78rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: "0.3rem" }}>
-              YouTube Category
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <label style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+              Category
             </label>
             <select value={seo.category_id ?? ""} disabled={!!actionLoading}
               onChange={(e) => { const v = Number(e.target.value); if (v) onCategoryChange(v); }}
-              style={{ width: "100%", maxWidth: 360 }}>
-              <option value="" disabled>Select a category...</option>
+              style={{ flex: 1, maxWidth: 260, fontSize: "0.76rem", padding: "0.28rem 0.4rem", background: "var(--bg)", color: "var(--text)" }}>
+              <option value="" disabled>Select…</option>
               {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
             </select>
           </div>
@@ -289,32 +324,35 @@ export default function SeoStep({
             onSave={(v) => onSave({ title: v })} />
 
           {/* Description (body only) */}
-          <EditableField label="Description" value={body} multiline rows={5}
+          <EditableField label="Description" value={body} multiline rows={4}
             onSave={(v) => constants ? onSave({ description: combineDescription(v, timestamps, disclaimer, constants) }) : Promise.resolve()} />
 
           {/* Timestamps */}
-          <div style={{ borderRadius: "8px", border: "1px solid var(--border)", overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.6rem 0.85rem", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <Clock size={14} color="var(--primary)" />
-                <strong style={{ fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Timestamps</strong>
+          <div style={{ borderRadius: "6px", border: "1px solid var(--border)", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.35rem 0.6rem", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                <Clock size={11} color="var(--primary)" />
+                <strong style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Timestamps</strong>
+                <span style={{ fontSize: "0.62rem", color: timestamps ? "var(--success)" : "var(--warning)" }}>
+                  {timestamps ? "✓ ready" : "empty"}
+                </span>
               </div>
               <button
                 onClick={handleRegenerateTimestamps}
                 disabled={!!actionLoading || scenes.length === 0}
-                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.72rem" }}
+                style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.2rem", fontSize: "0.65rem", padding: 0 }}
                 title="Rebuild timestamps from current scene durations"
               >
-                <RotateCcw size={11} /> Rebuild
+                <RotateCcw size={10} /> Rebuild
               </button>
             </div>
-            <div style={{ padding: "0.75rem 0.85rem" }}>
+            <div style={{ padding: "0.45rem 0.6rem", background: "var(--bg)" }}>
               {timestamps ? (
-                <pre style={{ margin: 0, fontFamily: "monospace", fontSize: "0.78rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
+                <pre style={{ margin: 0, fontFamily: "monospace", fontSize: "0.7rem", color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 140, overflowY: "auto" }}>
                   {timestamps}
                 </pre>
               ) : (
-                <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: 0 }}>
+                <p style={{ color: "var(--text-muted)", fontSize: "0.7rem", margin: 0 }}>
                   No timestamps yet. {scenes.length > 0 ? "Click Rebuild to generate from scenes." : "Add scenes with voice audio first."}
                 </p>
               )}
@@ -322,38 +360,40 @@ export default function SeoStep({
           </div>
 
           {/* Disclaimer */}
-          <div style={{ borderRadius: "8px", border: "1px solid var(--border)", overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 0.85rem", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-              <ShieldAlert size={14} color="var(--warning, #f59e0b)" />
-              <strong style={{ fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>YouTube Policy Disclaimer</strong>
+          <div style={{ borderRadius: "6px", border: "1px solid var(--border)", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.6rem", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+              <ShieldAlert size={11} color="var(--warning)" />
+              <strong style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>YouTube Policy Disclaimer</strong>
             </div>
-            <div style={{ padding: "0.75rem 0.85rem" }}>
-              <EditableField label="" value={disclaimer} multiline rows={4}
+            <div style={{ padding: "0.45rem 0.6rem", background: "var(--bg)" }}>
+              <EditableField label="" value={disclaimer} multiline rows={3}
                 onSave={(v) => constants ? onSave({ description: combineDescription(body, timestamps, v, constants) }) : Promise.resolve()} />
             </div>
           </div>
 
-          {/* Tags */}
-          <EditableField label="Tags" value={seo.tags ?? ""} multiline rows={2}
-            onSave={(v) => onSave({ tags: v })} />
-
-          {/* Hashtags */}
-          <EditableField label="Hashtags" value={seo.hashtags ?? ""}
-            onSave={(v) => onSave({ hashtags: v })} />
+          {/* Tags + Hashtags side by side */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.7rem" }}>
+            <EditableField label="Tags" value={seo.tags ?? ""} multiline rows={2}
+              onSave={(v) => onSave({ tags: v })} />
+            <EditableField label="Hashtags" value={seo.hashtags ?? ""}
+              onSave={(v) => onSave({ hashtags: v })} />
+          </div>
 
           {/* Full description preview */}
-          <details style={{ borderRadius: "6px", border: "1px solid var(--border)", overflow: "hidden" }}>
-            <summary style={{ padding: "0.5rem 0.85rem", cursor: "pointer", fontSize: "0.78rem", color: "var(--text-muted)", background: "var(--surface)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <FileText size={13} /> Preview full YouTube description
+          <details style={{ borderRadius: "6px", border: "1px solid var(--border)", overflow: "hidden", background: "var(--surface)" }}>
+            <summary style={{ padding: "0.35rem 0.6rem", cursor: "pointer", fontSize: "0.68rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.3rem", userSelect: "none" }}>
+              <FileText size={11} /> Preview full YouTube description
             </summary>
-            <pre style={{ margin: 0, padding: "0.75rem 0.85rem", fontFamily: "inherit", fontSize: "0.78rem", whiteSpace: "pre-wrap", lineHeight: 1.7, color: "var(--text)" }}>
+            <pre style={{ margin: 0, padding: "0.45rem 0.6rem", borderTop: "1px solid var(--border)", background: "var(--bg)", fontFamily: "monospace", fontSize: "0.7rem", whiteSpace: "pre-wrap", lineHeight: 1.55, color: "var(--text)", maxHeight: 220, overflowY: "auto" }}>
               {seo.description}
             </pre>
           </details>
 
         </div>
       ) : (
-        <p style={{ color: "var(--text-muted)", marginTop: "1rem" }}>Generate SEO metadata for YouTube upload.</p>
+        <p style={{ color: "var(--text-muted)", marginTop: "0.75rem", fontSize: "0.78rem" }}>
+          Generate SEO metadata for YouTube upload.
+        </p>
       )}
     </div>
   );

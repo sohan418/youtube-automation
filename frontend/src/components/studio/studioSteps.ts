@@ -25,23 +25,32 @@ export type StudioStep =
   | "seo"
   | "export";
 
+export type StepGroup = "plan" | "create" | "publish";
+
 export interface StepDef {
   key: StudioStep;
   label: string;
   icon: LucideIcon;
   hint: string;
+  group: StepGroup;
 }
 
 export const STUDIO_STEPS: StepDef[] = [
-  { key: "ideas", label: "Ideas", icon: Lightbulb, hint: "Brainstorm video topics" },
-  { key: "script", label: "Script", icon: FileText, hint: "Generate or write the script" },
-  { key: "scenes", label: "Scenes", icon: Clapperboard, hint: "Split the script into scenes" },
-  { key: "voice", label: "Voice", icon: Mic, hint: "Add narration (AI or recorded)" },
-  { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene" },
-  { key: "captions", label: "Captions", icon: Subtitles, hint: "Subtitle and caption settings" },
-  { key: "video", label: "Video & Export", icon: Video, hint: "Render and package final video" },
-  { key: "thumbnail", label: "Thumbnail", icon: Camera, hint: "Pick a cover image" },
-  { key: "seo", label: "SEO", icon: Search, hint: "Title, tags and description" },
+  { key: "ideas", label: "Ideas", icon: Lightbulb, hint: "Brainstorm video topics", group: "plan" },
+  { key: "script", label: "Script", icon: FileText, hint: "Generate or write the script", group: "plan" },
+  { key: "scenes", label: "Scenes", icon: Clapperboard, hint: "Split the script into scenes", group: "plan" },
+  { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene", group: "create" },
+  { key: "voice", label: "Voice", icon: Mic, hint: "Add narration (AI or recorded)", group: "create" },
+  { key: "captions", label: "Captions", icon: Subtitles, hint: "Subtitle and caption settings", group: "create" },
+  { key: "video", label: "Editor", icon: Video, hint: "Build and preview final video", group: "create" },
+  { key: "thumbnail", label: "Thumbnail", icon: Camera, hint: "Design a cover image", group: "publish" },
+  { key: "seo", label: "SEO", icon: Search, hint: "Title, tags and description", group: "publish" },
+];
+
+export const STEP_GROUPS: { key: StepGroup; label: string }[] = [
+  { key: "plan", label: "Plan" },
+  { key: "create", label: "Create" },
+  { key: "publish", label: "Publish" },
 ];
 
 export interface StepStatusData {
@@ -61,7 +70,7 @@ export function getDoneMap(d: StepStatusData): Record<StudioStep, boolean> {
     ideas: d.ideas.length > 0,
     script: !!d.activeScript,
     scenes: scenesReady,
-    images: scenesReady && d.scenes.every((s) => !!s.image_path),
+    images: scenesReady && d.scenes.every((s) => !!s.image_path || ((s.images?.length ?? 0) > 0) || ((s.videos?.length ?? 0) > 0)),
     voice: scenesReady && d.scenes.every((s) => !!s.audio_path),
     captions: true,
     timeline: true,
@@ -71,4 +80,17 @@ export function getDoneMap(d: StepStatusData): Record<StudioStep, boolean> {
     seo: !!d.seo,
     export: true,
   };
+}
+
+export function getProgressPercent(d: StepStatusData): number {
+  const done = getDoneMap(d);
+  const keys: StudioStep[] = ["ideas", "script", "scenes", "images", "voice", "captions", "video", "thumbnail", "seo"];
+  const completed = keys.filter((k) => done[k]).length;
+  return Math.round((completed / keys.length) * 100);
+}
+
+export function getCompletedCount(d: StepStatusData): number {
+  const done = getDoneMap(d);
+  const keys: StudioStep[] = ["ideas", "script", "scenes", "images", "voice", "captions", "video", "thumbnail", "seo"];
+  return keys.filter((k) => done[k]).length;
 }

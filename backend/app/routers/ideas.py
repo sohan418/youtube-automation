@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import Idea, Project, ProjectStatus
 from app.schemas import IdeaGenerateRequest, IdeaResponse
 from app.services.ai import ai_service
+from app.services.youtube import youtube_service
 
 router = APIRouter(prefix="/ideas", tags=["Ideas"])
 
@@ -64,11 +65,13 @@ def generate_ideas(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
+        recent_videos = youtube_service.fetch_recent_videos()
         raw_ideas = ai_service.generate_ideas(
             category=payload.category or project.category,
             count=payload.count,
             language=payload.language or project.language,
             topic=payload.topic,
+            recent_videos=recent_videos or None,
         )
     except ValueError as exc:
         raise HTTPException(

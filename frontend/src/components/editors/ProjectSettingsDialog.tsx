@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Key } from "lucide-react";
+import { X, Key, Play } from "lucide-react";
 import type { Project, SEOCategory, VoiceConfig } from "../../types";
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
   project: Project;
   categories: SEOCategory[];
   voiceConfig: VoiceConfig | null;
+  youtubeConfig: { youtube_api_key_configured: boolean; youtube_playlist_id: string } | null;
   actionLoading: string;
   onClose: () => void;
   onSave: (
@@ -22,6 +23,10 @@ interface Props {
       deepgram_api_key: string;
       elevenlabs_api_key: string;
     },
+    youtubeKeys: {
+      youtube_api_key: string;
+      youtube_playlist_id: string;
+    },
   ) => Promise<void>;
 }
 
@@ -30,6 +35,7 @@ export default function ProjectSettingsDialog({
   project,
   categories,
   voiceConfig,
+  youtubeConfig,
   actionLoading,
   onClose,
   onSave,
@@ -48,6 +54,11 @@ export default function ProjectSettingsDialog({
     elevenlabs_api_key: "",
   });
 
+  const [youtubeKeys, setYoutubeKeys] = useState({
+    youtube_api_key: "",
+    youtube_playlist_id: "",
+  });
+
   useEffect(() => {
     if (isOpen) {
       setSettingsForm({
@@ -62,6 +73,10 @@ export default function ProjectSettingsDialog({
         deepgram_api_key: "",
         elevenlabs_api_key: "",
       });
+      setYoutubeKeys({
+        youtube_api_key: "",
+        youtube_playlist_id: "",
+      });
     }
   }, [isOpen, project]);
 
@@ -70,7 +85,7 @@ export default function ProjectSettingsDialog({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settingsForm.name.trim()) return;
-    await onSave(settingsForm, voiceKeys);
+    await onSave(settingsForm, voiceKeys, youtubeKeys);
   };
 
   return (
@@ -455,6 +470,110 @@ export default function ProjectSettingsDialog({
                   setVoiceKeys((prev) => ({
                     ...prev,
                     elevenlabs_api_key: e.target.value,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  padding: "0.38rem 0.6rem",
+                  marginTop: "2px",
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* YouTube API Config */}
+        <div
+          style={{
+            borderTop: "1px solid var(--border)",
+            marginTop: "0.4rem",
+            paddingTop: "0.75rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+          }}
+        >
+          <h4
+            style={{
+              fontSize: "0.85rem",
+              margin: 0,
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.3rem",
+            }}
+          >
+            <Play size={14} color="#ff0000" /> YouTube Integration
+          </h4>
+          <p
+            style={{
+              fontSize: "0.68rem",
+              color: "var(--text-muted)",
+              margin: 0,
+            }}
+          >
+            Connect your YouTube channel to get AI suggestions based on your recent videos.
+          </p>
+
+          <div style={{ display: "grid", gap: "0.55rem" }}>
+            <label>
+              <span
+                style={{
+                  fontSize: "0.7rem",
+                  color: "var(--text-muted)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>YouTube API Key</span>
+                {youtubeConfig?.youtube_api_key_configured && (
+                  <span
+                    style={{ color: "var(--success)", fontSize: "0.65rem" }}
+                  >
+                    ✓ Configured
+                  </span>
+                )}
+              </span>
+              <input
+                type="password"
+                placeholder={
+                  youtubeConfig?.youtube_api_key_configured
+                    ? "••••••••••••••••"
+                    : "Paste YouTube Data API key"
+                }
+                value={youtubeKeys.youtube_api_key}
+                onChange={(e) =>
+                  setYoutubeKeys((prev) => ({
+                    ...prev,
+                    youtube_api_key: e.target.value,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  padding: "0.38rem 0.6rem",
+                  marginTop: "2px",
+                }}
+              />
+            </label>
+
+            <label>
+              <span
+                style={{
+                  fontSize: "0.7rem",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <span>Channel Uploads Playlist ID</span>
+              </span>
+              <input
+                type="text"
+                placeholder="e.g. UU-Tj0urQxuwGt-B3kXMcMTg"
+                value={youtubeKeys.youtube_playlist_id || youtubeConfig?.youtube_playlist_id || ""}
+                onChange={(e) =>
+                  setYoutubeKeys((prev) => ({
+                    ...prev,
+                    youtube_playlist_id: e.target.value,
                   }))
                 }
                 style={{

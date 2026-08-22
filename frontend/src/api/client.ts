@@ -79,6 +79,20 @@ export const api = {
 
   listScripts: (projectId: number) =>
     request<import("../types").Script[]>(`/scripts/project/${projectId}`),
+
+  // YouTube
+  getYoutubeConfig: () =>
+    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string }>("/youtube/config"),
+  saveYoutubeConfig: (data: { youtube_api_key?: string; youtube_playlist_id?: string }) =>
+    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string }>("/youtube/config", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getRecentVideos: (maxResults?: number) =>
+    request<{ title: string; description: string; published_at: string; video_id: string; channel_title: string }[]>(
+      `/youtube/recent${maxResults ? `?max_results=${maxResults}` : ""}`,
+    ),
+
   generateScript: (
     projectId: number,
     data: {

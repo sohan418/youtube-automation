@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Clapperboard, Trash2 } from "lucide-react";
 import { api, mediaUrl } from "../api/client";
 import type { Project, SEOCategory } from "../types";
@@ -11,6 +11,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<SEOCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,11 @@ export default function Dashboard() {
         ratio: form.ratio,
       });
       setShowDialog(false);
-      await loadProjects();
+      const data = await api.listProjects();
+      setProjects(data);
+      if (data.length > 0) {
+        navigate(`/project/${data[0].id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project");
     } finally {

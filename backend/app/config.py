@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     logs_root: str = "../logs"
     templates_root: str = "../templates"
 
+    # YouTube
+    youtube_api_key: str = ""
+    youtube_playlist_id: str = ""
+
     # Misc
     ffmpeg_path: str = "ffmpeg"
     default_language: str = "en"

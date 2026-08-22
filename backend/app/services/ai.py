@@ -186,7 +186,8 @@ class AIService:
         return "Mock AI response — set OPENAI_API_KEY for real generation."
 
     def generate_ideas(
-        self, category: str | None, count: int, language: str, topic: str | None = None
+        self, category: str | None, count: int, language: str, topic: str | None = None,
+        recent_videos: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         category_text = f" in the '{category}' category" if category else ""
         topic_text = f" about: {topic}" if topic else ""
@@ -194,6 +195,13 @@ class AIService:
         user = (
             f"Generate {count} trending YouTube video ideas{topic_text}{category_text}. "
             f"Language: {language}. "
+        )
+        if recent_videos:
+            user += "Here are my recent videos (for context - generate NEW and DIFFERENT ideas, don't repeat these):\n"
+            for i, v in enumerate(recent_videos[:10], 1):
+                user += f"{i}. {v['title']} - {v.get('description', '')[:80]}\n"
+            user += "\nGenerate ideas that complement but are distinct from these existing videos. "
+        user += (
             'Return JSON: {"ideas": [{"title": "...", "description": "...", '
             '"category": "...", "trending_score": 0-100}]}'
         )

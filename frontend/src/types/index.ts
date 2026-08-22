@@ -44,6 +44,14 @@ export interface Idea {
   created_at: string;
 }
 
+export interface YouTubeVideo {
+  title: string;
+  description: string;
+  published_at: string;
+  video_id: string;
+  channel_title: string;
+}
+
 export interface Script {
   id: number;
   project_id: number;

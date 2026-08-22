@@ -657,7 +657,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 m = 0
             return f"{h}:{m:02d}:{s:02d}.{c:02d}"
 
-        is_word_by_word = style == "word_by_word"
+        is_word_by_word = True
         with output_path.open("w", encoding="utf-8") as f:
             f.write(header)
             for entry in subtitle_entries:

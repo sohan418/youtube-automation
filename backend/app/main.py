@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.models import PromptTemplate
-from app.routers import admin, ai, export, ideas, images, media, projects, prompts, scenes, scene_videos, scripts, seo, thumbnails, video, voice
+from app.routers import admin, ai, export, ideas, images, media, projects, prompts, scenes, scene_videos, scripts, seo, thumbnails, video, voice, youtube
 
 logging.basicConfig(
     level=logging.INFO,
@@ -88,6 +88,7 @@ app.include_router(export.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(prompts.router, prefix="/api")
+app.include_router(youtube.router, prefix="/api")
 
 
 @app.get("/api/health")

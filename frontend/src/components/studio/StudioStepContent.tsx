@@ -10,8 +10,11 @@ import type {
   TimelineData,
   VideoStatus,
   VoiceProvider,
+  YouTubeVideo,
 } from "../../types";
 import type { DragMedia, MediaTile } from "../steps/ImagesStep";
+import { STUDIO_STEPS } from "./studioSteps";
+import { ChevronRight, ChevronLeft } from "lucide-react";
 
 import IdeasStep from "../steps/IdeasStep";
 import ScriptStep from "../steps/ScriptStep";
@@ -30,6 +33,7 @@ interface PromptPair {
 
 interface Props {
   activeTab: string;
+  onTabChange: (tab: string) => void;
   projectId: number;
   project: { name: string; language: string } | null;
   ideas: Idea[];
@@ -47,6 +51,7 @@ interface Props {
   activeSceneIdx: number;
   setActiveSceneIdx: React.Dispatch<React.SetStateAction<number>>;
   prompts: Record<string, PromptPair>;
+  recentVideos: YouTubeVideo[];
 
   ideaTopic: string;
   setIdeaTopic: (v: string) => void;
@@ -179,6 +184,7 @@ export default function StudioStepContent(p: Props) {
           onSelect={p.selectIdea}
           onFreeAIResponse={p.importFreeIdeas}
           prompts={p.prompts.ideas}
+          recentVideos={p.recentVideos}
         />
       )}
 
@@ -331,6 +337,7 @@ export default function StudioStepContent(p: Props) {
       {p.activeTab === "captions" && (
         <CaptionsStep
           scenes={p.scenes}
+          ratio={p.selectedRatio}
           enableSubtitles={p.enableSubtitles}
           setEnableSubtitles={p.setEnableSubtitles}
           subtitleStyle={p.subtitleStyle}
@@ -366,6 +373,8 @@ export default function StudioStepContent(p: Props) {
           subtitleOutline={p.subtitleOutline}
           subtitleFontSize={p.subtitleFontSize}
           exportInfo={p.exportInfo}
+          activeSceneIdx={p.activeSceneIdx}
+          setActiveSceneIdx={p.setActiveSceneIdx}
           onExport={() =>
             p.runAction("export", async () => {
               const result = await api.exportProject(p.projectId);
@@ -451,6 +460,44 @@ export default function StudioStepContent(p: Props) {
           prompts={p.prompts.seo}
         />
       )}
+
+      {/* Next Step Navigation */}
+      {(() => {
+        const idx = STUDIO_STEPS.findIndex((s) => s.key === p.activeTab);
+        if (idx === -1) return null;
+        const prev = idx > 0 ? STUDIO_STEPS[idx - 1] : null;
+        const next = idx < STUDIO_STEPS.length - 1 ? STUDIO_STEPS[idx + 1] : null;
+        if (!prev && !next) return null;
+        return (
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingTop: "0.75rem",
+            borderTop: "1px solid var(--border)",
+            marginTop: "0.75rem",
+          }}>
+            {prev ? (
+              <button
+                className="btn-secondary"
+                onClick={() => p.onTabChange(prev.key)}
+                style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+              >
+                <ChevronLeft size={14} /> {prev.label}
+              </button>
+            ) : <div />}
+            {next ? (
+              <button
+                className="btn-primary"
+                onClick={() => p.onTabChange(next.key)}
+                style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+              >
+                {next.label} <ChevronRight size={14} />
+              </button>
+            ) : <div />}
+          </div>
+        );
+      })()}
 
     </div>
   );

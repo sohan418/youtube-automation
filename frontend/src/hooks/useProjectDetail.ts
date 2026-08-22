@@ -53,6 +53,8 @@ export function useProjectDetail(projectId: number) {
   const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [selectedVoiceRate, setSelectedVoiceRate] = useState("+0%");
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
+  const [youtubeConfig, setYoutubeConfig] = useState<{ youtube_api_key_configured: boolean; youtube_playlist_id: string } | null>(null);
+  const [recentVideos, setRecentVideos] = useState<import("../types").YouTubeVideo[]>([]);
   const [voiceProgress, setVoiceProgress] = useState("");
   const [selectedRatio, setSelectedRatio] = useState("16:9");
   const [videoStatus, setVideoStatus] = useState<VideoStatus | null>(null);
@@ -145,6 +147,8 @@ export function useProjectDetail(projectId: number) {
             }
           })
           .catch(() => {});
+        api.getYoutubeConfig().then(setYoutubeConfig).catch(() => {});
+        api.getRecentVideos(10).then(setRecentVideos).catch(() => {});
         api.getTimeline(projectId).then((t) => setTimeline((prev) => prev ?? t.data)).catch(() => {});
         setProject(proj);
         if (proj.ratio) setSelectedRatio(proj.ratio);
@@ -233,6 +237,7 @@ export function useProjectDetail(projectId: number) {
   const saveSettings = async (
     form: { name: string; description: string; category: string; language: string; ratio: string },
     keys: { sarvam_api_key: string; deepgram_api_key: string; elevenlabs_api_key: string },
+    ytKeys: { youtube_api_key: string; youtube_playlist_id: string },
   ) => {
     await runAction("settings", async () => {
       await api.updateProject(projectId, {
@@ -246,6 +251,15 @@ export function useProjectDetail(projectId: number) {
         await api.saveVoiceConfig(keys);
         const cfg = await api.getVoiceConfig();
         setVoiceConfig(cfg);
+      }
+      if (ytKeys.youtube_api_key.trim() || ytKeys.youtube_playlist_id.trim()) {
+        const ytPayload: { youtube_api_key?: string; youtube_playlist_id?: string } = {};
+        if (ytKeys.youtube_api_key.trim()) ytPayload.youtube_api_key = ytKeys.youtube_api_key.trim();
+        if (ytKeys.youtube_playlist_id.trim()) ytPayload.youtube_playlist_id = ytKeys.youtube_playlist_id.trim();
+        await api.saveYoutubeConfig(ytPayload);
+        const cfg = await api.getYoutubeConfig();
+        setYoutubeConfig(cfg);
+        api.getRecentVideos(10).then(setRecentVideos).catch(() => {});
       }
       setEditingSettings(false);
       setSuccess("Project settings saved.");
@@ -283,7 +297,10 @@ export function useProjectDetail(projectId: number) {
   const selectIdea = async (ideaId: number) => {
     await runAction("select", async () => {
       await api.selectIdea(ideaId);
+      const selectedIdea = ideas.find((i) => i.id === ideaId);
+      if (selectedIdea) setScriptTopic(selectedIdea.title);
       setSuccess("Idea selected for script generation");
+      setActiveTab("script");
     });
   };
 
@@ -908,6 +925,7 @@ export function useProjectDetail(projectId: number) {
     activeTab, activeSceneIdx, prompts, loading, actionLoading, error, success,
     exportInfo, voiceProviders, selectedProvider, selectedVoice, selectedVoiceRate,
     voiceConfig, voiceProgress, selectedRatio, videoStatus, timeline,
+    youtubeConfig, recentVideos,
     imageUrlInputs, generatingSceneId, clipboardImageId, dragMedia, draggingOverScene,
     previewMedia, cropFile, trimFile, addingScene, newSceneNarration, addSceneAt,
     sceneCount, ideaTopic, editingSceneId, sceneEditForm, recordingSceneId,
