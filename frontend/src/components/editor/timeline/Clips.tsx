@@ -219,6 +219,15 @@ export const VideoClipView = memo(function VideoClipView(
         style={{
           position: "absolute",
           inset: 0,
+          backgroundImage:
+            "repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 42px, rgba(8,10,14,0.55) 42px 44px)",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
           background:
             "linear-gradient(180deg,rgba(10,12,18,0.62) 0%,rgba(10,12,18,0) 38%,rgba(10,12,18,0) 55%,rgba(10,12,18,0.66) 100%)",
         }}

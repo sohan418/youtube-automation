@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.database import get_db
-from app.models import Project, SEOMetadata
+from app.models import Project, SEOMetadata, Thumbnail
 from app.services.storage import storage_service
 from app.services.youtube import youtube_service
 
@@ -110,14 +110,25 @@ def upload_video(project_id: int, payload: YouTubeUploadRequest):
     tags = [t.strip() for t in tags_str.replace("\n", ",").split(",") if t.strip()] if tags_str else []
     category_id = str(seo.category_id) if seo and seo.category_id else "22"
 
-    # Find thumbnail
-    thumb_dir = storage_service.get_project_path(project.slug) / "thumbnail"
+    # Find thumbnail: prefer the user-selected one
+    selected = (
+        db.query(Thumbnail)
+        .filter(Thumbnail.project_id == project_id)
+        .order_by(Thumbnail.is_selected.desc(), Thumbnail.id.desc())
+        .first()
+    )
     thumbnail_path = None
-    if thumb_dir.exists():
-        for f in thumb_dir.iterdir():
-            if f.suffix.lower() in (".jpg", ".jpeg", ".png"):
-                thumbnail_path = str(f)
-                break
+    if selected and selected.file_path:
+        candidate = storage_service.root.parent / selected.file_path
+        if candidate.exists():
+            thumbnail_path = str(candidate)
+    if not thumbnail_path:
+        thumb_dir = storage_service.get_project_path(project.slug) / "thumbnail"
+        if thumb_dir.exists():
+            for f in sorted(thumb_dir.iterdir()):
+                if f.suffix.lower() in (".jpg", ".jpeg", ".png"):
+                    thumbnail_path = str(f)
+                    break
 
     youtube_service.upload_video(
         project_slug=project.slug,

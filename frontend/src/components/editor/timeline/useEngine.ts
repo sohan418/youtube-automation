@@ -79,6 +79,7 @@ export function useTimelineEngine(
   const [rowStates, setRowStates] = useState<
     Partial<Record<TimelineTrack, RowState>>
   >({});
+  const rowStatesHydrated = useRef<string>("");
   const [draft, setDraft] = useState<{ clips: TimelineClip[] } | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<TimelineTrack | null>(null);
@@ -103,6 +104,18 @@ export function useTimelineEngine(
 
   const pxRef = useRef(px);
   pxRef.current = px;
+
+  useEffect(() => {
+    const sig = JSON.stringify(timeline.track_states ?? {});
+    if (sig === rowStatesHydrated.current) return;
+    rowStatesHydrated.current = sig;
+    setRowStates(
+      (timeline.track_states ?? {}) as Partial<
+        Record<TimelineTrack, RowState>
+      >,
+    );
+  }, [timeline.track_states]);
+
   const timeRef = useRef(time);
   timeRef.current = time;
   const playingRef = useRef(playing);
@@ -113,10 +126,19 @@ export function useTimelineEngine(
   clipsRef.current = clips;
 
   const totalDuration = useMemo(() => {
-    let d = timeline.duration;
-    for (const c of clips) d = Math.max(d, c.start + c.duration);
-    return d;
-  }, [timeline.duration, clips]);
+    let videoEnd = -1;
+    let narrEnd = -1;
+    let anyEnd = -1;
+    for (const c of clips) {
+      const e = c.start + c.duration;
+      anyEnd = Math.max(anyEnd, e);
+      if (c.track === "video") videoEnd = Math.max(videoEnd, e);
+      else if (c.track === "narration") narrEnd = Math.max(narrEnd, e);
+    }
+    if (videoEnd >= 0) return Math.max(videoEnd, narrEnd, 0);
+    if (narrEnd >= 0) return narrEnd;
+    return Math.max(anyEnd, 0);
+  }, [clips]);
   const totalRef = useRef(totalDuration);
   totalRef.current = totalDuration;
 
@@ -306,6 +328,14 @@ export function useTimelineEngine(
       }
       commit(buildNext(rest));
       setSelectedId((s) => (s === clip.id ? null : s));
+    },
+    [buildNext, commit],
+  );
+
+  const addClip = useCallback(
+    (clip: TimelineClip) => {
+      commit(buildNext([...clipsRef.current, clip]));
+      setSelectedId(clip.id);
     },
     [buildNext, commit],
   );
@@ -510,20 +540,18 @@ export function useTimelineEngine(
         });
       }
       if (want.size === 0) {
-        const v = clipsRef.current.find(
-          (c) =>
-            c.track === "video" &&
-            c.audio_path &&
-            !rowStateOf("video").muted &&
-            t >= c.start &&
-            t < c.start + c.duration,
-        );
-        if (v?.audio_path) {
-          want.set(v.id, {
-            src: mediaUrl(v.audio_path),
-            vol: clamp(v.volume, 0, 1),
-            offset: Math.max(0, (v.audio_in ?? 0) + (t - v.start)),
+        for (const c of clipsRef.current) {
+          if (c.track !== "video") continue;
+          const srcFile = c.audio_path ?? c.video_path;
+          if (!srcFile) continue;
+          if (!(t >= c.start && t < c.start + c.duration)) continue;
+          if (c.muted || rowStateOf("video").muted) continue;
+          want.set(c.id, {
+            src: mediaUrl(srcFile),
+            vol: clamp(c.volume * fadeGain(c, t - c.start), 0, 1),
+            offset: Math.max(0, (c.audio_in ?? 0) + (t - c.start)),
           });
+          break;
         }
       }
       for (const [id, el] of pool) {
@@ -794,11 +822,27 @@ export function useTimelineEngine(
     setSnapLine(null);
     setHoverRow(null);
     if (st && st.moved && draftMirror.current) {
-      commit(buildNext(draftMirror.current));
+      let finalClips = draftMirror.current;
+      if (rippleOn && st.mode === "trim-r") {
+        const o = st.orig;
+        const trimmed = finalClips.find((c) => c.id === st.clipId);
+        if (trimmed && Math.abs(trimmed.start - o.start) < 1e-6) {
+          const delta = o.duration - trimmed.duration;
+          if (delta > 0.01) {
+            const oldEnd = o.start + o.duration;
+            finalClips = finalClips.map((c) =>
+              c.id !== st.clipId && c.start >= oldEnd - 0.02
+                ? { ...c, start: round2(Math.max(0, c.start - delta)) }
+                : c,
+            );
+          }
+        }
+      }
+      commit(buildNext(finalClips));
     }
     draftMirror.current = null;
     setDraft(null);
-  }, [buildNext, commit]);
+  }, [buildNext, commit, rippleOn]);
 
   const onClipPointerDown = useCallback(
     (e: React.PointerEvent, clip: TimelineClip) => {
@@ -991,12 +1035,27 @@ export function useTimelineEngine(
 
   const toggleRowFlag = useCallback(
     (id: TimelineTrack, flag: keyof RowState) => {
-      setRowStates((rs) => {
-        const cur = rs[id] ?? { muted: false, locked: false };
-        return { ...rs, [id]: { ...cur, [flag]: !cur[flag] } };
+      const cur = rowStates[id] ?? { muted: false, locked: false };
+      const nextAll = {
+        ...rowStates,
+        [id]: { ...cur, [flag]: !cur[flag] },
+      } as Partial<Record<TimelineTrack, RowState>>;
+      setRowStates(nextAll);
+      rowStatesHydrated.current = JSON.stringify(nextAll);
+      const past = historyRef.current.past;
+      past.push(timeline);
+      if (past.length > 100) past.shift();
+      historyRef.current.future = [];
+      lastMerge.current = { key: "", t: 0 };
+      bumpHistory((v) => v + 1);
+      onChange({
+        ...timeline,
+        clips: clipsRef.current,
+        duration: totalRef.current,
+        track_states: nextAll,
       });
     },
-    [],
+    [rowStates, timeline, onChange],
   );
 
   const clearMarkers = useCallback(() => setMarkers([]), []);
@@ -1040,6 +1099,7 @@ export function useTimelineEngine(
     deleteClipOp,
     removeSilentEdges,
     extendToSource,
+    addClip,
     closeGaps,
     moveClipRow,
     adjacentRow,

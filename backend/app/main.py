@@ -26,10 +26,10 @@ async def lifespan(app: FastAPI):
             conn.execute(text("SELECT motion_effect FROM scenes LIMIT 1"))
         except Exception:
             logging.info("Migrating database: adding motion_effect column to scenes table")
-            conn.execute(text("ALTER TABLE scenes ADD COLUMN motion_effect VARCHAR(50) DEFAULT 'zoom_in'"))
+            conn.execute(text("ALTER TABLE scenes ADD COLUMN motion_effect VARCHAR(50) DEFAULT 'none'"))
             conn.commit()
         try:
-            conn.execute(text("UPDATE scenes SET motion_effect = 'zoom_in' WHERE motion_effect IS NULL OR motion_effect = 'none'"))
+            conn.execute(text("UPDATE scenes SET motion_effect = 'none' WHERE motion_effect IS NULL"))
             conn.commit()
         except Exception:
             pass

@@ -8,6 +8,8 @@ import {
   Type,
   Copy,
   Waves,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { TimelineClip } from "../../../types";
 import { THEME, TRACK_BY_ID } from "./constants";
@@ -48,9 +50,11 @@ interface Props {
 function Field({
   label,
   children,
+  extra,
 }: {
   label: string;
   children: React.ReactNode;
+  extra?: React.ReactNode;
 }) {
   return (
     <label
@@ -65,6 +69,7 @@ function Field({
     >
       {label}
       {children}
+      {extra}
     </label>
   );
 }
@@ -327,23 +332,49 @@ export function Inspector({
                 style={numInputStyle}
               />
             </Field>
-            <Field label={`Volume ${Math.round(clip.volume * 100)}%`}>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={clip.volume}
-                onChange={(e) =>
-                  onPatch(
-                    { volume: parseFloat(e.target.value) },
-                    `vo:${clip.id}`,
-                  )
-                }
-                style={{ width: 96, accentColor: THEME.accent, cursor: "pointer" }}
-              />
-            </Field>
           </>
+        )}
+        {clip.track !== "text" && (
+          <Field
+            label={`Volume ${Math.round(clip.volume * 100)}%`}
+            extra={
+              <button
+                type="button"
+                title={clip.muted ? "Unmute clip audio" : "Mute clip audio"}
+                onClick={() => onPatch({ muted: !clip.muted }, `mu:${clip.id}`)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  border: `1px solid ${clip.muted ? "#ff6b78" : THEME.separator}`,
+                  background: clip.muted ? "rgba(255,107,120,0.16)" : THEME.surfaceAlt,
+                  color: clip.muted ? "#ff6b78" : "#c9c9d1",
+                  cursor: "pointer",
+                }}
+              >
+                {clip.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+              </button>
+            }
+          >
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={clip.muted ? 0 : clip.volume}
+              disabled={clip.muted}
+              onChange={(e) =>
+                onPatch(
+                  { volume: parseFloat(e.target.value) },
+                  `vo:${clip.id}`,
+                )
+              }
+              style={{ width: 96, accentColor: THEME.accent, cursor: "pointer" }}
+            />
+          </Field>
         )}
         {clip.track === "video" && (
           <Field label="Motion">

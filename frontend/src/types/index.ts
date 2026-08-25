@@ -231,10 +231,13 @@ export interface TimelineClip {
   fade_out?: number;
 }
 
+export type TimelineTrackState = { muted: boolean; locked: boolean };
+
 export interface TimelineData {
   version: number;
   duration: number;
   clips: TimelineClip[];
+  track_states?: Partial<Record<TimelineTrack, TimelineTrackState>>;
 }
 
 export interface TimelineResponse {

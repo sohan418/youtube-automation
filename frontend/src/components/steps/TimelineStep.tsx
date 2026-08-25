@@ -13,9 +13,17 @@ async function applyOriginalMediaLengths(
   let changed = false;
   await Promise.all(
     clips.map(async (c, i) => {
-      const p = c.audio_path ?? c.video_path;
-      if (!p) return;
-      const kind = c.audio_path ? ("audio" as const) : ("video" as const);
+      let p: string | null | undefined = null;
+      let kind: "audio" | "video" = "audio";
+      if (c.track === "narration" || c.track === "music") {
+        p = c.audio_path;
+        kind = "audio";
+      } else if (c.video_path) {
+        p = c.video_path;
+        kind = "video";
+      } else {
+        return;
+      }
       try {
         const d = await resolveMediaDuration(mediaUrl(p), kind);
         if (d == null || !(d > 0)) return;
@@ -79,11 +87,11 @@ function buildDefaultTimeline(scenes: Scene[]): TimelineData {
       duration,
       image_path: image,
       video_path: s.video_path,
-      audio_path: s.audio_path,
+      audio_path: null,
       audio_in: 0,
       audio_out: null,
       volume: 1,
-      motion_effect: s.motion_effect || "zoom_in",
+      motion_effect: s.motion_effect || "none",
     });
     if (s.audio_path) {
       clips.push({
@@ -114,6 +122,7 @@ interface Props {
   mediaUrl: (path: string | null | undefined) => string;
   timeline: TimelineData | null;
   onTimelineChange: (tl: TimelineData) => void;
+  onAddScene?: () => Promise<Scene | null>;
 }
 
 export default function TimelineStep({
@@ -125,6 +134,7 @@ export default function TimelineStep({
   mediaUrl,
   timeline,
   onTimelineChange,
+  onAddScene,
 }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -309,6 +319,7 @@ export default function TimelineStep({
           timeline={timeline}
           scenes={scenes}
           mediaUrl={mediaUrl}
+          projectId={projectId}
           previewRatio={{
             id: ratio,
             label: ratio,
@@ -317,6 +328,7 @@ export default function TimelineStep({
             resolution: ratio === "9:16" ? "1080×1920" : "1920×1080",
           }}
           onChange={handleChange}
+          onAddScene={onAddScene}
         />
       )}
 

@@ -77,6 +77,7 @@ interface Props {
   onNewSceneNarration: (v: string) => void;
   onAddScene: () => void;
   onOpenAdd: (pos: number | null) => void;
+  onAddBlank?: () => void;
   onCloseAdd: () => void;
   editingSceneId: number | null;
   sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null };
@@ -93,7 +94,7 @@ interface Props {
 export default function ScenesStep({
   scenes, activeScript, actionLoading, sceneCount, onSceneCountChange,
   onGenerate, onClearAll, addingScene, addSceneAt, newSceneNarration,
-  onNewSceneNarration, onAddScene, onOpenAdd, onCloseAdd, editingSceneId,
+  onNewSceneNarration, onAddScene, onOpenAdd, onAddBlank, onCloseAdd, editingSceneId,
   sceneEditForm, onEditFormChange, onStartEdit, onCancelEdit, onSaveEdit,
   onRemove, onImportScenes, projectName = "project", prompts,
 }: Props) {
@@ -205,6 +206,9 @@ export default function ScenesStep({
           <input type="number" min={1} max={30} value={sceneCount} onChange={(e) => onSceneCountChange(e.target.value)} placeholder="Auto" title="Scene count" style={{ width: "3rem", textAlign: "center", padding: "0.28rem 0.25rem", fontSize: "0.75rem" }} />
           <button className="btn-accent" disabled={!!actionLoading} onClick={() => onOpenAdd(null)} style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}>
             <Plus size={12} /> Add
+          </button>
+          <button className="btn-secondary" disabled={!!actionLoading} onClick={() => onAddBlank?.()} title="Add a blank scene (fill in later)" style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}>
+            <Plus size={12} /> Blank
           </button>
 
           <div ref={menuRef} style={{ position: "relative" }}>

@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 import urllib.parse
@@ -6,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
-from app.models import Project, ProjectStatus, Scene, Script
+from app.models import Project, ProjectStatus, Scene, Script, Timeline
 from app.schemas import (
     MessageResponse,
     MusicSuggestionResponse,
@@ -157,8 +158,26 @@ def video_build_status(project_id: int, db: Session = Depends(get_db)):
     return video_service.get_progress(project.slug)
 
 
+def _load_timeline_payload(db: Session, project_id: int) -> dict | None:
+    tl = db.query(Timeline).filter(Timeline.project_id == project_id).first()
+    if not tl or not tl.data:
+        return None
+    try:
+        parsed = json.loads(tl.data)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(parsed, dict) or not parsed.get("clips"):
+        return None
+    return parsed
+
+
 def _run_build(
-    project_id: int, slug: str, scene_data: list[dict], payload: VideoBuildRequest
+    project_id: int,
+    slug: str,
+    scene_data: list[dict],
+    payload: VideoBuildRequest,
+    timeline_clips: list[dict] | None = None,
+    track_states: dict | None = None,
 ) -> None:
     from app.services.video import video_service
 
@@ -178,6 +197,8 @@ def _run_build(
             subtitle_outline=payload.subtitle_outline,
             subtitle_font_size=payload.subtitle_font_size,
             force_rebuild=payload.force_rebuild,
+            timeline_clips=timeline_clips,
+            track_states=track_states,
         )
         db = SessionLocal()
         try:
@@ -219,6 +240,7 @@ def build_video(
 
     scene_data = [
         {
+            "id": s.id,
             "order_index": s.order_index,
             "image_path": s.image_path,
             "images": [
@@ -238,12 +260,28 @@ def build_video(
         for s in scenes
     ]
 
+    timeline_payload = _load_timeline_payload(db, project_id)
+    background_music = payload.background_music
+    music_volume = payload.music_volume
+    if (
+        not background_music
+        and timeline_payload
+        and isinstance(timeline_payload.get("music"), dict)
+        and timeline_payload["music"].get("file_path")
+    ):
+        background_music = timeline_payload["music"]["file_path"]
+        music_volume = float(timeline_payload["music"].get("volume", music_volume))
+    timeline_clips = timeline_payload["clips"] if timeline_payload else None
+    track_states = (
+        timeline_payload.get("track_states") if timeline_payload else None
+    )
+
     video_service.set_progress(
         project.slug, 0, "starting", "Starting video build..."
     )
     thread = threading.Thread(
         target=_run_build,
-        args=(project_id, project.slug, scene_data, payload),
+        args=(project_id, project.slug, scene_data, payload, timeline_clips, track_states),
         daemon=True,
     )
     thread.start()

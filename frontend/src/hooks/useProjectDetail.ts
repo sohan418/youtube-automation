@@ -1,5 +1,5 @@
   import { useCallback, useEffect, useRef, useState } from "react";
-import { api, mediaUrl } from "../api/client";
+import { api, API_BASE, mediaUrl } from "../api/client";
 import type {
   ExportResult,
   Idea,
@@ -91,7 +91,7 @@ export function useProjectDetail(projectId: number) {
   const [sceneCount, setSceneCount] = useState("");
   const [ideaTopic, setIdeaTopic] = useState("");
   const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
-  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in", duration_seconds: null as number | null });
+  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "none", duration_seconds: null as number | null });
   const [recordingSceneId, setRecordingSceneId] = useState<number | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordingPaused, setRecordingPaused] = useState(false);
@@ -662,6 +662,20 @@ export function useProjectDetail(projectId: number) {
     setAddSceneAt(null);
   };
 
+  const quickAddScene = async (): Promise<Scene | null> => {
+    try {
+      const scene = await api.createScene(projectId, { narration: "" });
+      setScenes((prev) =>
+        [...prev, scene].sort((a, b) => a.order_index - b.order_index),
+      );
+      return scene;
+    } catch (err) {
+      console.error("Failed to add scene from timeline", err);
+      setError("Could not add scene. Generate a script first.");
+      return null;
+    }
+  };
+
   const generateScenes = async () => {
     await runAction("scenes", async () => {
       if (scenes.length > 0 && !window.confirm(`Regenerating scenes will replace all ${scenes.length} existing scenes. Continue?`)) return;
@@ -685,7 +699,7 @@ export function useProjectDetail(projectId: number) {
       narration: scene.narration,
       image_prompt: scene.image_prompt ?? "",
       video_prompt: scene.video_prompt ?? "",
-      motion_effect: scene.motion_effect ?? "zoom_in",
+      motion_effect: scene.motion_effect ?? "none",
       duration_seconds: scene.duration_seconds,
     });
     setEditingSceneId(scene.id);
@@ -693,7 +707,7 @@ export function useProjectDetail(projectId: number) {
 
   const cancelSceneEdit = () => {
     setEditingSceneId(null);
-    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in", duration_seconds: null });
+    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "none", duration_seconds: null });
   };
 
   const saveSceneEdit = async (sceneId: number) => {
@@ -883,6 +897,12 @@ export function useProjectDetail(projectId: number) {
     });
   };
 
+  const downloadCombinedAudio = () => {
+    if (audioPreviewUrl) {
+      api.downloadCombinedAudio(audioPreviewUrl.replace(API_BASE + "/media/", ""));
+    }
+  };
+
   const formatRecordTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   const handleTileDragOver = (e: React.DragEvent) => {
@@ -1025,9 +1045,10 @@ export function useProjectDetail(projectId: number) {
     handleVideoFileSelected, applyVideoUpload, removeSceneVideo, removeSceneImage,
     makePrimaryImage, reorderSceneMedia, copySceneImageTo,
     addScene, openAddScene, closeAddScene, generateScenes, removeScene,
+    quickAddScene,
     openSceneEdit, cancelSceneEdit, saveSceneEdit, clearScenes, updateSceneEffect,
     startRecording, toggleRecordingPause, stopRecording, handleAudioFileSelected,
-    clearSceneAudio, combineAudioPreview, audioPreviewUrl, formatRecordTime, buildVideo,
+    clearSceneAudio, combineAudioPreview, downloadCombinedAudio, audioPreviewUrl, formatRecordTime, buildVideo,
     handleTileDragOver, handleTileDrop, handleSceneDrop, handleUploadTileDrop, handlePaste,
     audioInputRef, uploadYouTube,
   };

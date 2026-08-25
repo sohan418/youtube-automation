@@ -88,6 +88,7 @@ interface Props {
   addScene: () => Promise<void>;
   openAddScene: (pos: number | null) => void;
   closeAddScene: () => void;
+  quickAddScene: () => Promise<Scene | null>;
   editingSceneId: number | null;
   sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null };
   setSceneEditForm: React.Dispatch<React.SetStateAction<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null }>>;
@@ -141,6 +142,7 @@ interface Props {
   handleAudioFileSelected: (id: number, file: File) => Promise<void>;
   clearSceneAudio: (id: number) => Promise<void>;
   combineAudioPreview: () => Promise<void>;
+  downloadCombinedAudio: () => void;
   audioPreviewUrl: string | null;
   setSelectedProvider: (v: string) => void;
   setSelectedVoice: (v: string) => void;
@@ -244,6 +246,7 @@ export default function StudioStepContent(p: Props) {
           onNewSceneNarration={p.setNewSceneNarration}
           onAddScene={p.addScene}
           onOpenAdd={p.openAddScene}
+          onAddBlank={() => { void p.quickAddScene(); }}
           onCloseAdd={p.closeAddScene}
           editingSceneId={p.editingSceneId}
           sceneEditForm={p.sceneEditForm}
@@ -334,6 +337,7 @@ export default function StudioStepContent(p: Props) {
           onFileSelected={p.handleAudioFileSelected}
           onClearAudio={p.clearSceneAudio}
           onCombineAudioPreview={p.combineAudioPreview}
+          onDownloadCombinedAudio={p.downloadCombinedAudio}
           audioPreviewUrl={p.audioPreviewUrl}
           mediaUrl={mediaUrl}
           audioVersion={p.audioVersion}
@@ -375,6 +379,7 @@ export default function StudioStepContent(p: Props) {
           mediaUrl={mediaUrl}
           timeline={p.timeline}
           onTimelineChange={p.setTimeline}
+          onAddScene={p.quickAddScene}
         />
       )}
 

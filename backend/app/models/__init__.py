@@ -118,7 +118,7 @@ class Scene(Base):
     audio_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True, default=5.0)
     duration_manual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    motion_effect: Mapped[str | None] = mapped_column(String(50), default="zoom_in", nullable=True)
+    motion_effect: Mapped[str | None] = mapped_column(String(50), default="none", nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

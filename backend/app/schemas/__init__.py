@@ -129,10 +129,10 @@ class SceneGenerateRequest(BaseModel):
 
 
 class SceneCreate(BaseModel):
-    narration: str = Field(min_length=1)
+    narration: str = ""
     image_prompt: str | None = None
     video_prompt: str | None = None
-    motion_effect: str | None = "zoom_in"
+    motion_effect: str | None = "none"
     script_id: int | None = None
     order_index: int | None = None
 
@@ -141,7 +141,7 @@ class SceneImportItem(BaseModel):
     narration: str
     image_prompt: str | None = None
     video_prompt: str | None = None
-    motion_effect: str | None = "zoom_in"
+    motion_effect: str | None = "none"
 
 
 class SceneImportRequest(BaseModel):
@@ -190,7 +190,7 @@ class SceneResponse(BaseModel):
     narration: str
     image_prompt: str | None
     video_prompt: str | None
-    motion_effect: str | None = "zoom_in"
+    motion_effect: str | None = "none"
     image_path: str | None
     video_path: str | None
     audio_path: str | None
@@ -267,11 +267,17 @@ class TimelineMusic(BaseModel):
     volume: float = 0.12
 
 
+class TimelineTrackState(BaseModel):
+    muted: bool = False
+    locked: bool = False
+
+
 class TimelineData(BaseModel):
     version: int = 1
     duration: float = 0.0
     clips: list[TimelineClip] = Field(default_factory=list)
     music: TimelineMusic | None = None
+    track_states: dict[str, TimelineTrackState] | None = None
 
 
 class TimelineResponse(BaseModel):

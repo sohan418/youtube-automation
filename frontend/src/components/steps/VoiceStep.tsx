@@ -8,6 +8,7 @@ import {
   Volume2,
   CheckCircle2,
   Upload,
+  Download,
 } from "lucide-react";
 import type { Scene, VoiceProvider } from "../../types";
 import Select from "../ui/Select";
@@ -191,6 +192,7 @@ interface Props {
   onFileSelected: (sceneId: number, file: File) => void;
   onClearAudio: (sceneId: number) => void;
   onCombineAudioPreview: () => void;
+  onDownloadCombinedAudio: () => void;
   audioPreviewUrl: string | null;
   mediaUrl: (p: string) => string;
   audioVersion: Record<number, number>;
@@ -223,6 +225,7 @@ export default function VoiceStep({
   onFileSelected,
   onClearAudio,
   onCombineAudioPreview,
+  onDownloadCombinedAudio,
   audioPreviewUrl,
   mediaUrl,
   audioVersion,
@@ -429,6 +432,29 @@ export default function VoiceStep({
                 <span style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>All scenes combined</span>
               </div>
               <CustomAudioPlayer src={audioPreviewUrl} audioVersionKey={0} />
+              <button
+                onClick={onDownloadCombinedAudio}
+                disabled={!!actionLoading}
+                style={{
+                  marginTop: "0.4rem",
+                  width: "100%",
+                  padding: "0.3rem",
+                  fontSize: "0.68rem",
+                  fontWeight: 600,
+                  background: "var(--surface)",
+                  border: "1px solid var(--success)",
+                  color: "var(--success)",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.35rem",
+                }}
+              >
+                <Download size={13} />
+                Download Combined Audio
+              </button>
             </div>
           )}
 

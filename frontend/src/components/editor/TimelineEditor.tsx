@@ -30,8 +30,10 @@ import type {
   Scene,
   TimelineClip,
   TimelineData,
+  TimelineTrack,
   VideoRatio,
 } from "../../types";
+import { api } from "../../api/client";
 import { AudioClipView, TextView, VideoClipView } from "./timeline/Clips";
 import { useMediaDuration } from "./timeline/mediaMeta";
 import {
@@ -48,7 +50,7 @@ import { ContextMenu, type MenuItem } from "./timeline/ContextMenu";
 import { Inspector } from "./timeline/Inspector";
 import { PreviewPanel } from "./timeline/PreviewPanel";
 import { Ruler } from "./timeline/Ruler";
-import { fmtTime } from "./timeline/utils";
+import { fmtTime, freshId, round2 } from "./timeline/utils";
 import { useTimelineEngine } from "./timeline/useEngine";
 
 const CSS = `
@@ -70,6 +72,8 @@ interface Props {
   scenes: Scene[];
   mediaUrl: (path: string | null | undefined) => string;
   previewRatio?: VideoRatio;
+  projectId?: number;
+  onAddScene?: () => Promise<Scene | null>;
   onChange: (tl: TimelineData) => void;
 }
 
@@ -78,6 +82,8 @@ export default function TimelineEditor({
   scenes,
   mediaUrl,
   previewRatio,
+  projectId,
+  onAddScene,
   onChange,
 }: Props) {
   const E = useTimelineEngine(timeline, scenes, mediaUrl, onChange);
@@ -131,6 +137,61 @@ export default function TimelineEditor({
         ? mediaUrl(sel.video_path)
         : null,
     sel?.audio_path ? "audio" : "video",
+  );
+
+  const [dragDepth, setDragDepth] = useState(0);
+  const [droppingFile, setDroppingFile] = useState<string | null>(null);
+
+  const handleDropFiles = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragDepth(0);
+      const files = Array.from(e.dataTransfer.files || []);
+      if (files.length === 0 || !projectId) return;
+      const r = E.ticksRef.current?.getBoundingClientRect();
+      let cursor = r ? Math.max(0, (e.clientX - r.left) / px) : 0;
+      const rowEl = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest("[data-row]");
+      const dropRow = rowEl?.getAttribute("data-row") as TimelineTrack | null;
+      for (const file of files) {
+        setDroppingFile(file.name);
+        try {
+          const res = await api.uploadTimelineMedia(projectId, file);
+          const dur = Math.max(
+            MIN_DUR,
+            round2(res.duration_seconds && res.duration_seconds > 0 ? res.duration_seconds : 5),
+          );
+          const track: TimelineTrack =
+            res.kind === "audio"
+              ? dropRow === "music"
+                ? "music"
+              : "narration"
+              : "video";
+          const clip: TimelineClip = {
+            id: freshId("x"),
+            scene_id: -1,
+            track,
+            start: round2(cursor),
+            duration: dur,
+            image_path: res.kind === "image" ? res.file_path : null,
+            video_path: res.kind === "video" ? res.file_path : null,
+            audio_path: res.kind === "audio" ? res.file_path : null,
+            audio_in: 0,
+            audio_out: null,
+            volume: track === "music" ? 0.8 : 1,
+            motion_effect: "none",
+          };
+          E.addClip(clip);
+          cursor += dur;
+        } catch (err) {
+          console.error("Timeline media upload failed", err);
+        } finally {
+          setDroppingFile(null);
+        }
+      }
+    },
+    [E, projectId, px],
   );
 
   const openMenuFor = useCallback((x: number, y: number, clipId: string | null) => {
@@ -392,6 +453,37 @@ export default function TimelineEditor({
     </button>
   );
 
+  const [addingScene, setAddingScene] = useState(false);
+
+  const handleAddScene = useCallback(async () => {
+    if (!onAddScene || addingScene) return;
+    setAddingScene(true);
+    try {
+      const scene = await onAddScene();
+      if (!scene) return;
+      let end = 0;
+      for (const c of E.clips) end = Math.max(end, c.start + c.duration);
+      end = Math.max(end, timeline.duration);
+      const dur = Math.max(MIN_DUR, round2(scene.duration_seconds ?? 5));
+      E.addClip({
+        id: freshId("x"),
+        scene_id: scene.id,
+        track: "video",
+        start: round2(end),
+        duration: dur,
+        image_path: scene.image_path ?? null,
+        video_path: scene.video_path ?? null,
+        audio_path: null,
+        audio_in: 0,
+        audio_out: null,
+        volume: 1,
+        motion_effect: scene.motion_effect || "none",
+      });
+    } finally {
+      setAddingScene(false);
+    }
+  }, [E, onAddScene, addingScene, timeline.duration]);
+
   return (
     <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
       <style>{CSS}</style>
@@ -575,6 +667,15 @@ export default function TimelineEditor({
             padding: 0,
           }}
         />
+        {onAddScene &&
+          btn(
+            "Create a new scene and append it at the end",
+            <>
+              <Plus size={14} /> Scene
+            </>,
+            () => void handleAddScene(),
+            { primary: true, disabled: addingScene },
+          )}
         {btn("Zoom in (+)", <ZoomIn size={14} />, () => E.zoomAt(1.3))}
         {btn("Fit timeline", <Maximize size={14} />, E.fitTimeline)}
         <span
@@ -609,8 +710,64 @@ export default function TimelineEditor({
               maxHeight: 340,
               overflow: "auto",
               overscrollBehavior: "contain",
+              position: "relative",
             }}
+            onDragEnter={(e) => {
+              if (e.dataTransfer.types.includes("Files")) {
+                e.preventDefault();
+                setDragDepth((d) => d + 1);
+              }
+            }}
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+            }}
+            onDragLeave={(e) => {
+              if (e.dataTransfer.types.includes("Files")) {
+                setDragDepth((d) => Math.max(0, d - 1));
+              }
+            }}
+            onDrop={handleDropFiles}
           >
+            {dragDepth > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 70,
+                  border: "2px dashed #7c8cff",
+                  borderRadius: 10,
+                  background: "rgba(20,24,44,0.72)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#cdd6ff",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  pointerEvents: "none",
+                }}
+              >
+                Drop video / audio / image files here
+              </div>
+            )}
+            {droppingFile && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  bottom: 10,
+                  zIndex: 71,
+                  background: "rgba(0,0,0,0.75)",
+                  border: "1px solid #3a4166",
+                  borderRadius: 8,
+                  padding: "5px 10px",
+                  color: "#cdd6ff",
+                  fontSize: 11,
+                  pointerEvents: "none",
+                }}
+              >
+                Uploading {droppingFile}...
+              </div>
+            )}
             <div ref={E.contentRef} style={{ position: "relative", width: GUTTER_W + E.contentW }}>
               <Ruler
                 width={E.contentW}
@@ -816,15 +973,50 @@ export default function TimelineEditor({
                 <div
                   style={{
                     position: "absolute",
-                    top: RULER_H - 8,
-                    left: 0.5,
-                    width: 8,
-                    height: 8,
+                    top: 1,
+                    left: "50%",
+                    transform: "translateX(-50%)",
                     background: THEME.playhead,
-                    clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+                    color: "#fff",
+                    fontFamily: MONO,
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    padding: "2px 6px",
+                    borderRadius: 999,
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.55)",
                     pointerEvents: "none",
                   }}
-                />
+                >
+                  {fmtTime(t)}
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: RULER_H - 26,
+                    left: "-5px",
+                    width: 18,
+                    height: 24,
+                    borderRadius: 9,
+                    background: THEME.playhead,
+                    border: "2px solid #ffffff",
+                    boxShadow:
+                      "0 3px 10px rgba(0,0,0,0.55), 0 0 12px rgba(255,71,87,0.45)",
+                    pointerEvents: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 2.5,
+                      height: 10,
+                      borderRadius: 2,
+                      background: "rgba(255,255,255,0.9)",
+                    }}
+                  />
+                </div>
               </div>
 
               {E.clips.length === 0 && (
@@ -858,8 +1050,8 @@ export default function TimelineEditor({
                       Timeline is empty
                     </strong>
                     <span style={{ fontSize: 11.5 }}>
-                      Generate scenes &amp; voice in the pipeline steps, then
-                      use "Reset from scenes".
+                      Drag &amp; drop video / audio / image files below, press
+                      "+ Scene", or use "Reset from scenes".
                     </span>
                     <button
                       className="btn-secondary"

@@ -287,10 +287,17 @@ class YouTubeService:
 
                 # Upload thumbnail if available
                 if thumbnail_path and Path(thumbnail_path).exists():
+                    suffix = Path(thumbnail_path).suffix.lower()
+                    mime = {
+                        ".png": "image/png",
+                        ".webp": "image/webp",
+                        ".gif": "image/gif",
+                        ".bmp": "image/bmp",
+                    }.get(suffix, "image/jpeg")
                     try:
                         youtube.thumbnails().set(
                             videoId=video_id,
-                            media_body=MediaFileUpload(str(Path(thumbnail_path).resolve()), mimetype="image/jpeg"),
+                            media_body=MediaFileUpload(str(Path(thumbnail_path).resolve()), mimetype=mime),
                         ).execute()
                     except Exception:
                         logger.warning("Failed to upload thumbnail, continuing...")

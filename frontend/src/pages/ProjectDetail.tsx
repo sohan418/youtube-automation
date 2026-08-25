@@ -164,6 +164,7 @@ export default function ProjectDetail() {
             setNewSceneNarration={h.setNewSceneNarration}
             addScene={h.addScene}
             openAddScene={h.openAddScene}
+            quickAddScene={h.quickAddScene}
             closeAddScene={h.closeAddScene}
             editingSceneId={h.editingSceneId}
             sceneEditForm={h.sceneEditForm}
@@ -216,6 +217,7 @@ export default function ProjectDetail() {
             handleAudioFileSelected={h.handleAudioFileSelected}
             clearSceneAudio={h.clearSceneAudio}
             combineAudioPreview={h.combineAudioPreview}
+            downloadCombinedAudio={h.downloadCombinedAudio}
             audioPreviewUrl={h.audioPreviewUrl}
             setSelectedProvider={h.setSelectedProvider}
             setSelectedVoice={h.setSelectedVoice}

@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export function mediaUrl(path: string | null | undefined): string {
   if (!path) return "";
@@ -340,6 +340,15 @@ export const api = {
       `/voice/project/${projectId}/preview`,
       { method: "POST" },
     ),
+  downloadCombinedAudio: (previewPath: string) => {
+    const url = mediaUrl(previewPath);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "combined_audio.mp3";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
 
   listVideoRatios: () =>
     request<import("../types").VideoRatioCatalog>("/video/ratios"),
@@ -352,6 +361,18 @@ export const api = {
       `/timeline/project/${projectId}`,
       { method: "PUT", body: JSON.stringify(data) },
     ),
+  uploadTimelineMedia: (projectId: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request<{
+      file_path: string;
+      kind: "video" | "audio" | "image";
+      duration_seconds: number | null;
+      width: number | null;
+      height: number | null;
+      size_bytes: number;
+    }>(`/media/upload/${projectId}`, { method: "POST", body: form });
+  },
   listGlobalClips: () =>
     request<import("../types").VideoClip[]>("/video/clips/library"),
   uploadGlobalClip: (file: File) => {
