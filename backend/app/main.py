@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.models import PromptTemplate
-from app.routers import admin, ai, export, ideas, images, media, projects, prompts, scenes, scene_videos, scripts, seo, thumbnails, video, voice, youtube
+from app.routers import admin, ai, export, ideas, images, media, projects, prompts, scenes, scene_videos, scripts, seo, thumbnails, timeline, video, voice, youtube
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +33,12 @@ async def lifespan(app: FastAPI):
             conn.commit()
         except Exception:
             pass
+        try:
+            conn.execute(text("SELECT duration_manual FROM scenes LIMIT 1"))
+        except Exception:
+            logging.info("Migrating database: adding duration_manual column to scenes table")
+            conn.execute(text("ALTER TABLE scenes ADD COLUMN duration_manual BOOLEAN DEFAULT 0"))
+            conn.commit()
 
     _seed_default_prompts()
     yield
@@ -83,6 +89,7 @@ app.include_router(images.router, prefix="/api")
 app.include_router(voice.router, prefix="/api")
 app.include_router(video.router, prefix="/api")
 app.include_router(thumbnails.router, prefix="/api")
+app.include_router(timeline.router, prefix="/api")
 app.include_router(seo.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")

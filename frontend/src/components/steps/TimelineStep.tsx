@@ -1,8 +1,69 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, RotateCcw, Save, Timer } from "lucide-react";
+import { AlertTriangle, Check, RotateCcw, Save, Timer } from "lucide-react";
 import { api } from "../../api/client";
 import type { Scene, TimelineClip, TimelineData, VideoStatus } from "../../types";
 import TimelineEditor from "../editor/TimelineEditor";
+import { resolveMediaDuration } from "../editor/timeline/mediaMeta";
+
+async function applyOriginalMediaLengths(
+  clips: TimelineClip[],
+  mediaUrl: (path: string | null | undefined) => string,
+): Promise<TimelineClip[]> {
+  const out = [...clips];
+  let changed = false;
+  await Promise.all(
+    clips.map(async (c, i) => {
+      const p = c.audio_path ?? c.video_path;
+      if (!p) return;
+      const kind = c.audio_path ? ("audio" as const) : ("video" as const);
+      try {
+        const d = await resolveMediaDuration(mediaUrl(p), kind);
+        if (d == null || !(d > 0)) return;
+        if (Math.abs(out[i].duration - d) > 0.05) {
+          out[i] = { ...out[i], duration: Math.round(d * 100) / 100 };
+          changed = true;
+        }
+      } catch {
+        return;
+      }
+    }),
+  );
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const byScene = new Map<number, TimelineClip[]>();
+  const loose: TimelineClip[] = [];
+  for (const c of out) {
+    if (c.scene_id >= 0) {
+      const arr = byScene.get(c.scene_id);
+      if (arr) arr.push(c);
+      else byScene.set(c.scene_id, [c]);
+    } else {
+      loose.push(c);
+    }
+  }
+  const sceneIds = [...byScene.keys()].sort(
+    (a, b) =>
+      Math.min(...(byScene.get(a) ?? []).map((c) => c.start)) -
+      Math.min(...(byScene.get(b) ?? []).map((c) => c.start)),
+  );
+  let cursor = 0;
+  let moved = false;
+  const placed: TimelineClip[] = [];
+  for (const sid of sceneIds) {
+    const arr = [...(byScene.get(sid) ?? [])].sort((a, b) => a.start - b.start);
+    if (arr.length === 0) continue;
+    const base = arr[0].start;
+    let end = cursor;
+    for (const c of arr) {
+      const ns = r2(cursor + (c.start - base));
+      if (Math.abs(ns - c.start) > 1e-6) moved = true;
+      placed.push({ ...c, start: ns });
+      end = Math.max(end, ns + c.duration);
+    }
+    cursor = end;
+  }
+  if (!changed && !moved) return clips;
+  return [...placed, ...loose].sort((a, b) => a.start - b.start);
+}
 
 function buildDefaultTimeline(scenes: Scene[]): TimelineData {
   let t = 0;
@@ -71,11 +132,26 @@ export default function TimelineStep({
 
   const building = actionLoading === "video" || videoStatus?.running;
 
+  const seedDefaults = (scenesArg: Scene[]) => {
+    const base = buildDefaultTimeline(scenesArg);
+    onTimelineChange(base);
+    void applyOriginalMediaLengths(base.clips, mediaUrl).then((clips) => {
+      if (clips === base.clips) return;
+      let t = 0;
+      for (const c of clips) t = Math.max(t, c.start + c.duration);
+      onTimelineChange({
+        ...base,
+        clips,
+        duration: Math.round(t * 100) / 100,
+      });
+    });
+  };
+
   useEffect(() => {
     if (!timeline && scenes.length > 0) {
-      onTimelineChange(buildDefaultTimeline(scenes));
+      seedDefaults(scenes);
     }
-  }, [timeline, scenes, onTimelineChange]);
+  }, [timeline, scenes]);
 
   const handleChange = (tl: TimelineData) => {
     setSaved(false);
@@ -107,7 +183,7 @@ export default function TimelineStep({
     )
       return;
     setDirty(false);
-    onTimelineChange(buildDefaultTimeline(scenes));
+    seedDefaults(scenes);
   };
 
   const durationLabel = useMemo(() => {
@@ -117,8 +193,28 @@ export default function TimelineStep({
     return `${m}:${s.toFixed(1).padStart(4, "0")}`;
   }, [timeline]);
 
+  const voiceOverruns = useMemo(() => {
+    if (!timeline) return [] as number[];
+    const visual = new Map<number, number>();
+    const narration = new Map<number, number>();
+    for (const c of timeline.clips) {
+      if (c.track === "video" && c.scene_id >= 0)
+        visual.set(c.scene_id, Math.max(visual.get(c.scene_id) ?? 0, c.duration));
+      else if (c.track === "narration" && c.scene_id >= 0)
+        narration.set(c.scene_id, Math.max(narration.get(c.scene_id) ?? 0, c.duration));
+    }
+    const over: number[] = [];
+    narration.forEach((dur, sceneId) => {
+      if (dur > (visual.get(sceneId) ?? 0) + 0.05) over.push(sceneId);
+    });
+    return over;
+  }, [timeline]);
+
   return (
-    <div className="card" style={{ display: "grid", gap: "0.75rem" }}>
+    <div
+      className="card"
+      style={{ display: "grid", gap: "0.75rem", minWidth: 0, maxWidth: "100%" }}
+    >
       <div
         style={{
           display: "flex",
@@ -138,6 +234,23 @@ export default function TimelineStep({
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+          {voiceOverruns.length > 0 && (
+            <span
+              className="badge"
+              title={`Scenes ${voiceOverruns.join(", ")}: narration is longer than the visuals. The renderer will fade the voice out at the scene end — shorten the script or extend those scenes.`}
+              style={{
+                background: "var(--warning)",
+                color: "#000",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <AlertTriangle size={12} />
+              Voice overruns visuals in {voiceOverruns.length} scene
+              {voiceOverruns.length > 1 ? "s" : ""}
+            </span>
+          )}
           {dirty && (
             <span
               className="badge"

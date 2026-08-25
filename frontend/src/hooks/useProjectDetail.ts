@@ -1,5 +1,5 @@
   import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api/client";
+import { api, mediaUrl } from "../api/client";
 import type {
   ExportResult,
   Idea,
@@ -27,8 +27,16 @@ export function useProjectDetail(projectId: number) {
   const [thumbnails, setThumbnails] = useState<Thumbnail[]>([]);
   const [seo, setSeo] = useState<SEOMetadata | null>(null);
   const [categories, setCategories] = useState<SEOCategory[]>([]);
-  const [activeTab, setActiveTab] = useState<string>("ideas");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const saved = localStorage.getItem(`project-${projectId}-tab`);
+    return saved || "ideas";
+  });
   const [activeSceneIdx, setActiveSceneIdx] = useState(0);
+
+  // Persist tab to localStorage
+  useEffect(() => {
+    localStorage.setItem(`project-${projectId}-tab`, activeTab);
+  }, [activeTab, projectId]);
   const prompts = usePrompts(projectId, scripts.length + scenes.length);
 
   useEffect(() => {
@@ -43,6 +51,13 @@ export function useProjectDetail(projectId: number) {
     }
   }, [scenes.length, activeSceneIdx]);
 
+  // Refresh YouTube config when switching to upload tab
+  useEffect(() => {
+    if (activeTab === "upload") {
+      api.getYoutubeConfig().then(setYoutubeConfig).catch(() => {});
+    }
+  }, [activeTab]);
+
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
@@ -53,8 +68,10 @@ export function useProjectDetail(projectId: number) {
   const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [selectedVoiceRate, setSelectedVoiceRate] = useState("+0%");
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
-  const [youtubeConfig, setYoutubeConfig] = useState<{ youtube_api_key_configured: boolean; youtube_playlist_id: string } | null>(null);
+  const [youtubeConfig, setYoutubeConfig] = useState<{ youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean } | null>(null);
   const [recentVideos, setRecentVideos] = useState<import("../types").YouTubeVideo[]>([]);
+  const [youtubeUploadStatus, setYoutubeUploadStatus] = useState<import("../types").YouTubeUploadStatus | null>(null);
+  const youtubeUploadPollRef = useRef<number | null>(null);
   const [voiceProgress, setVoiceProgress] = useState("");
   const [selectedRatio, setSelectedRatio] = useState("16:9");
   const [videoStatus, setVideoStatus] = useState<VideoStatus | null>(null);
@@ -74,12 +91,13 @@ export function useProjectDetail(projectId: number) {
   const [sceneCount, setSceneCount] = useState("");
   const [ideaTopic, setIdeaTopic] = useState("");
   const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
-  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in" });
+  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in", duration_seconds: null as number | null });
   const [recordingSceneId, setRecordingSceneId] = useState<number | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordingPaused, setRecordingPaused] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [audioVersion, setAudioVersion] = useState<Record<number, number>>({});
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
   const recordingRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
@@ -234,10 +252,19 @@ export function useProjectDetail(projectId: number) {
 
   const openSettings = () => setEditingSettings(true);
 
+  const onRatioChange = async (ratio: string) => {
+    setSelectedRatio(ratio);
+    try {
+      await api.updateProject(projectId, { ratio });
+    } catch {
+      // silently fail
+    }
+  };
+
   const saveSettings = async (
     form: { name: string; description: string; category: string; language: string; ratio: string },
     keys: { sarvam_api_key: string; deepgram_api_key: string; elevenlabs_api_key: string },
-    ytKeys: { youtube_api_key: string; youtube_playlist_id: string },
+    ytKeys: { youtube_api_key: string; youtube_playlist_id: string; youtube_client_id: string; youtube_client_secret: string },
   ) => {
     await runAction("settings", async () => {
       await api.updateProject(projectId, {
@@ -252,10 +279,13 @@ export function useProjectDetail(projectId: number) {
         const cfg = await api.getVoiceConfig();
         setVoiceConfig(cfg);
       }
-      if (ytKeys.youtube_api_key.trim() || ytKeys.youtube_playlist_id.trim()) {
-        const ytPayload: { youtube_api_key?: string; youtube_playlist_id?: string } = {};
+      const hasYtKeys = ytKeys.youtube_api_key.trim() || ytKeys.youtube_playlist_id.trim() || ytKeys.youtube_client_id.trim() || ytKeys.youtube_client_secret.trim();
+      if (hasYtKeys) {
+        const ytPayload: { youtube_api_key?: string; youtube_playlist_id?: string; youtube_client_id?: string; youtube_client_secret?: string } = {};
         if (ytKeys.youtube_api_key.trim()) ytPayload.youtube_api_key = ytKeys.youtube_api_key.trim();
         if (ytKeys.youtube_playlist_id.trim()) ytPayload.youtube_playlist_id = ytKeys.youtube_playlist_id.trim();
+        if (ytKeys.youtube_client_id.trim()) ytPayload.youtube_client_id = ytKeys.youtube_client_id.trim();
+        if (ytKeys.youtube_client_secret.trim()) ytPayload.youtube_client_secret = ytKeys.youtube_client_secret.trim();
         await api.saveYoutubeConfig(ytPayload);
         const cfg = await api.getYoutubeConfig();
         setYoutubeConfig(cfg);
@@ -585,9 +615,9 @@ export function useProjectDetail(projectId: number) {
     [projectId],
   );
 
-  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number; subtitle_font_size?: number | null }) => {
+  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number; subtitle_font_size?: number | null; force_rebuild?: boolean }) => {
     await runAction("video", async () => {
-      setVideoStatus({ running: true, progress: 0, stage: "starting", message: "Starting video build...", output: null, error: null, updated_at: null });
+      setVideoStatus({ running: true, progress: 0, stage: "starting", message: "Starting video build...", output: null, error: null, updated_at: null, scene_statuses: {} });
       const result = await api.buildVideo(projectId, {
         ratio: options?.ratio ?? selectedRatio,
         timeline: options?.timeline,
@@ -598,6 +628,7 @@ export function useProjectDetail(projectId: number) {
         subtitle_outline_color: options?.subtitle_outline_color ?? subtitleOutlineColor,
         subtitle_outline: options?.subtitle_outline ?? subtitleOutline,
         subtitle_font_size: options?.subtitle_font_size !== undefined ? options.subtitle_font_size : subtitleFontSize,
+        force_rebuild: options?.force_rebuild ?? false,
       });
       setSuccess(result.message);
       const finalStatus = await pollVideoStatus();
@@ -655,24 +686,29 @@ export function useProjectDetail(projectId: number) {
       image_prompt: scene.image_prompt ?? "",
       video_prompt: scene.video_prompt ?? "",
       motion_effect: scene.motion_effect ?? "zoom_in",
+      duration_seconds: scene.duration_seconds,
     });
     setEditingSceneId(scene.id);
   };
 
   const cancelSceneEdit = () => {
     setEditingSceneId(null);
-    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in" });
+    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "zoom_in", duration_seconds: null });
   };
 
   const saveSceneEdit = async (sceneId: number) => {
     if (!sceneEditForm.narration.trim()) return;
     await runAction(`edit-scene-${sceneId}`, async () => {
-      await api.updateScene(sceneId, {
+      const patch: Record<string, unknown> = {
         narration: sceneEditForm.narration.trim(),
         image_prompt: sceneEditForm.image_prompt.trim() || null,
         video_prompt: sceneEditForm.video_prompt.trim() || null,
         motion_effect: sceneEditForm.motion_effect,
-      });
+      };
+      if (sceneEditForm.duration_seconds != null && sceneEditForm.duration_seconds > 0) {
+        patch.duration_seconds = Number(sceneEditForm.duration_seconds);
+      }
+      await api.updateScene(sceneId, patch);
       cancelSceneEdit();
       setSuccess("Scene updated.");
     });
@@ -837,6 +873,16 @@ export function useProjectDetail(projectId: number) {
     });
   };
 
+  const combineAudioPreview = async () => {
+    await runAction("audio-preview", async () => {
+      setError("");
+      setSuccess("");
+      const result = await api.combineAudioPreview(projectId);
+      setAudioPreviewUrl(mediaUrl(result.preview_path));
+      setSuccess("Audio preview combined! Use the player below to listen.");
+    });
+  };
+
   const formatRecordTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   const handleTileDragOver = (e: React.DragEvent) => {
@@ -920,12 +966,41 @@ export function useProjectDetail(projectId: number) {
     await copySceneImageTo(imageId, sceneId);
   };
 
+  const uploadYouTube = async (privacy: string) => {
+    await runAction("youtube-upload", async () => {
+      await api.uploadToYouTube(projectId, privacy);
+      setSuccess("Upload started! Check the Upload tab for progress.");
+      // Start polling upload status
+      if (youtubeUploadPollRef.current) clearInterval(youtubeUploadPollRef.current);
+      youtubeUploadPollRef.current = window.setInterval(async () => {
+        try {
+          const status = await api.getYoutubeUploadStatus(projectId);
+          setYoutubeUploadStatus(status);
+          if (!status.running) {
+            if (youtubeUploadPollRef.current) clearInterval(youtubeUploadPollRef.current);
+            youtubeUploadPollRef.current = null;
+          }
+        } catch {
+          if (youtubeUploadPollRef.current) clearInterval(youtubeUploadPollRef.current);
+          youtubeUploadPollRef.current = null;
+        }
+      }, 2000);
+    });
+  };
+
+  // Cleanup upload poll on unmount
+  useEffect(() => {
+    return () => {
+      if (youtubeUploadPollRef.current) clearInterval(youtubeUploadPollRef.current);
+    };
+  }, []);
+
   return {
     project, ideas, scripts, scriptTopic, scenes, thumbnails, seo, setSeo, categories,
     activeTab, activeSceneIdx, prompts, loading, actionLoading, error, success,
     exportInfo, voiceProviders, selectedProvider, selectedVoice, selectedVoiceRate,
-    voiceConfig, voiceProgress, selectedRatio, videoStatus, timeline,
-    youtubeConfig, recentVideos,
+    voiceConfig, voiceProgress, selectedRatio, onRatioChange, videoStatus, timeline,
+    youtubeConfig, recentVideos, youtubeUploadStatus,
     imageUrlInputs, generatingSceneId, clipboardImageId, dragMedia, draggingOverScene,
     previewMedia, cropFile, trimFile, addingScene, newSceneNarration, addSceneAt,
     sceneCount, ideaTopic, editingSceneId, sceneEditForm, recordingSceneId,
@@ -952,8 +1027,8 @@ export function useProjectDetail(projectId: number) {
     addScene, openAddScene, closeAddScene, generateScenes, removeScene,
     openSceneEdit, cancelSceneEdit, saveSceneEdit, clearScenes, updateSceneEffect,
     startRecording, toggleRecordingPause, stopRecording, handleAudioFileSelected,
-    clearSceneAudio, formatRecordTime, buildVideo,
+    clearSceneAudio, combineAudioPreview, audioPreviewUrl, formatRecordTime, buildVideo,
     handleTileDragOver, handleTileDrop, handleSceneDrop, handleUploadTileDrop, handlePaste,
-    audioInputRef,
+    audioInputRef, uploadYouTube,
   };
 }

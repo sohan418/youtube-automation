@@ -1,7 +1,10 @@
 import logging
+import os
 import re
 import shutil
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,6 +22,16 @@ VIDEO_RATIOS: dict[str, dict] = {
 class VideoService:
     def __init__(self) -> None:
         self._progress: dict[str, dict] = {}
+        self._scene_status: dict[str, dict[int, str]] = {}
+        self._convert_lock = threading.Lock()
+
+    def _set_scene_status(self, slug: str, order: int, status: str) -> None:
+        if slug not in self._scene_status:
+            self._scene_status[slug] = {}
+        self._scene_status[slug][order] = status
+
+    def _get_scene_statuses(self, slug: str) -> dict[int, str]:
+        return self._scene_status.get(slug, {})
 
     def set_progress(
         self,
@@ -43,7 +56,6 @@ class VideoService:
 
     def get_progress(self, slug: str) -> dict:
         if slug not in self._progress:
-            # Check if final video exists on disk
             project_path = storage_service.get_project_path(slug)
             final_video_path = project_path / "video" / "final.mp4"
             if final_video_path.exists():
@@ -56,6 +68,7 @@ class VideoService:
                     "output": relative,
                     "error": None,
                     "updated_at": None,
+                    "scene_statuses": self._get_scene_statuses(slug),
                 }
             return {
                 "running": False,
@@ -65,8 +78,11 @@ class VideoService:
                 "output": None,
                 "error": None,
                 "updated_at": None,
+                "scene_statuses": self._get_scene_statuses(slug),
             }
-        return self._progress[slug]
+        data = dict(self._progress[slug])
+        data["scene_statuses"] = self._get_scene_statuses(slug)
+        return data
 
     def ratio_list(self) -> list[dict]:
         items = []
@@ -252,6 +268,44 @@ class VideoService:
         except OSError:
             return False
 
+    def _sanitize_video(self, video: Path, output: Path) -> bool:
+        if not video.exists() or video.stat().st_size < 1024:
+            return False
+        cmd = [
+            settings.ffmpeg_path,
+            "-y",
+            "-i", str(video),
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-movflags", "+faststart",
+            str(output),
+        ]
+        return self._run_ffmpeg(cmd)
+
+    def _ensure_mp4(self, video: Path) -> Path:
+        if video.suffix.lower() != ".webm":
+            return video
+        candidate = video.with_suffix(".mp4")
+        if candidate.exists() and candidate.stat().st_size > 1024:
+            return candidate
+        converted = video.parent / f"{video.stem}_converted.mp4"
+        if converted.exists() and converted.stat().st_size > 1024:
+            return converted
+        with self._convert_lock:
+            if converted.exists() and converted.stat().st_size > 1024:
+                return converted
+            logger.info("Converting WEBM to MP4: %s -> %s", video.name, converted.name)
+            if self._sanitize_video(video, converted):
+                if converted.exists() and converted.stat().st_size > 1024:
+                    return converted
+                logger.error("WEBM conversion produced empty file: %s", converted)
+            else:
+                logger.error("WEBM conversion failed: %s", video)
+        return video
+
     def _create_video_segment(
         self,
         video: Path,
@@ -263,13 +317,44 @@ class VideoService:
         volume: float = 1.0,
         video_start: float | None = None,
     ) -> None:
+        video = self._ensure_mp4(video)
+        if not video.exists() or video.stat().st_size < 1024:
+            logger.error("Video input missing or empty: %s", video)
+            return
+        info = self._probe_video_info(video)
+        if not info or not info.get("width") or not info.get("height"):
+            logger.error("Video has no valid stream: %s (info=%s)", video, info)
+            return
+        vid_duration = info.get("duration")
+        if vid_duration is not None and vid_duration <= 0:
+            logger.error("Video has zero/negative duration: %s (%.3fs)", video, vid_duration)
+            return
+        if vid_duration is not None and start >= vid_duration:
+            logger.error("Seek start %.3fs beyond video duration %.3fs: %s", start, vid_duration, video)
+            return
+        if duration <= 0:
+            logger.error("Invalid segment duration %.3f for video %s", duration, video)
+            return
+
+        def _render(cmd: list[str]) -> bool:
+            result = self._run_ffmpeg_with_result(cmd)
+            if result is None:
+                return False
+            if result.returncode != 0:
+                logger.error("FFmpeg error: %s", result.stderr)
+                return False
+            if not output.exists() or output.stat().st_size < 1024:
+                logger.error("FFmpeg produced empty output. cmd=%s stderr=%s", " ".join(cmd[:8]), result.stderr[:500])
+                return False
+            return True
+
         width, height = self._parse_resolution(resolution)
         vf = (
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},setsar=1"
         )
         v_ss = video_start if video_start is not None else start
-        cmd = [
+        base_cmd = [
             settings.ffmpeg_path,
             "-y",
             "-ss", f"{v_ss:.3f}",
@@ -277,26 +362,53 @@ class VideoService:
             "-i", str(video),
         ]
         if audio is not None:
-            cmd += ["-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(audio)]
-            cmd += ["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "192k"]
+            base_cmd += ["-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(audio)]
+            fade_st = max(duration - 0.5, 0.0)
+            base_cmd += [
+                "-map", "0:v", "-map", "1:a",
+                "-af", f"apad,afade=t=out:st={fade_st:.3f}:d=0.5",
+                "-c:a", "aac", "-b:a", "192k",
+            ]
         elif self._has_audio_stream(video):
             safe_volume = max(0.01, min(1.0, float(volume)))
-            cmd += [
+            base_cmd += [
                 "-map", "0:v", "-map", "0:a",
                 "-af", f"volume={safe_volume:.3f}",
                 "-c:a", "aac", "-b:a", "192k",
             ]
         else:
-            cmd += ["-map", "0:v"]
-        cmd += [
+            base_cmd += ["-map", "0:v"]
+
+        primary_cmd = base_cmd + [
             "-vf", vf,
             "-r", "25",
             "-c:v", "libx264",
+            "-preset", "ultrafast",
             "-pix_fmt", "yuv420p",
             "-t", f"{duration:.3f}",
             str(output),
         ]
-        self._run_ffmpeg(cmd)
+        if _render(primary_cmd):
+            return
+
+        fallback_cmd = base_cmd + [
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+            "-t", f"{duration:.3f}",
+            str(output),
+        ]
+        if _render(fallback_cmd):
+            return
+
+        copy_cmd = base_cmd + [
+            "-c", "copy",
+            str(output),
+        ]
+        if _render(copy_cmd):
+            return
+
+        logger.error("All FFmpeg attempts failed for video=%s start=%.3f dur=%.3f out=%s", video, v_ss, duration, output)
 
     def build_video(
         self,
@@ -313,26 +425,29 @@ class VideoService:
         subtitle_outline_color: str = "#000000",
         subtitle_outline: float = 2.0,
         subtitle_font_size: int | None = None,
+        force_rebuild: bool = False,
     ) -> str:
         resolution = self.resolve_resolution(ratio, resolution)
         project_path = storage_service.get_project_path(slug)
         video_dir = project_path / "video"
         video_dir.mkdir(exist_ok=True)
 
-        # Clean stale segment files from previous builds to prevent
-        # phantom segments being picked up by the concat step.
-        for old in video_dir.glob("segment_*.mp4"):
-            try:
-                old.unlink()
-            except OSError:
-                pass
-        for old in video_dir.glob("scene_*_media*.mp4"):
-            try:
-                old.unlink()
-            except OSError:
-                pass
-
         concat_file = video_dir / "concat_list.txt"
+        output_path = video_dir / "final.mp4"
+
+        if force_rebuild:
+            logger.info("Force rebuild requested — removing existing segments and output")
+            for old in video_dir.glob("segment_*.mp4"):
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+            for old in video_dir.glob("scene_*_media*.mp4"):
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+            output_path.unlink(missing_ok=True)
 
         self.set_progress(slug, 1, "preparing", "Preparing video scenes...")
         plans: list[dict] = []
@@ -358,9 +473,6 @@ class VideoService:
                     full_audio = mp3_fallback if mp3_fallback.exists() else wav_fallback
                 if full_audio.exists() and self._is_valid_audio(full_audio):
                     audio_ok = True
-                    audio_duration = self._probe_audio_duration(full_audio)
-                    if audio_duration and audio_duration > 0:
-                        duration = audio_duration
 
             narration = scene.get("narration")
             if narration:
@@ -385,125 +497,162 @@ class VideoService:
         if not plans:
             return self._create_placeholder_video(slug, resolution)
 
-        total_images = sum(len(p["media"]) for p in plans)
-        done_images = 0
         segment_files: list[Path] = []
+        rendered_orders: set[int] = set()
+        build_errors: list[str] = []
 
-        for plan in plans:
+        def _segment_path(order: int) -> Path:
+            return video_dir / f"segment_{order:03d}.mp4"
+
+        def _needs_render(plan: dict) -> bool:
             order = plan["order"]
-            duration = plan["duration"]
-            media = plan["media"]
-            audio_ok = plan["audio_ok"]
-            full_audio = plan["full_audio"]
-            motion_effect = plan.get("motion_effect", "none")
+            seg = _segment_path(order)
+            if not seg.exists():
+                return True
+            if seg.stat().st_size < 1024:
+                return True
+            return False
 
-            segment = video_dir / f"segment_{order:03d}.mp4"
+        total_to_render = sum(1 for p in plans if _needs_render(p))
+        if total_to_render == 0:
+            logger.info("All scene segments already exist — skipping render")
+            for plan in plans:
+                seg = _segment_path(plan["order"])
+                if seg.exists():
+                    segment_files.append(seg)
+            segment_files.sort()
+        else:
+            total_images = sum(len(p["media"]) for p in plans)
+            done_images = 0
+            done_lock = threading.Lock()
 
-            if len(media) == 1:
-                item = media[0]
-                done_images += 1
-                label = "video clip" if item["kind"] == "video" else "image"
-                self.set_progress(
-                    slug,
-                    int(2 + 88 * done_images / total_images),
-                    "rendering",
-                    f"Rendering scene {order} {label} ({done_images}/{total_images} media)...",
-                )
-                if item["kind"] == "video":
-                    audio_for_video = full_audio if audio_ok else None
-                    self._create_video_segment(
-                        item["path"],
-                        audio_for_video,
-                        0,
-                        duration,
-                        segment,
-                        resolution,
-                    )
-                elif audio_ok:
-                    self._create_segment_with_audio(item["path"], full_audio, segment, resolution, motion_effect)
-                else:
-                    self._create_segment_silent(item["path"], segment, duration, resolution, motion_effect)
-            else:
-                sub_segments: list[Path] = []
-                audio_len = None
-                if audio_ok:
-                    audio_len = self._probe_audio_duration(full_audio)
+            def _build_one(plan: dict) -> Path | None:
+                nonlocal done_images
+                order = plan["order"]
+                duration = plan["duration"]
+                media = plan["media"]
+                audio_ok = plan["audio_ok"]
+                full_audio = plan["full_audio"]
+                motion_effect = plan.get("motion_effect", "none")
+                segment = _segment_path(order)
 
-                # Build a per-item duration list that respects natural video clip
-                # lengths. Video clips own their probed duration; images share the
-                # remaining time equally. The sum is always clamped to `duration`
-                # (the scene's audio length) so nothing runs over.
-                video_durations: dict[int, float] = {}
-                for k, item in enumerate(media):
-                    if item["kind"] == "video":
-                        probed = self._probe_audio_duration(item["path"]) or (
-                            self._probe_video_info(item["path"]) or {}
-                        ).get("duration") or 0.0
-                        video_durations[k] = probed
+                if not _needs_render(plan):
+                    logger.info("Scene %d segment already exists — skipping render", order)
+                    self._set_scene_status(slug, order, "done")
+                    return segment
 
-                total_video_time = sum(video_durations.values())
-                image_indices = [k for k in range(len(media)) if k not in video_durations]
-                remaining = max(duration - total_video_time, 0.0)
-                image_part = (remaining / len(image_indices)) if image_indices else 0.0
-                image_part = max(image_part, 0.5)
-
-                item_durations = [
-                    video_durations[k] if k in video_durations else image_part
-                    for k in range(len(media))
-                ]
-
-                start = 0.0
-                for k, item in enumerate(media):
-                    done_images += 1
-                    self.set_progress(
-                        slug,
-                        int(2 + 88 * done_images / total_images),
-                        "rendering",
-                        f"Rendering scene {order} media {k + 1}/{len(media)} ({done_images}/{total_images} media)...",
-                    )
-                    seg = video_dir / f"scene_{order:03d}_media{k:02d}.mp4"
-                    part = item_durations[k]
-                    has_audio = audio_ok and (audio_len is None or start < audio_len)
-                    if item["kind"] == "video":
-                        audio_for_video = full_audio if has_audio else None
-                        self._create_video_segment(
-                            item["path"],
-                            audio_for_video,
-                            start,
-                            part,
-                            seg,
-                            resolution,
-                            video_start=0.0,
+                self._set_scene_status(slug, order, "rendering")
+                try:
+                    if len(media) == 1:
+                        item = media[0]
+                        with done_lock:
+                            done_images += 1
+                            done_local = done_images
+                        label = "video clip" if item["kind"] == "video" else "image"
+                        self.set_progress(
+                            slug,
+                            int(2 + 88 * done_local / total_images),
+                            "rendering",
+                            f"Rendering scene {order} {label} ({done_local}/{total_images} media)...",
                         )
-                    elif has_audio:
-                        self._create_segment_with_audio_slice(
-                            item["path"], full_audio, start, part, seg, resolution, motion_effect
-                        )
+                        if item["kind"] == "video":
+                            self._create_video_segment(
+                                item["path"], full_audio if audio_ok else None,
+                                0, duration, segment, resolution,
+                            )
+                        elif audio_ok:
+                            self._create_segment_with_audio(item["path"], full_audio, segment, resolution, motion_effect, duration)
+                        else:
+                            self._create_segment_silent(item["path"], segment, duration, resolution, motion_effect)
                     else:
-                        self._create_segment_silent(item["path"], seg, part, resolution, motion_effect)
-                    if seg.exists():
-                        sub_segments.append(seg)
-                    else:
-                        logger.warning(
-                            "Scene %d media %d segment failed to create (kind=%s, path=%s)",
-                            order, k, item["kind"], item["path"],
-                        )
-                    start += part
+                        sub_segments: list[Path] = []
+                        audio_len = self._probe_audio_duration(full_audio) if audio_ok else None
 
-                if sub_segments:
-                    self.set_progress(slug, 91, "joining", f"Joining scene {order} media...")
-                    # Re-encode when joining sub-segments because they may have
-                    # mismatched streams (some with audio, some without).
-                    self._concat_list(sub_segments, segment, reencode=True)
+                        video_durations: dict[int, float] = {}
+                        for k, item in enumerate(media):
+                            if item["kind"] == "video":
+                                probed = self._probe_audio_duration(item["path"]) or (
+                                    self._probe_video_info(item["path"]) or {}
+                                ).get("duration") or 0.0
+                                video_durations[k] = max(probed, 0.5)
 
-            if segment.exists():
-                segment_files.append(segment)
+                        total_video_time = sum(video_durations.values())
+                        image_indices = [k for k in range(len(media)) if k not in video_durations]
+                        remaining = max(duration - total_video_time, 0.0)
+                        image_part = max((remaining / len(image_indices)) if image_indices else 0.0, 0.5)
+
+                        item_durations = [
+                            video_durations.get(k, image_part) for k in range(len(media))
+                        ]
+
+                        cur = 0.0
+                        for k, item in enumerate(media):
+                            seg = video_dir / f"scene_{order:03d}_media{k:02d}.mp4"
+                            part = item_durations[k]
+                            has_audio = audio_ok and (audio_len is None or cur < audio_len)
+                            if item["kind"] == "video":
+                                self._create_video_segment(
+                                    item["path"], full_audio if has_audio else None,
+                                    cur, part, seg, resolution, video_start=0.0,
+                                )
+                            elif has_audio:
+                                self._create_segment_with_audio_slice(
+                                    item["path"], full_audio, cur, part, seg, resolution, motion_effect
+                                )
+                            else:
+                                self._create_segment_silent(item["path"], seg, part, resolution, motion_effect)
+                            if seg.exists() and seg.stat().st_size > 1024:
+                                sub_segments.append(seg)
+                            else:
+                                logger.warning("Scene %d media %d segment failed (kind=%s)", order, k, item["kind"])
+                            cur += part
+
+                        if sub_segments:
+                            self._concat_list(sub_segments, segment, reencode=True)
+
+                    if segment.exists():
+                        rendered_orders.add(order)
+                        self._set_scene_status(slug, order, "done")
+                        return segment
+                    self._set_scene_status(slug, order, "failed")
+                    return None
+                except Exception:
+                    logger.exception("Scene %d render failed", order)
+                    self._set_scene_status(slug, order, "failed")
+                    build_errors.append(f"Scene {order}")
+                    return None
+
+            max_workers = min(total_to_render, settings.ffmpeg_max_workers or 1)
+            self.set_progress(slug, 2, "rendering", f"Rendering {total_to_render} scenes ({max_workers} workers)...")
+
+            if max_workers > 1:
+                with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                    futures = {pool.submit(_build_one, p): p for p in plans}
+                    for future in as_completed(futures):
+                        try:
+                            result = future.result()
+                            if result:
+                                segment_files.append(result)
+                        except Exception:
+                            logger.exception("Scene segment failed")
             else:
-                logger.warning("Scene %d segment file not created — skipped", order)
+                for plan in plans:
+                    result = _build_one(plan)
+                    if result:
+                        segment_files.append(result)
 
+        segment_files.sort()
         if not segment_files:
-            logger.error("No scene segments were created — video cannot be built")
-            self.set_progress(slug, 100, "failed", "No scene segments produced")
+            err = "No scene segments produced"
+            if build_errors:
+                err += f" (failures: {', '.join(build_errors)})"
+            logger.error(err)
+            self.set_progress(slug, 100, "failed", err)
+            for old in video_dir.glob("scene_*_media*.mp4"):
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
             return ""
 
         self.set_progress(slug, 92, "joining", "Joining all scene segments...")
@@ -512,43 +661,52 @@ class VideoService:
                 f.write(f"file '{seg.as_posix()}'\n")
 
         output_path = video_dir / "final.mp4"
-        ok = self._concat_segments(concat_file, output_path, reencode=False)
-        if not ok or not output_path.exists():
-            logger.error("Final concat failed — %d segments were not joined", len(segment_files))
 
-        # Resolve music path once so we can pass it to the combined pass
+        # Resolve music & subtitles before concat so we can do ONE combined pass
         music_path: Path | None = None
         if background_music:
             candidate = self._resolve_scene_path(background_music)
             if candidate.exists():
                 music_path = candidate
 
-        # Resolve subtitle ASS file once (generate it even if we decide not to burn)
         ass_path: Path | None = None
-        if subtitles and subtitle_entries and output_path.exists():
+        if subtitles and subtitle_entries:
             ass_path = video_dir / "subtitles.ass"
             self._generate_ass_subtitles(
                 subtitle_entries, ass_path, style=subtitle_style,
                 position=subtitle_position, color=subtitle_color,
                 outline_color=subtitle_outline_color, outline_thickness=subtitle_outline,
-                font_size=subtitle_font_size,
+                font_size=subtitle_font_size, resolution=resolution,
             )
             if not ass_path.exists():
                 ass_path = None
 
-        # Single combined FFmpeg pass: music + subtitles (or either alone)
-        if (music_path or ass_path) and output_path.exists():
+        # Single combined FFmpeg pass: concat + music + subtitles in one re-encode
+        needs_combined = music_path or ass_path
+        if needs_combined:
             stage_msg = (
-                "Mixing music and burning subtitles..." if music_path and ass_path
-                else ("Mixing background music..." if music_path else "Burning in subtitles...")
+                "Joining with music & subtitles..." if music_path and ass_path
+                else ("Joining with background music..." if music_path
+                      else "Joining & burning subtitles...")
             )
-            self.set_progress(slug, 96, "finishing", stage_msg)
-            try:
-                self._add_music_and_subtitles(
-                    output_path, video_dir, music_path, music_volume, ass_path
-                )
-            except Exception:
-                logger.exception("Combined music+subtitles pass failed")
+            self.set_progress(slug, 93, "joining", stage_msg)
+            ok = self._concat_with_extras(
+                concat_file, output_path, music_path, music_volume, ass_path
+            )
+            if not ok or not output_path.exists():
+                logger.error("Combined concat failed — attempting separate subtitle/music passes")
+                self._concat_segments(concat_file, output_path, reencode=False)
+                if output_path.exists():
+                    if music_path:
+                        self._add_background_music(output_path, music_path, video_dir, music_volume)
+                    if ass_path:
+                        subtitled = video_dir / "final_subtitled.mp4"
+                        self._burn_subtitles(output_path, ass_path, subtitled)
+                        if subtitled.exists():
+                            output_path.unlink(missing_ok=True)
+                            subtitled.rename(output_path)
+        else:
+            self._concat_segments(concat_file, output_path, reencode=False)
 
         relative = str(output_path.relative_to(storage_service.root.parent))
         self.set_progress(
@@ -618,7 +776,7 @@ class VideoService:
             auto_size = int(height * 0.024) if is_vertical else int(height * 0.035)
             fs = font_size if font_size is not None else auto_size
             margin_v = int(height * 0.08) if position == "bottom" else int(height * 0.04)
-            style_lines.append(f"Style: Default,Arial,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,0,0,0,0,100,100,0,0,1,{max(outline_thickness, 1.8):.1f},1.8,{alignment},20,20,{margin_v},1")
+            style_lines.append(f"Style: Default,Arial,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,0,0,0,0,100,100,0,0,1,{max(outline_thickness, 1.8):.1f},1,{alignment},20,20,{margin_v},1")
         else:
             auto_size = int(height * 0.026) if is_vertical else int(height * 0.038)
             fs = font_size if font_size is not None else auto_size
@@ -630,7 +788,7 @@ Title: Auto-Generated Subtitles
 ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
-WrapStyle: 0
+WrapStyle: 1
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
@@ -657,22 +815,41 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 m = 0
             return f"{h}:{m:02d}:{s:02d}.{c:02d}"
 
+        def _escape_ass_text(text: str) -> str:
+            return (
+                text.replace("\\", "\\\\")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace("\n", " ")
+                .replace("\r", " ")
+            )
+
         is_word_by_word = True
         with output_path.open("w", encoding="utf-8") as f:
             f.write(header)
             for entry in subtitle_entries:
-                text = entry["text"].replace("\n", " ").strip()
+                text = _escape_ass_text(entry["text"]).strip()
                 if not text:
                     continue
                 if is_word_by_word:
                     chunks = self._split_into_word_chunks(text)
                     total_words = len(text.split())
                     entry_duration = entry["end"] - entry["start"]
-                    cursor = entry["start"]
-                    for chunk in chunks:
+                    padding = min(0.05, entry_duration * 0.05) if entry_duration >= 0.3 else 0.0
+                    cursor = entry["start"] + padding
+                    end_time = entry["end"] - padding if entry_duration >= 0.3 else entry["end"]
+                    available = max(end_time - cursor, 0.01)
+                    for idx, chunk in enumerate(chunks):
                         chunk_words = len(chunk.split())
-                        chunk_duration = (chunk_words / total_words) * entry_duration if total_words else entry_duration
-                        chunk_end = cursor + chunk_duration
+                        if idx == len(chunks) - 1:
+                            chunk_end = end_time
+                        else:
+                            chunk_duration = (chunk_words / total_words) * available if total_words else available / len(chunks)
+                            chunk_end = cursor + chunk_duration
+                        if chunk_end > end_time:
+                            chunk_end = end_time
+                        if chunk_end < cursor:
+                            chunk_end = cursor + 0.01
                         f.write(
                             f"Dialogue: 0,{format_ass_time(cursor)},{format_ass_time(chunk_end)},Default,,0,0,0,,{chunk}\n"
                         )
@@ -690,7 +867,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-i", str(input_video),
             "-vf", f"ass='{escaped_path}'",
             "-c:v", "libx264",
-            "-preset", "fast",
+            "-preset", "ultrafast",
             "-crf", "23",
             "-c:a", "copy",
             str(output_video),
@@ -757,27 +934,45 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return None
 
     def _get_motion_filter(self, motion_effect: str, width: int, height: int, duration: float) -> str:
-        if motion_effect == "zoom_in":
-            return f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z='min(zoom+0.0015,1.2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=25*{duration:.3f}:s={width}x{height}"
-        elif motion_effect == "zoom_out":
-            return f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z='max(1.2-0.0015*on,1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(iw/zoom/2)':d=25*{duration:.3f}:s={width}x{height}"
-        elif motion_effect == "pan_right":
-            return f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z=1.2:x='(iw-iw/zoom)*(on/(25*{duration:.3f}))':y='(ih-ih/zoom)/2':d=25*{duration:.3f}:s={width}x{height}"
-        elif motion_effect == "pan_left":
-            return f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z=1.2:x='(iw-iw/zoom)*(1-on/(25*{duration:.3f}))':y='(ih-ih/zoom)/2':d=25*{duration:.3f}:s={width}x{height}"
-        elif motion_effect == "pan_up":
-            return f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z=1.2:x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*(1-on/(25*{duration:.3f}))':d=25*{duration:.3f}:s={width}x{height}"
-        elif motion_effect == "pan_down":
-            return f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z=1.2:x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*(on/(25*{duration:.3f}))':d=25*{duration:.3f}:s={width}x{height}"
-        else:
+        frames = max(int(25 * duration), 1)
+        if motion_effect == "none":
             return f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1"
+        factor = 4 if max(width, height) <= 1920 else 2
+        up_w = width * factor
+        up_h = height * factor
+        base = f"scale={up_w}:{up_h}:force_original_aspect_ratio=increase,crop={up_w}:{up_h}"
+        tail = f"d={frames}:s={width}x{height}:fps=25"
+        center = "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        if motion_effect == "zoom_in":
+            return f"{base},zoompan=z='min(1+0.25*on/{frames},1.25)':{center}:{tail},setsar=1"
+        elif motion_effect == "zoom_out":
+            return f"{base},zoompan=z='max(1.25-0.25*on/{frames},1.0)':{center}:{tail},setsar=1"
+        elif motion_effect == "pan_right":
+            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)*(on/{frames})':y='(ih-ih/zoom)/2':{tail},setsar=1"
+        elif motion_effect == "pan_left":
+            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)*(1-on/{frames})':y='(ih-ih/zoom)/2':{tail},setsar=1"
+        elif motion_effect == "pan_up":
+            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*(1-on/{frames})':{tail},setsar=1"
+        elif motion_effect == "pan_down":
+            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*(on/{frames})':{tail},setsar=1"
+        else:
+            return f"{base},setsar=1"
 
     def _create_segment_with_audio(
-        self, image: Path, audio: Path, output: Path, resolution: str, motion_effect: str = "none"
+        self,
+        image: Path,
+        audio: Path,
+        output: Path,
+        resolution: str,
+        motion_effect: str = "none",
+        duration: float | None = None,
     ) -> None:
-        duration = self._probe_audio_duration(audio) or 5.0
+        if not duration or duration <= 0:
+            duration = self._probe_audio_duration(audio) or 5.0
+        fade_st = max(duration - 0.5, 0.0)
+        af = f"apad,afade=t=out:st={fade_st:.3f}:d=0.5"
         width, height = self._parse_resolution(resolution)
-        
+
         if motion_effect != "none":
             vf = self._get_motion_filter(motion_effect, width, height, duration)
             cmd = [
@@ -787,12 +982,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "-i", str(image),
                 "-i", str(audio),
                 "-vf", vf,
+                "-af", af,
+                "-t", f"{duration:.3f}",
                 "-r", "25",
                 "-c:v", "libx264",
+                "-preset", "ultrafast",
                 "-pix_fmt", "yuv420p",
                 "-c:a", "aac",
                 "-b:a", "192k",
-                "-shortest",
                 str(output),
             ]
         else:
@@ -803,12 +1000,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "-i", str(image),
                 "-i", str(audio),
                 "-c:v", "libx264",
+                "-preset", "ultrafast",
                 "-tune", "stillimage",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-pix_fmt", "yuv420p",
                 "-s", resolution,
-                "-shortest",
+                "-af", af,
+                "-t", f"{duration:.3f}",
                 str(output),
             ]
         self._run_ffmpeg(cmd)
@@ -839,6 +1038,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "-vf", vf,
                 "-r", "25",
                 "-c:v", "libx264",
+                "-preset", "ultrafast",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-pix_fmt", "yuv420p",
@@ -855,6 +1055,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "-t", f"{duration:.3f}",
                 "-i", str(audio),
                 "-c:v", "libx264",
+                "-preset", "ultrafast",
                 "-tune", "stillimage",
                 "-c:a", "aac",
                 "-b:a", "192k",
@@ -881,6 +1082,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "-vf", vf,
                 "-r", "25",
                 "-c:v", "libx264",
+                "-preset", "ultrafast",
                 "-pix_fmt", "yuv420p",
                 "-t", f"{duration:.3f}",
                 str(output),
@@ -892,6 +1094,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "-loop", "1",
                 "-i", str(image),
                 "-c:v", "libx264",
+                "-preset", "ultrafast",
                 "-tune", "stillimage",
                 "-pix_fmt", "yuv420p",
                 "-s", resolution,
@@ -919,21 +1122,114 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return ok
 
     def _concat_list(self, segments: list[Path], output: Path, reencode: bool = False) -> None:
-        import tempfile
-
-        lines = "\n".join(f"file '{seg.as_posix()}'" for seg in segments)
-        with tempfile.NamedTemporaryFile(
-            "w", suffix=".txt", delete=False, encoding="utf-8"
-        ) as tmp:
-            tmp.write(lines)
-            tmp_path = tmp.name
+        valid = [seg for seg in segments if seg.exists() and seg.stat().st_size > 1024]
+        if not valid:
+            logger.error("No valid segments to concat for %s", output.name)
+            return
+        if len(valid) < len(segments):
+            logger.warning("Skipping %d empty/invalid segments for %s", len(segments) - len(valid), output.name)
+        lines = "\n".join(f"file '{seg.as_posix()}'" for seg in valid)
+        concat_file = output.parent / f"concat_{output.stem}.txt"
         try:
-            self._concat_segments(Path(tmp_path), output, reencode=reencode)
+            concat_file.write_text(lines, encoding="utf-8")
+            self._concat_segments(concat_file, output, reencode=reencode)
         finally:
             try:
-                Path(tmp_path).unlink()
+                concat_file.unlink(missing_ok=True)
             except OSError:
                 pass
+
+    def _concat_with_extras(
+        self,
+        concat_file: Path,
+        output: Path,
+        music_path: Path | None,
+        music_volume: float,
+        ass_path: Path | None,
+    ) -> bool:
+        """Concat all segments and optionally mix music + burn subtitles in one pass."""
+        has_music = music_path is not None
+        has_subs = ass_path is not None
+        safe_volume = max(0.01, min(1.0, float(music_volume)))
+
+        cmd = [
+            settings.ffmpeg_path, "-y",
+            "-f", "concat", "-safe", "0", "-i", str(concat_file),
+        ]
+        if has_music:
+            cmd += ["-stream_loop", "-1", "-i", str(music_path)]
+
+        has_video_audio = self._has_audio_stream_from_concat(concat_file)
+
+        if has_music and has_subs:
+            escaped = ass_path.as_posix().replace(":", "\\:")
+            if has_video_audio:
+                fc = (
+                    f"[0:v]ass='{escaped}'[vout];"
+                    f"[1:a]volume={safe_volume:.3f}[bg];"
+                    f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[mix]"
+                )
+                cmd += [
+                    "-filter_complex", fc,
+                    "-map", "[vout]", "-map", "[mix]",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                    "-c:a", "aac", "-b:a", "192k",
+                ]
+            else:
+                fc = (
+                    f"[0:v]ass='{escaped}'[vout];"
+                    f"[1:a]volume={safe_volume:.3f}[bg]"
+                )
+                cmd += [
+                    "-filter_complex", fc,
+                    "-map", "[vout]", "-map", "[bg]",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                    "-c:a", "aac", "-b:a", "192k",
+                ]
+        elif has_subs:
+            escaped = ass_path.as_posix().replace(":", "\\:")
+            cmd += [
+                "-vf", f"ass='{escaped}'",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                "-c:a", "aac", "-b:a", "192k",
+            ]
+        elif has_music:
+            if has_video_audio:
+                fc = (
+                    f"[1:a]volume={safe_volume:.3f}[bg];"
+                    f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[mix]"
+                )
+                cmd += [
+                    "-filter_complex", fc,
+                    "-map", "0:v", "-map", "[mix]",
+                    "-c:v", "copy",
+                    "-c:a", "aac", "-b:a", "192k",
+                ]
+            else:
+                fc = f"[1:a]volume={safe_volume:.3f}[bg]"
+                cmd += [
+                    "-filter_complex", fc,
+                    "-map", "0:v", "-map", "[bg]",
+                    "-c:v", "copy",
+                    "-c:a", "aac", "-b:a", "192k",
+                ]
+        else:
+            cmd += ["-c", "copy"]
+
+        cmd += ["-shortest", str(output)]
+        return self._run_ffmpeg(cmd)
+
+    def _has_audio_stream_from_concat(self, concat_file: Path) -> bool:
+        """Check if first segment in concat list has an audio stream."""
+        try:
+            with open(concat_file) as f:
+                first_line = f.readline().strip()
+            if first_line.startswith("file "):
+                seg_path = first_line.split("file ", 1)[1].strip("'\"")
+                return self._has_audio_stream(Path(seg_path))
+        except Exception:
+            pass
+        return True  # assume yes to be safe
 
     def _add_music_and_subtitles(
         self,
@@ -983,7 +1279,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 cmd += [
                     "-filter_complex", fc,
                     "-map", "[vout]", "-map", audio_map,
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                     "-c:a", "aac", "-b:a", "192k",
                 ]
             else:
@@ -999,7 +1295,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 escaped = ass_path.as_posix().replace(":", "\\:")
                 cmd += [
                     "-vf", f"ass='{escaped}'",
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                     "-c:a", "copy",
                 ]
             else:
@@ -1129,7 +1425,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     def _run_ffmpeg(self, cmd: list[str]) -> bool:
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=600, check=False
+                cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds, check=False
             )
             if result.returncode != 0:
                 logger.error("FFmpeg error: %s", result.stderr)
@@ -1139,8 +1435,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.error("FFmpeg not found. Install FFmpeg and add to PATH.")
             return False
         except subprocess.TimeoutExpired:
-            logger.error("FFmpeg timed out after 600s: %s", " ".join(cmd[:6]))
+            logger.error("FFmpeg timed out after %ds: %s", settings.ffmpeg_timeout_seconds, " ".join(cmd[:6]))
             return False
+
+    def _run_ffmpeg_with_result(self, cmd: list[str]) -> subprocess.CompletedProcess[str] | None:
+        try:
+            return subprocess.run(
+                cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds, check=False
+            )
+        except FileNotFoundError:
+            logger.error("FFmpeg not found. Install FFmpeg and add to PATH.")
+            return None
+        except subprocess.TimeoutExpired:
+            logger.error("FFmpeg timed out after %ds: %s", settings.ffmpeg_timeout_seconds, " ".join(cmd[:6]))
+            return None
 
 
 video_service = VideoService()

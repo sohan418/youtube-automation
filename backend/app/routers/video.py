@@ -177,6 +177,7 @@ def _run_build(
             subtitle_outline_color=payload.subtitle_outline_color,
             subtitle_outline=payload.subtitle_outline,
             subtitle_font_size=payload.subtitle_font_size,
+            force_rebuild=payload.force_rebuild,
         )
         db = SessionLocal()
         try:

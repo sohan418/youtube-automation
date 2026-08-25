@@ -135,6 +135,11 @@ def update_seo_category(
 
     seo.category = category["name"]  # type: ignore[assignment]
     seo.category_id = category["id"]  # type: ignore[assignment]
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project:
+        project.category = category["name"]
+
     db.commit()
     db.refresh(seo)
     return seo
@@ -212,6 +217,14 @@ def generate_seo(
     seo.description = full_description
     seo.tags = raw.get("tags")
     seo.hashtags = raw.get("hashtags")
+
+    if project.category:
+        match = next(
+            (c for c in YOUTUBE_CATEGORIES if c["name"] == project.category), None
+        )
+        if match:
+            seo.category = match["name"]
+            seo.category_id = match["id"]
 
     import json
 

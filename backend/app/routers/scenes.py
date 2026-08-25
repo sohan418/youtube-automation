@@ -191,8 +191,11 @@ def update_scene(scene_id: int, payload: SceneUpdate, db: Session = Depends(get_
     if not scene:
         raise HTTPException(status_code=404, detail="Scene not found")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
         setattr(scene, field, value)
+    if data.get("duration_seconds") is not None:
+        scene.duration_manual = True
 
     db.commit()
     db.refresh(scene)

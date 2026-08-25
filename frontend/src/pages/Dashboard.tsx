@@ -53,7 +53,7 @@ export default function Dashboard() {
     try {
       setCreating(true);
       setError("");
-      await api.createProject({
+      const created = await api.createProject({
         name: form.name,
         description: form.description || undefined,
         category: form.category || undefined,
@@ -61,11 +61,7 @@ export default function Dashboard() {
         ratio: form.ratio,
       });
       setShowDialog(false);
-      const data = await api.listProjects();
-      setProjects(data);
-      if (data.length > 0) {
-        navigate(`/project/${data[0].id}`);
-      }
+        navigate(`/projects/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project");
     } finally {

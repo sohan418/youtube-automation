@@ -52,6 +52,16 @@ export interface YouTubeVideo {
   channel_title: string;
 }
 
+export interface YouTubeUploadStatus {
+  running: boolean;
+  progress: number;
+  stage: string;
+  message: string;
+  video_id: string | null;
+  video_url: string | null;
+  error: string | null;
+}
+
 export interface Script {
   id: number;
   project_id: number;
@@ -101,6 +111,7 @@ export interface Scene {
   video_path: string | null;
   audio_path: string | null;
   duration_seconds: number | null;
+  duration_manual?: boolean;
   motion_effect?: string;
   images: SceneImage[];
   videos: SceneVideo[];
@@ -195,12 +206,15 @@ export interface VideoStatus {
   output: string | null;
   error: string | null;
   updated_at: string | null;
+  scene_statuses: Record<number, string>;
 }
+
+export type TimelineTrack = "video" | "narration" | "text" | "music";
 
 export interface TimelineClip {
   id: string;
   scene_id: number;
-  track: "video" | "narration";
+  track: TimelineTrack;
   start: number;
   duration: number;
   image_path: string | null;
@@ -210,6 +224,11 @@ export interface TimelineClip {
   audio_out: number | null;
   volume: number;
   motion_effect?: string;
+  text?: string | null;
+  locked?: boolean;
+  muted?: boolean;
+  fade_in?: number;
+  fade_out?: number;
 }
 
 export interface TimelineData {

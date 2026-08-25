@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Sparkles, Download, Upload, FileText, X, Pencil } from "lucide-react";
 import type { Idea, Script } from "../../types";
+import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
 
 interface Props {
@@ -103,20 +104,25 @@ export default function ScriptStep({
     URL.revokeObjectURL(url);
   };
 
-  const handleExportJson = () => {
+  const handleExportJson = async () => {
     if (!activeScript) return;
-    const json = JSON.stringify(
-      {
-        title: activeScript.title,
-        hook: activeScript.hook,
-        body: activeScript.body,
-        ending: activeScript.ending,
-      },
-      null,
-      2
-    );
     const cleanName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    downloadFile(json, `script-${cleanName}.json`, "application/json");
+    const filename = `script-${cleanName}.json`;
+    try {
+      await api.exportScriptJson(activeScript.id, filename);
+    } catch {
+      const json = JSON.stringify(
+        {
+          title: activeScript.title,
+          hook: activeScript.hook,
+          body: activeScript.body,
+          ending: activeScript.ending,
+        },
+        null,
+        2
+      );
+      downloadFile(json, filename, "application/json");
+    }
     setShowExportMenu(false);
   };
 

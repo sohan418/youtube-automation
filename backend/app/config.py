@@ -50,9 +50,16 @@ class Settings(BaseSettings):
     # YouTube
     youtube_api_key: str = ""
     youtube_playlist_id: str = ""
+    youtube_client_id: str = ""
+    youtube_client_secret: str = ""
+    youtube_access_token: str = ""
+    youtube_refresh_token: str = ""
+    youtube_token_expiry: str = ""
 
     # Misc
     ffmpeg_path: str = "ffmpeg"
+    ffmpeg_max_workers: int = 1
+    ffmpeg_timeout_seconds: int = 300
     default_language: str = "en"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 

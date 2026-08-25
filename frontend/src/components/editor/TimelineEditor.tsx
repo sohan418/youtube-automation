@@ -1,69 +1,69 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Film,
-  Image as ImageIcon,
+﻿import {
+  AlignStartVertical,
+  ChevronDown,
+  ChevronUp,
+  ChevronsRight,
+  Copy,
+  Eye,
+  EyeOff,
+  Lock,
+  Magnet,
   Maximize,
-  Mic,
   Pause,
   Play,
+  Plus,
+  Redo2,
+  Scissors,
+  Settings,
   Trash2,
+  Type,
+  Undo2,
+  Unlock,
+  Volume2,
+  VolumeX,
+  Waves,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   Scene,
   TimelineClip,
   TimelineData,
   VideoRatio,
 } from "../../types";
-import { useWaveform } from "../../hooks/useWaveform";
+import { AudioClipView, TextView, VideoClipView } from "./timeline/Clips";
+import { useMediaDuration } from "./timeline/mediaMeta";
+import {
+  GUTTER_W,
+  MIN_DUR,
+  PX_MAX,
+  PX_MIN,
+  RULER_H,
+  THEME,
+  TRACK_BY_ID,
+  TRACK_ROWS,
+} from "./timeline/constants";
+import { ContextMenu, type MenuItem } from "./timeline/ContextMenu";
+import { Inspector } from "./timeline/Inspector";
+import { PreviewPanel } from "./timeline/PreviewPanel";
+import { Ruler } from "./timeline/Ruler";
+import { fmtTime } from "./timeline/utils";
+import { useTimelineEngine } from "./timeline/useEngine";
 
-const SNAP = 0.1;
-const MIN_PX_PER_SEC = 20;
-const MAX_PX_PER_SEC = 300;
+const CSS = `
+.vtl-hl,.vtl-hr{position:absolute;top:0;bottom:0;width:9px;z-index:6;cursor:ew-resize;opacity:0}
+.vtl-hl{left:0}.vtl-hr{right:0}
+.vtl-clip:hover .vtl-hl,.vtl-sel .vtl-hl,.vtl-clip:hover .vtl-hr,.vtl-sel .vtl-hr{opacity:1}
+.vtl-hl::after,.vtl-hr::after{content:'';position:absolute;top:22%;bottom:22%;width:3px;border-radius:2px;background:#fff;left:3px;box-shadow:0 0 4px rgba(0,0,0,.65)}
+.vtl-hr::after{left:auto;right:3px}
+.vtl-sel{box-shadow:inset 0 0 0 1px rgba(255,255,255,.15),0 0 0 2px #ffffff,0 0 0 4px rgba(124,92,255,.8)!important}
+.vtl-drag{box-shadow:0 12px 30px rgba(0,0,0,.55),0 0 0 2px #7c5cff!important}
+.vtl-locked .vtl-hl,.vtl-locked .vtl-hr{display:none}
+`;
 
-function snap(v: number): number {
-  return Math.round(v / SNAP) * SNAP;
-}
-
-function fmtTime(sec: number): string {
-  const s = Math.max(0, sec);
-  const m = Math.floor(s / 60);
-  const r = s - m * 60;
-  return `${m}:${r.toFixed(1).padStart(4, "0")}`;
-}
-
-function clampStartFor(
-  sibs: TimelineClip[],
-  origStart: number,
-  origDuration: number,
-  ns: number,
-): number {
-  let min = 0;
-  for (const c of sibs)
-    if (c.start < origStart) min = Math.max(min, c.start + c.duration);
-  let max = Number.MAX_SAFE_INTEGER;
-  for (const c of sibs)
-    if (c.start >= origStart) {
-      max = c.start;
-      break;
-    }
-  return Math.min(Math.max(ns, min), Math.max(max - origDuration, min));
-}
-
-function clampDurationFor(
-  sibs: TimelineClip[],
-  origStart: number,
-  nd: number,
-): number {
-  let maxEnd = 300;
-  for (const c of sibs)
-    if (c.start >= origStart) {
-      maxEnd = c.start - origStart;
-      break;
-    }
-  return Math.min(Math.max(nd, 0.5), Math.max(maxEnd, 0.5));
-}
+const MONO =
+  "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
 
 interface Props {
   timeline: TimelineData;
@@ -73,8 +73,6 @@ interface Props {
   onChange: (tl: TimelineData) => void;
 }
 
-type DragMode = "move" | "trim-left" | "trim-right";
-
 export default function TimelineEditor({
   timeline,
   scenes,
@@ -82,1312 +80,848 @@ export default function TimelineEditor({
   previewRatio,
   onChange,
 }: Props) {
-  const [pxPerSec, setPxPerSec] = useState(90);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [playhead, setPlayhead] = useState(0);
-  const [playing, setPlaying] = useState(false);
-
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const innerRef = useRef<HTMLDivElement | null>(null);
-  const audioElRef = useRef<HTMLAudioElement | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const lastTickRef = useRef(0);
-  const lastAudioClipRef = useRef<string | null>(null);
-  const dragRef = useRef<{
-    mode: DragMode;
-    id: string;
-    startX: number;
-    origStart: number;
-    origDuration: number;
-    origAudioIn: number;
-    sibs: TimelineClip[];
+  const E = useTimelineEngine(timeline, scenes, mediaUrl, onChange);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    clipId: string | null;
   } | null>(null);
-
-  const sceneById = useMemo(
-    () => new Map(scenes.map((s) => [s.id, s])),
-    [scenes],
-  );
-
-  const videoClips = useMemo(
-    () =>
-      timeline.clips
-        .filter((c) => c.track === "video")
-        .sort((a, b) => a.start - b.start),
-    [timeline.clips],
-  );
-  const narrationClips = useMemo(
-    () =>
-      timeline.clips
-        .filter((c) => c.track === "narration")
-        .sort((a, b) => a.start - b.start),
-    [timeline.clips],
-  );
-
-  const totalDuration = useMemo(
-    () =>
-      Math.max(
-        timeline.duration,
-        timeline.clips.reduce((m, c) => Math.max(m, c.start + c.duration), 0),
-      ),
-    [timeline],
-  );
-  const totalPx = totalDuration * pxPerSec;
-
-  const withClips = (clips: TimelineClip[]): TimelineData => {
-    const end = clips.reduce((m, c) => Math.max(m, c.start + c.duration), 0);
-    return { ...timeline, clips, duration: Math.max(timeline.duration, end) };
-  };
-
-  const patchClip = (id: string, patch: Partial<TimelineClip>) => {
-    const src = timeline.clips.find((c) => c.id === id);
-    if (!src) return;
-    const twinTrack: TimelineClip["track"] =
-      src.track === "video" ? "narration" : "video";
-    const twinPatch: Partial<TimelineClip> = {};
-    if (patch.start !== undefined && patch.duration !== undefined) {
-      twinPatch.start = patch.start;
-      twinPatch.duration = patch.duration;
-    } else if (patch.start !== undefined) {
-      twinPatch.start = patch.start;
-    } else if (patch.duration !== undefined) {
-      twinPatch.duration = patch.duration;
-    }
-    onChange(
-      withClips(
-        timeline.clips.map((c) => {
-          if (c.id === id) return { ...c, ...patch };
-          if (c.track === twinTrack && c.scene_id === src.scene_id)
-            return { ...c, ...twinPatch };
-          return c;
-        }),
-      ),
-    );
-  };
-
-  const deleteClip = (id: string) => {
-    const src = timeline.clips.find((c) => c.id === id);
-    if (!src) return;
-    onChange(
-      withClips(
-        timeline.clips.filter(
-          (c) =>
-            c.id !== id &&
-            !(c.scene_id === src.scene_id && c.track !== src.track),
-        ),
-      ),
-    );
-    setSelectedId((prev) => (prev === id ? null : prev));
-  };
-
-  // ---- Drag & drop ----
-  const onDragStart = (e: React.PointerEvent, id: string, mode: DragMode) => {
-    const clip = timeline.clips.find((c) => c.id === id);
-    if (!clip) return;
-    e.preventDefault();
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = {
-      mode,
-      id,
-      startX: e.clientX,
-      origStart: clip.start,
-      origDuration: clip.duration,
-      origAudioIn: clip.audio_in ?? 0,
-      sibs: timeline.clips
-        .filter((c) => c.track === clip.track && c.id !== id)
-        .sort((a, b) => a.start - b.start),
-    };
-  };
-
-  const onDragMove = (e: React.PointerEvent) => {
-    const d = dragRef.current;
-    if (!d) return;
-    const delta = (e.clientX - d.startX) / pxPerSec;
-    if (d.mode === "move") {
-      const ns = clampStartFor(
-        d.sibs,
-        d.origStart,
-        d.origDuration,
-        snap(d.origStart + delta),
-      );
-      patchClip(d.id, { start: ns });
-    } else if (d.mode === "trim-left") {
-      const ns = clampStartFor(
-        d.sibs,
-        d.origStart,
-        d.origDuration,
-        snap(d.origStart + delta),
-      );
-      const nd = d.origDuration + (d.origStart - ns);
-      const audioIn = d.origAudioIn + (ns - d.origStart);
-      patchClip(d.id, {
-        start: ns,
-        duration: nd,
-        audio_in: Math.max(0, audioIn),
-      });
-    } else {
-      const nd = clampDurationFor(
-        d.sibs,
-        d.origStart,
-        snap(d.origDuration + delta),
-      );
-      patchClip(d.id, { duration: nd });
-    }
-  };
-
-  const onDragEnd = () => {
-    dragRef.current = null;
-  };
-
-  // ---- Playback ----
-  const togglePlay = () => {
-    if (playing) {
-      setPlaying(false);
-    } else {
-      if (playhead >= totalDuration) setPlayhead(0);
-      lastTickRef.current = performance.now();
-      setPlaying(true);
-    }
-  };
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!playing) return;
-    const tick = (now: number) => {
-      const dt = (now - lastTickRef.current) / 1000;
-      lastTickRef.current = now;
-      setPlayhead((p) => {
-        const next = p + dt;
-        if (next >= totalDuration) {
-          setPlaying(false);
-          return totalDuration;
-        }
-        return next;
-      });
-      rafRef.current = requestAnimationFrame(tick);
+    if (!settingsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node))
+        setSettingsOpen(false);
     };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [playing, totalDuration]);
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [settingsOpen]);
 
-  const activeNarration = useMemo(
-    () =>
-      narrationClips.find(
-        (c) => playhead >= c.start && playhead < c.start + c.duration,
-      ) ?? null,
-    [narrationClips, playhead],
+  const t = E.time;
+  const px = E.px;
+
+  const activeVideo = E.clips.find(
+    (c) =>
+      c.track === "video" &&
+      !E.rowStateOf("video").muted &&
+      t >= c.start &&
+      t < c.start + c.duration,
+  ) ?? null;
+  const activeCaptionClip = E.clips.find(
+    (c) =>
+      c.track === "text" &&
+      !E.rowStateOf("text").muted &&
+      !!c.text?.trim() &&
+      t >= c.start &&
+      t < c.start + c.duration,
+  );
+  const activeScene =
+    activeVideo && activeVideo.scene_id >= 0
+      ? E.sceneById.get(activeVideo.scene_id) ?? null
+      : null;
+
+  const sel = E.selected;
+  const selDef = sel ? TRACK_BY_ID[sel.track] : null;
+  const selSrcDur = useMediaDuration(
+    sel?.audio_path
+      ? mediaUrl(sel.audio_path)
+      : sel?.video_path
+        ? mediaUrl(sel.video_path)
+        : null,
+    sel?.audio_path ? "audio" : "video",
   );
 
-  const activeVideoClip = useMemo(
-    () =>
-      videoClips.find(
-        (c) => playhead >= c.start && playhead < c.start + c.duration,
-      ) ?? null,
-    [videoClips, playhead],
-  );
-
-  useEffect(() => {
-    const el = audioElRef.current;
-    if (!el) return;
-    const n = activeNarration;
-    const v = activeVideoClip;
-    const sourcePath =
-      n?.audio_path ?? (v?.video_path && !v?.audio_path ? v.video_path : null);
-    if (playing && sourcePath) {
-      if (lastAudioClipRef.current !== sourcePath) {
-        lastAudioClipRef.current = sourcePath;
-        el.src = mediaUrl(sourcePath);
-        const t = n ? (n.audio_in ?? 0) + (playhead - n.start) : 0;
-        el.currentTime = Math.min(t, n?.audio_out ?? Number.MAX_SAFE_INTEGER);
-        void el.play().catch(() => {});
-      }
-    } else if (lastAudioClipRef.current !== null) {
-      el.pause();
-      lastAudioClipRef.current = null;
-    }
-  }, [activeNarration, activeVideoClip, playing, mediaUrl]);
-
-  useEffect(() => {
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      audioElRef.current?.pause();
-    };
+  const openMenuFor = useCallback((x: number, y: number, clipId: string | null) => {
+    setMenu({ x, y, clipId });
   }, []);
 
-  // ---- Seek ----
-  const seekFromEvent = (e: React.PointerEvent) => {
-    const rect = innerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const time = (e.clientX - rect.left) / pxPerSec;
-    lastAudioClipRef.current = null;
-    audioElRef.current?.pause();
-    setPlayhead(Math.max(0, Math.min(time, totalDuration)));
-    setPlaying(false);
-  };
-
-  // ---- Inspector number inputs ----
-  const applyDuration = (id: string, value: number) => {
-    if (!Number.isFinite(value)) return;
-    const clip = timeline.clips.find((c) => c.id === id);
-    if (!clip) return;
-    patchClip(id, {
-      duration: clampDurationFor(
-        getSibs(clip),
-        clip.start,
-        Math.max(0.5, value),
-      ),
-    });
-  };
-
-  const getSibs = (clip: TimelineClip) =>
-    timeline.clips
-      .filter((c) => c.track === clip.track && c.id !== clip.id)
-      .sort((a, b) => a.start - b.start);
-
-  const applyStart = (id: string, value: number) => {
-    if (!Number.isFinite(value)) return;
-    const clip = timeline.clips.find((c) => c.id === id);
-    if (!clip) return;
-    patchClip(id, {
-      start: clampStartFor(getSibs(clip), clip.start, clip.duration, value),
-    });
-  };
-
-  // ---- Keyboard delete ----
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!selectedId) return;
-      const tag = (document.activeElement?.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault();
-        deleteClip(selectedId);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, timeline.clips]);
-
-  // ---- Zoom / fit ----
-  const zoomFit = () => {
-    const width = scrollRef.current?.clientWidth ?? 800;
-    const target = Math.max(
-      MIN_PX_PER_SEC,
-      Math.min(MAX_PX_PER_SEC, (width - 16) / Math.max(totalDuration, 1)),
-    );
-    setPxPerSec(Math.round(target));
-  };
-
-  const activeClip = selectedId
-    ? timeline.clips.find((c) => c.id === selectedId)
-    : null;
-
-  // Ruler ticks
-  const tickStep = useMemo(() => {
-    const target = 90;
-    for (const s of [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120]) {
-      if (s * pxPerSec >= target) return s;
+  const menuItems: MenuItem[] = (() => {
+    const clip = menu?.clipId ? E.clipMap.get(menu.clipId) ?? null : null;
+    if (!clip) {
+      return [
+      {
+        label: "Add caption here",
+        icon: <Plus size={13} />,
+        onSelect: () => E.addTextClip(t),
+      },
+      {
+        label: "Close gaps (all tracks)",
+        icon: <AlignStartVertical size={13} />,
+        onSelect: () => E.closeGaps(),
+        disabled: E.clips.length < 2,
+      },
+      {
+        label: "Fit timeline",
+        icon: <Maximize size={13} />,
+        onSelect: () => E.fitTimeline(),
+      },
+        {
+          label: E.snapOn ? "Snapping: ON" : "Snapping: OFF",
+          icon: <Magnet size={13} />,
+          onSelect: () => E.setSnapOn(!E.snapOn),
+        },
+      ];
     }
-    return 120;
-  }, [pxPerSec]);
+    const rs = E.rowStateOf(clip.track);
+    return [
+      {
+        label: "Split at playhead",
+        icon: <Scissors size={13} />,
+        shortcut: "S",
+        disabled:
+          t <= clip.start + MIN_DUR || t >= clip.start + clip.duration - MIN_DUR,
+        onSelect: () => E.splitClipAt(clip, t),
+      },
+      {
+        label: "Duplicate",
+        icon: <Copy size={13} />,
+        shortcut: "Ctrl+D",
+        onSelect: () => E.duplicateClip(clip),
+      },
+      {
+        label: "Trim in to playhead",
+        separatorBefore: true,
+        disabled: t <= clip.start + MIN_DUR,
+        onSelect: () => {
+          E.setSelectedId(clip.id);
+          requestAnimationFrame(() => E.trimSelectedEdge("start"));
+        },
+      },
+      {
+        label: "Trim out to playhead",
+        disabled: t >= clip.start + clip.duration - MIN_DUR,
+        onSelect: () => {
+          E.setSelectedId(clip.id);
+          requestAnimationFrame(() => E.trimSelectedEdge("end"));
+        },
+      },
+      ...(clip.audio_path
+        ? [
+            {
+              label: "Remove silent edges",
+              icon: <Waves size={13} />,
+              separatorBefore: true,
+              onSelect: () => void E.removeSilentEdges(clip.id),
+            } as MenuItem,
+          ]
+        : []),
+      ...((clip.audio_path || clip.video_path) &&
+      selSrcDur != null &&
+      selSrcDur > clip.duration + 0.05 &&
+      menu?.clipId === sel?.id
+        ? [
+            {
+              label: `Extend to full source (${selSrcDur.toFixed(1)}s)`,
+              icon: <ChevronsRight size={13} />,
+              onSelect: () => void E.extendToSource(clip.id),
+            } as MenuItem,
+          ]
+        : []),
+      {
+        label: "Move up",
+        icon: <ChevronUp size={13} />,
+        separatorBefore: true,
+        disabled: !E.adjacentRow(clip.track, -1),
+        onSelect: () => E.moveClipRow(clip, -1),
+      },
+      {
+        label: "Move down",
+        icon: <ChevronDown size={13} />,
+        disabled: !E.adjacentRow(clip.track, 1),
+        onSelect: () => E.moveClipRow(clip, 1),
+      },
+      {
+        label: clip.locked ? "Unlock clip" : "Lock clip",
+        icon: clip.locked ? <Unlock size={13} /> : <Lock size={13} />,
+        onSelect: () => E.patchClip(clip.id, { locked: !clip.locked }),
+      },
+      {
+        label: clip.muted ? "Unmute clip" : "Mute clip",
+        icon: clip.muted ? <Volume2 size={13} /> : <VolumeX size={13} />,
+        disabled: !clip.audio_path,
+        onSelect: () => E.patchClip(clip.id, { muted: !clip.muted }),
+      },
+      {
+        label: "Delete",
+        icon: <Trash2 size={13} />,
+        shortcut: "Del",
+        danger: true,
+        separatorBefore: true,
+        onSelect: () => E.deleteClipOp(clip, false),
+      },
+      {
+        label: "Ripple delete",
+        danger: true,
+        onSelect: () => E.deleteClipOp(clip, true),
+      },
+      ...(rs.locked
+        ? ([
+            {
+              label: "Unlock track",
+              icon: <Lock size={13} />,
+              separatorBefore: true,
+              onSelect: () => E.toggleRowFlag(clip.track, "locked"),
+            },
+          ] as MenuItem[])
+        : []),
+    ];
+  })();
 
-  const ticks: number[] = [];
-  for (let t = 0; t <= totalDuration + 1e-6; t += tickStep)
-    ticks.push(Math.round(t * 1e6) / 1e6);
+  const renderClip = (c: TimelineClip, h: number) => {
+    const wPx = Math.max(8, c.duration * px);
+    const isSel = c.id === E.selectedId;
+    const dragging = E.draggingId === c.id;
+    const orderIndex =
+      c.scene_id >= 0 ? E.sceneById.get(c.scene_id)?.order_index : undefined;
+    let view: React.ReactNode;
+    if (c.track === "video") {
+      view = (
+        <VideoClipView
+          clip={c}
+          widthPx={wPx}
+          heightPx={h}
+          selected={isSel}
+          dragging={dragging}
+          orderIndex={orderIndex}
+          thumbUrl={c.image_path ? mediaUrl(c.image_path) : null}
+          probeUrl={c.video_path ? mediaUrl(c.video_path) : null}
+          onExtendToSource={() => void E.extendToSource(c.id)}
+        />
+      );
+    } else if (c.track === "text") {
+      view = (
+        <TextView
+          clip={c}
+          widthPx={wPx}
+          heightPx={h}
+          selected={isSel}
+          dragging={dragging}
+          orderIndex={orderIndex}
+        />
+      );
+    } else {
+      view = (
+        <AudioClipView
+          clip={c}
+          widthPx={wPx}
+          heightPx={h}
+          selected={isSel}
+          dragging={dragging}
+          orderIndex={orderIndex}
+          audioUrl={c.audio_path ? mediaUrl(c.audio_path) : null}
+          enabled
+          music={c.track === "music"}
+          onExtendToSource={() => void E.extendToSource(c.id)}
+        />
+      );
+    }
+    const dim =
+      c.muted ||
+      E.rowStateOf(c.track).muted ||
+      c.locked ||
+      E.rowStateOf(c.track).locked;
+    return (
+      <div
+        key={c.id}
+        style={{
+          position: "absolute",
+          left: c.start * px,
+          top: 0,
+          width: wPx,
+          height: h,
+          zIndex: dragging ? 40 : isSel ? 25 : 10,
+          opacity: dim ? (c.locked || E.rowStateOf(c.track).locked ? 0.62 : 0.75) : 1,
+          cursor: c.locked || E.rowStateOf(c.track).locked ? "default" : "grab",
+        }}
+        onPointerDown={(e) => E.onClipPointerDown(e, c)}
+        onClick={(e) => {
+          e.stopPropagation();
+          E.setSelectedId(c.id);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          E.setSelectedId(c.id);
+          openMenuFor(e.clientX, e.clientY, c.id);
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if (c.track === "text") {
+            E.setSelectedId(c.id);
+            requestAnimationFrame(() => E.textAreaRef.current?.focus());
+          }
+        }}
+      >
+        {view}
+      </div>
+    );
+  };
 
-  const minorTicks: number[] = [];
-  if (tickStep >= 0.5) {
-    for (let t = 0; t <= totalDuration + 1e-6; t += tickStep / 5)
-      minorTicks.push(Math.round(t * 1e6) / 1e6);
-  }
-
-  const selected = activeClip;
+  const btn = (
+    title: string,
+    node: React.ReactNode,
+    onClick: () => void,
+    opts?: { disabled?: boolean; active?: boolean; primary?: boolean; danger?: boolean },
+  ) => (
+    <button
+      className={opts?.primary ? "btn-primary" : "btn-secondary"}
+      title={title}
+      disabled={opts?.disabled}
+      onClick={() => {
+        onClick();
+        document.activeElement instanceof HTMLElement &&
+          document.activeElement.blur();
+      }}
+      style={{
+        padding: "5px 8px",
+        display: "inline-flex",
+        alignItems: "center",
+        fontSize: 12,
+        color: opts?.danger
+          ? "#ff6b78"
+          : opts?.active
+            ? "#fff"
+            : undefined,
+        background: opts?.active ? THEME.accent : undefined,
+        borderColor: opts?.active ? THEME.accent : undefined,
+      }}
+    >
+      {node}
+    </button>
+  );
 
   return (
-    <div style={{ display: "grid", gap: "0.6rem" }}>
-      <audio
-        ref={audioElRef}
-        onEnded={() => setPlaying(false)}
-        onError={() => {}}
-      />
-
-      {/* Toolbar */}
+    <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
+      <style>{CSS}</style>
+        <PreviewPanel
+                ratio={previewRatio}
+                activeVideo={activeVideo}
+                activeCaption={activeCaptionClip?.text ?? null}
+                scene={activeScene}
+                time={t}
+                totalDuration={E.totalDuration}
+                playing={E.playing}
+                onTogglePlay={E.togglePlay}
+                mediaUrl={mediaUrl}
+              />
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "0.5rem",
+          gap: 5,
           flexWrap: "wrap",
         }}
       >
-        <button
-          className="btn-primary"
-          onClick={togglePlay}
-          disabled={videoClips.length === 0}
+        {btn(
+          "Play / Pause (Space)",
+          E.playing ? <Pause size={14} /> : <Play size={14} />,
+          E.togglePlay,
+          { primary: true, disabled: E.clips.length === 0 },
+        )}
+        <span
           style={{
-            padding: "0.35rem 0.8rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.35rem",
-            fontSize: "0.8rem",
+            fontFamily: MONO,
+            fontSize: 12,
+            padding: "4px 10px",
+            borderRadius: 7,
+            border: `1px solid ${THEME.separator}`,
+            background: THEME.surfaceAlt,
+            whiteSpace: "nowrap",
           }}
         >
-          {playing ? <Pause size={14} /> : <Play size={14} />}{" "}
-          {playing ? "Pause" : "Play"}
-        </button>
-        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          <strong style={{ color: "var(--text)" }}>{fmtTime(playhead)}</strong>{" "}
-          / {fmtTime(totalDuration)}
+          <strong style={{ color: "#fff" }}>{fmtTime(t)}</strong>
+          <span style={{ color: "#6f6f7a" }}> / {fmtTime(E.totalDuration)}</span>
         </span>
-        <div style={{ flex: 1 }} />
-        <button
-          className="btn-secondary"
-          onClick={() => setPxPerSec((z) => Math.max(MIN_PX_PER_SEC, z / 1.3))}
-          title="Zoom out"
-          style={{ padding: "0.3rem 0.5rem" }}
-        >
-          <ZoomOut size={14} />
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={zoomFit}
-          title="Fit timeline"
-          style={{ padding: "0.3rem 0.5rem" }}
-        >
-          <Maximize size={14} />
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={() => setPxPerSec((z) => Math.min(MAX_PX_PER_SEC, z * 1.3))}
-          title="Zoom in"
-          style={{ padding: "0.3rem 0.5rem" }}
-        >
-          <ZoomIn size={14} />
-        </button>
-        {selected && (
-          <button
-            className="btn-secondary"
-            onClick={() => deleteClip(selected.id)}
-            title="Delete selected clip (or press Delete)"
-            style={{ padding: "0.3rem 0.5rem", color: "var(--danger)" }}
-          >
-            <Trash2 size={14} />
-          </button>
+
+        <span style={{ width: 1, height: 18, background: THEME.separator }} />
+
+        {btn("Split at playhead (S)", <Scissors size={14} />, E.splitAtPlayhead)}
+        {btn(
+          "Duplicate (Ctrl+D)",
+          <Copy size={14} />,
+          () => sel && E.duplicateClip(sel),
+          { disabled: !sel },
         )}
+        {btn(
+          "Delete (Del)",
+          <Trash2 size={14} />,
+          () => sel && E.deleteClipOp(sel, E.rippleOn),
+          { disabled: !sel, danger: true },
+        )}
+        {btn(
+          E.rippleOn ? "Ripple delete: ON" : "Ripple delete: OFF",
+          <span style={{ fontSize: 10, fontWeight: 800 }}>RIPPLE</span>,
+          () => E.setRippleOn(!E.rippleOn),
+          { active: E.rippleOn },
+        )}
+
+        <span style={{ width: 1, height: 18, background: THEME.separator }} />
+
+        {btn("Undo (Ctrl+Z)", <Undo2 size={14} />, E.undo, {
+          disabled: !E.canUndo,
+        })}
+        {btn("Redo (Ctrl+Shift+Z)", <Redo2 size={14} />, E.redo, {
+          disabled: !E.canRedo,
+        })}
+
+        <span style={{ width: 1, height: 18, background: THEME.separator }} />
+
+        {btn("Add caption at playhead", <Type size={14} />, () =>
+          E.addTextClip(),
+        )}
+        {btn("Marker at playhead (M)", <Plus size={14} />, () =>
+          E.toggleMarker(),
+        )}
+
+        <span style={{ width: 1, height: 18, background: THEME.separator }} />
+
+        {btn(
+          E.snapOn ? "Snapping ON" : "Snapping OFF",
+          <Magnet size={14} />,
+          () => E.setSnapOn(!E.snapOn),
+          { active: E.snapOn },
+        )}
+
+        <div style={{ flex: 1 }} />
+
+        <div
+          ref={settingsRef}
+          style={{ position: "relative", display: "inline-flex" }}
+        >
+          {btn(
+            "Timeline settings",
+            <Settings size={14} />,
+            () => setSettingsOpen((v) => !v),
+            { active: settingsOpen },
+          )}          {settingsOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                right: 0,
+                zIndex: 60,
+                width: 190,
+                background: "#26262d",
+                border: `1px solid ${THEME.separator}`,
+                borderRadius: 9,
+                padding: 10,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.55)",
+                display: "grid",
+                gap: 8,
+                fontSize: 11.5,
+                color: "#c9c9d1",
+              }}
+            >
+              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                Frame rate
+                <select
+                  value={E.fps}
+                  onChange={(e) => E.setFps(Number(e.target.value))}
+                  style={{ width: 74, padding: "2px 6px", fontSize: 11 }}
+                >
+                  {[24, 25, 30, 50, 60].map((f) => (
+                    <option key={f} value={f}>
+                      {f} fps
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                Snapping
+                <input
+                  type="checkbox"
+                  checked={E.snapOn}
+                  onChange={() => E.setSnapOn(!E.snapOn)}
+                  style={{ width: 14, accentColor: THEME.accent }}
+                />
+              </label>
+              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                Ripple delete
+                <input
+                  type="checkbox"
+                  checked={E.rippleOn}
+                  onChange={() => E.setRippleOn(!E.rippleOn)}
+                  style={{ width: 14, accentColor: THEME.accent }}
+                />
+              </label>
+              <button
+                className="btn-secondary"
+                style={{ fontSize: 11, padding: "4px 8px" }}
+                onClick={() => {
+                  E.clearMarkers();
+                  setSettingsOpen(false);
+                }}
+              >
+                Clear all markers ({E.markers.length})
+              </button>
+            </div>
+          )}
+        </div>
+
+        {btn("Zoom out (-)", <ZoomOut size={14} />, () => E.zoomAt(1 / 1.3))}
+        <input
+          type="range"
+          min={PX_MIN}
+          max={PX_MAX}
+          value={px}
+          onChange={(e) => E.zoomAt(Number(e.target.value) / px)}
+          title="Zoom (Ctrl + wheel)"
+          style={{
+            width: 110,
+            accentColor: THEME.accent,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        />
+        {btn("Zoom in (+)", <ZoomIn size={14} />, () => E.zoomAt(1.3))}
+        {btn("Fit timeline", <Maximize size={14} />, E.fitTimeline)}
+        <span
+          style={{
+            fontSize: 10.5,
+            color: "#6f6f7a",
+            width: 38,
+            textAlign: "right",
+            fontFamily: MONO,
+          }}
+        >
+          {Math.round((px / 60) * 100)}%
+        </span>
       </div>
 
-      {/* Preview + Timeline */}
+     
+
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.75rem",
-          maxWidth: "100%",
+          width: "100%",
+          minWidth: 0,
+          border: `1px solid ${THEME.separator}`,
+          borderRadius: 12,
           overflow: "hidden",
+          background: THEME.bg,
         }}
       >
-        <PreviewPanel
-          ratio={previewRatio}
-          activeClip={activeVideoClip}
-          activeNarration={activeNarration}
-          scene={
-            activeVideoClip
-              ? (sceneById.get(activeVideoClip.scene_id) ?? null)
-              : null
-          }
-          playhead={playhead}
-          totalDuration={totalDuration}
-          playing={playing}
-          onTogglePlay={togglePlay}
-          mediaUrl={mediaUrl}
-        />
-
-        {/* Timeline body */}
-        <div
-          style={{
-            display: "flex",
-            width: "100%",
-            minWidth: 0,
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius)",
-            overflow: "hidden",
-            background: "var(--surface)",
-          }}
-        >
-          {/* Track labels */}
           <div
+            ref={E.scrollRef}
+            className="vtl-scroll"
             style={{
-              width: 96,
-              flexShrink: 0,
-              borderRight: "1px solid var(--border)",
-              display: "grid",
-              gridTemplateRows: "26px 72px 40px",
+              maxHeight: 340,
+              overflow: "auto",
+              overscrollBehavior: "contain",
             }}
           >
-            <div
-              style={{
-                fontSize: "0.6rem",
-                color: "var(--text-muted)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              TIME
-            </div>
-            <div style={labelStyle}>
-              <ImageIcon size={11} /> Video
-            </div>
-            <div style={labelStyle}>
-              <Mic size={11} /> Narration
-            </div>
-          </div>
+            <div ref={E.contentRef} style={{ position: "relative", width: GUTTER_W + E.contentW }}>
+              <Ruler
+                width={E.contentW}
+                pxPerSec={px}
+                duration={E.totalDuration}
+                markers={E.markers}
+                ticksRef={E.ticksRef}
+                onScrubStart={E.pausePlayback}
+                onScrubMove={E.handleScrub}
+                onMarkerToggle={(mt) => E.toggleMarker(mt)}
+              />
 
-          {/* Scrollable timeline */}
-          <div
-            ref={scrollRef}
-            style={{ flex: 1, overflowX: "auto", position: "relative" }}
-          >
-            <div
-              ref={innerRef}
-              style={{
-                width: Math.max(totalPx + 24, 100),
-                position: "relative",
-              }}
-              onPointerDown={seekFromEvent}
-            >
-              {/* Ruler */}
-              <div
-                style={{
-                  height: 26,
-                  position: "relative",
-                  borderBottom: "1px solid var(--border)",
-                  cursor: "crosshair",
-                }}
-              >
-                {minorTicks.map((t) => (
+              {TRACK_ROWS.map((row) => {
+                const h = E.rowHeight(row.id);
+                const rs = E.rowStateOf(row.id);
+                const def = TRACK_BY_ID[row.id];
+                const rowClips = E.clips.filter((c) => c.track === row.id);
+                return (
                   <div
-                    key={`m${t}`}
+                    key={row.id}
                     style={{
-                      position: "absolute",
-                      left: t * pxPerSec,
-                      top: 16,
-                      width: 1,
-                      height: 6,
-                      background: "var(--border)",
-                    }}
-                  />
-                ))}
-                {ticks.map((t) => (
-                  <div
-                    key={`t${t}`}
-                    style={{
-                      position: "absolute",
-                      left: t * pxPerSec,
-                      top: 8,
-                      width: 1,
-                      height: 14,
-                      background: "var(--text-muted)",
+                      display: "flex",
+                      height: h,
+                      borderTop: `1px solid ${THEME.separator}`,
+                      background:
+                        E.hoverRow === row.id
+                          ? "rgba(124,92,255,0.07)"
+                          : undefined,
                     }}
                   >
-                    <span
+                    <div
                       style={{
-                        position: "absolute",
-                        left: 3,
-                        top: 0,
-                        fontSize: "0.6rem",
-                        color: "var(--text-muted)",
-                        whiteSpace: "nowrap",
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 51,
+                        width: GUTTER_W,
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "0 8px",
+                        background: rs.muted || rs.locked ? "#202027" : THEME.surface,
+                        borderRight: `1px solid ${THEME.separator}`,
                       }}
                     >
-                      {fmtTime(t)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                      <button
+                        title={E.collapsed[row.id] ? "Expand track" : "Collapse track"}
+                        onClick={() => E.toggleCollapsed(row.id)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "#6f6f7a",
+                          padding: 2,
+                          display: "inline-flex",
+                          transform: E.collapsed[row.id]
+                            ? "rotate(180deg)"
+                            : undefined,
+                        }}
+                      >
+                        <ChevronUp size={12} />
+                      </button>
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 3,
+                          background: def.color,
+                          boxShadow: `0 0 8px ${def.color}66`,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          letterSpacing: "0.02em",
+                          color: rs.muted ? "#6f6f7a" : "#c9c9d1",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {def.label}
+                      </span>
+                      <span style={{ flex: 1 }} />
+                      <button
+                        title={
+                          def.kind === "audio"
+                            ? rs.muted
+                              ? "Unmute track"
+                              : "Mute track"
+                            : rs.muted
+                              ? "Show track"
+                              : "Hide track"
+                        }
+                        onClick={() => E.toggleRowFlag(row.id, "muted")}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: rs.muted ? "#ff8a94" : "#8e8e98",
+                          padding: 2,
+                          display: "inline-flex",
+                        }}
+                      >
+                        {rs.muted ? <EyeOff size={12} /> : def.kind === "audio" ? <Volume2 size={12} /> : <Eye size={12} />}
+                      </button>
+                      <button
+                        title={rs.locked ? "Unlock track" : "Lock track"}
+                        onClick={() => E.toggleRowFlag(row.id, "locked")}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: rs.locked ? "#ffd166" : "#8e8e98",
+                          padding: 2,
+                          display: "inline-flex",
+                        }}
+                      >
+                        {rs.locked ? <Lock size={12} /> : <Unlock size={12} />}
+                      </button>
+                    </div>
 
-              {/* Video track */}
-              <div
-                style={{
-                  height: 72,
-                  position: "relative",
-                  borderBottom: "1px solid var(--border)",
-                  background: "var(--bg)",
-                }}
-              >
-                {videoClips.map((clip) => (
-                  <ClipBox
-                    key={clip.id}
-                    clip={clip}
-                    pxPerSec={pxPerSec}
-                    selected={selectedId === clip.id}
-                    onClick={() => setSelectedId(clip.id)}
-                    onDragStart={onDragStart}
-                    onDragMove={onDragMove}
-                    onDragEnd={onDragEnd}
-                    kind="video"
-                    mediaUrl={mediaUrl}
-                    sceneLabel={sceneById.get(clip.scene_id)?.order_index}
-                  />
-                ))}
-                {videoClips.length === 0 && (
-                  <div
-                    style={{
-                      padding: "0.5rem",
-                      fontSize: "0.75rem",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    No video clips yet. Save a timeline or add scenes first.
+                    <div
+                      data-row={row.id}
+                      style={{
+                        position: "relative",
+                        width: E.contentW,
+                        flexShrink: 0,
+                        background: THEME.lane,
+                        backgroundImage:
+                          "repeating-linear-gradient(90deg, transparent 0, transparent 59px, rgba(255,255,255,0.025) 59px, rgba(255,255,255,0.025) 60px)",
+                      }}
+                      onPointerDown={(e) => {
+                        if (e.target === e.currentTarget) {
+                          E.setSelectedId(null);
+                          setMenu(null);
+                        }
+                      }}
+                      onDoubleClick={(e) => {
+                        if (row.id !== "text" || e.target !== e.currentTarget)
+                          return;
+                        const r = E.ticksRef.current?.getBoundingClientRect();
+                        if (!r) return;
+                        E.addTextClip((e.clientX - r.left) / px);
+                      }}
+                    >
+                      {rowClips.map((c) => renderClip(c, h))}
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })}
 
-              {/* Narration track */}
-              <div
-                style={{
-                  height: 40,
-                  position: "relative",
-                  borderBottom: "1px solid var(--border)",
-                  background: "var(--bg)",
-                }}
-              >
-                {narrationClips.map((clip) => (
-                  <ClipBox
-                    key={clip.id}
-                    clip={clip}
-                    pxPerSec={pxPerSec}
-                    selected={selectedId === clip.id}
-                    onClick={() => setSelectedId(clip.id)}
-                    onDragStart={onDragStart}
-                    onDragMove={onDragMove}
-                    onDragEnd={onDragEnd}
-                    kind="narration"
-                    mediaUrl={mediaUrl}
-                    sceneLabel={sceneById.get(clip.scene_id)?.order_index}
-                  />
-                ))}
-                {narrationClips.length === 0 && (
-                  <div
-                    style={{
-                      padding: "0.4rem",
-                      fontSize: "0.72rem",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    No narration clips (generate voice or record audio first).
-                  </div>
-                )}
-              </div>
+              {E.snapLine != null && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: GUTTER_W + E.snapLine * px - 1,
+                    top: RULER_H,
+                    bottom: 0,
+                    width: 2,
+                    background: "#ffd166",
+                    boxShadow: "0 0 8px rgba(255,209,102,0.7)",
+                    zIndex: 30,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
 
-              {/* Playhead */}
               <div
                 style={{
                   position: "absolute",
+                  left: GUTTER_W + t * px - 4.5,
                   top: 0,
                   bottom: 0,
-                  left: playhead * pxPerSec,
-                  width: 2,
-                  background: "var(--primary)",
-                  pointerEvents: "none",
-                  zIndex: 5,
+                  width: 9,
+                  zIndex: 31,
+                  cursor: "ew-resize",
+                  touchAction: "none",
+                }}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.preventDefault();
+                  E.handleScrub(e.clientX);
+                  const move = (ev: PointerEvent) => E.handleScrub(ev.clientX);
+                  const up = () => {
+                    window.removeEventListener("pointermove", move);
+                    window.removeEventListener("pointerup", up);
+                  };
+                  window.addEventListener("pointermove", move);
+                  window.addEventListener("pointerup", up);
                 }}
               >
                 <div
                   style={{
                     position: "absolute",
-                    top: 0,
-                    left: -5,
-                    width: 0,
-                    height: 0,
-                    borderLeft: "5px solid transparent",
-                    borderRight: "5px solid transparent",
-                    borderTop: "8px solid var(--primary)",
+                    top: RULER_H,
+                    bottom: 0,
+                    left: 4,
+                    width: 2,
+                    background: THEME.playhead,
+                    boxShadow: "0 0 8px rgba(255,71,87,0.65)",
+                    pointerEvents: "none",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: RULER_H - 8,
+                    left: 0.5,
+                    width: 8,
+                    height: 8,
+                    background: THEME.playhead,
+                    clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+                    pointerEvents: "none",
                   }}
                 />
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Inspector */}
-      {selected && (
-        <div
-          className="card"
-          style={{
-            background: "var(--bg)",
-            padding: "0.75rem",
-            display: "grid",
-            gap: "0.6rem",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <h4 style={{ fontSize: "0.95rem", margin: 0 }}>
-              {selected.scene_id === -1
-                ? "Video Clip"
-                : `Clip — Scene #${sceneById.get(selected.scene_id)?.order_index ?? selected.scene_id}`}
-            </h4>
-            <span className="badge">{selected.track}</span>
-            <div style={{ flex: 1 }} />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              {selected.scene_id === -1
-                ? (selected.video_path?.split("/").pop() ?? "")
-                : (sceneById.get(selected.scene_id)?.narration || "").slice(
-                    0,
-                    60,
-                  )}
-            </span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: "1rem",
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            <label style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Start (s)
-              <input
-                type="number"
-                step={0.1}
-                value={Number(selected.start.toFixed(2))}
-                onChange={(e) =>
-                  applyStart(selected.id, parseFloat(e.target.value))
-                }
-                style={{ width: 90, marginLeft: "0.4rem" }}
-              />
-            </label>
-            <label style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Duration (s)
-              <input
-                type="number"
-                step={0.1}
-                value={Number(selected.duration.toFixed(2))}
-                onChange={(e) =>
-                  applyDuration(selected.id, parseFloat(e.target.value))
-                }
-                style={{ width: 90, marginLeft: "0.4rem" }}
-              />
-            </label>
-            {selected.track === "video" && selected.audio_path && (
-              <label
-                style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}
-              >
-                Narration trim (s)
-                <input
-                  type="number"
-                  step={0.1}
-                  value={Number((selected.audio_in ?? 0).toFixed(2))}
-                  onChange={(e) =>
-                    patchClip(selected.id, {
-                      audio_in: Math.max(0, parseFloat(e.target.value) || 0),
-                    })
-                  }
-                  style={{ width: 90, marginLeft: "0.4rem" }}
-                />
-              </label>
-            )}
-            <label style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Volume
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={selected.volume}
-                onChange={(e) =>
-                  patchClip(selected.id, { volume: parseFloat(e.target.value) })
-                }
-                style={{
-                  width: 120,
-                  marginLeft: "0.4rem",
-                  verticalAlign: "middle",
-                }}
-              />
-              <span
-                style={{
-                  fontSize: "0.7rem",
-                  color: "var(--text-muted)",
-                  marginLeft: "0.3rem",
-                }}
-              >
-                {Math.round(selected.volume * 100)}%
-              </span>
-            </label>
-            <button
-              className="btn-secondary"
-              onClick={() => deleteClip(selected.id)}
-              style={{
-                color: "var(--danger)",
-                fontSize: "0.75rem",
-                padding: "0.3rem 0.6rem",
-              }}
-            >
-              Delete Clip
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "0.3rem",
-  fontSize: "0.72rem",
-  color: "var(--text-muted)",
-  borderBottom: "1px solid var(--border)",
-};
-
-const chipStyle: React.CSSProperties = {
-  background: "rgba(0,0,0,0.55)",
-  color: "#fff",
-  padding: "0.15rem 0.4rem",
-  borderRadius: 4,
-  fontSize: "0.7rem",
-};
-
-interface PreviewPanelProps {
-  ratio?: VideoRatio;
-  activeClip: TimelineClip | null;
-  activeNarration: TimelineClip | null;
-  scene: Scene | null;
-  playhead: number;
-  totalDuration: number;
-  playing: boolean;
-  onTogglePlay: () => void;
-  mediaUrl: (path: string | null | undefined) => string;
-}
-
-function PreviewPanel({
-  ratio,
-  activeClip,
-  activeNarration,
-  scene,
-  playhead,
-  totalDuration,
-  playing,
-  onTogglePlay,
-  mediaUrl,
-}: PreviewPanelProps) {
-  const w = ratio?.width ?? 1920;
-  const h = ratio?.height ?? 1080;
-  const scale = Math.min(400 / w, 400 / h);
-  const pw = Math.round(w * scale);
-  const ph = Math.round(h * scale);
-  const narrationText = scene?.narration || "";
-  const audioPlaying = playing && !!activeNarration?.audio_path;
-  const progress =
-    totalDuration > 0 ? Math.min(1, playhead / totalDuration) : 0;
-
-  return (
-    <div
-      style={{
-        width: pw,
-        display: "grid",
-        gap: "0.5rem",
-        alignSelf: "center",
-      }}
-    >
-      <div
-        onClick={onTogglePlay}
-        title="Click to play / pause"
-        style={{
-          position: "relative",
-          width: pw,
-          height: ph,
-          borderRadius: 8,
-          overflow: "hidden",
-          background: "linear-gradient(135deg, #101018, #1a1a24)",
-          border: "1px solid var(--border)",
-          boxShadow: "var(--shadow)",
-          cursor: "pointer",
-        }}
-      >
-        {activeClip?.video_path ? (
-          <video
-            key={mediaUrl(activeClip.video_path)}
-            src={mediaUrl(activeClip.video_path)}
-            muted
-            loop
-            autoPlay
-            playsInline
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
-        ) : activeClip?.image_path ? (
-          <img
-            src={mediaUrl(activeClip.image_path)}
-            alt=""
-            draggable={false}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.4rem",
-              color: "var(--text-muted)",
-              fontSize: "0.8rem",
-            }}
-          >
-            <Film size={16} /> No image at playhead
-          </div>
-        )}
-
-        {/* soft overlay */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.15) 45%, transparent 60%)",
-          }}
-        />
-
-        {/* scene badge */}
-        {activeClip && (
-          <span
-            style={{
-              position: "absolute",
-              top: 8,
-              left: 8,
-              background: "rgba(0,0,0,0.55)",
-              color: "#fff",
-              padding: "0.15rem 0.5rem",
-              borderRadius: 4,
-              fontSize: "0.7rem",
-              fontWeight: 700,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.3rem",
-            }}
-          >
-            {activeClip.scene_id === -1 ? (
-              <>
-                <Film size={11} /> Video clip
-              </>
-            ) : (
-              `Scene #${scene?.order_index ?? activeClip.scene_id}`
-            )}
-          </span>
-        )}
-
-        {/* status chips */}
-        <div
-          style={{
-            position: "absolute",
-            top: 8,
-            right: 8,
-            display: "flex",
-            gap: 4,
-          }}
-        >
-          {(audioPlaying || !!activeClip?.audio_path) && (
-            <span
-              style={chipStyle}
-              title={audioPlaying ? "Narration playing" : "Has narration"}
-            >
-              {audioPlaying ? <EqBars /> : <Mic size={12} />}
-            </span>
-          )}
-        </div>
-
-        {/* narration text overlay */}
-        {narrationText && (
-          <div style={{ position: "absolute", left: 8, right: 8, bottom: 10 }}>
-            <div
-              style={{
-                color: "#fff",
-                fontSize: 11,
-                lineHeight: 1.35,
-                textShadow: "0 1px 3px #000",
-                maxHeight: 44,
-                overflow: "hidden",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-              }}
-            >
-              {narrationText}
-            </div>
-          </div>
-        )}
-
-        {/* play indicator */}
-        {!playing && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: "none",
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: "rgba(255,0,51,0.85)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-              }}
-            >
-              <Play size={20} color="#fff" style={{ marginLeft: 2 }} />
-            </div>
-          </div>
-        )}
-
-        {/* progress bar */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            height: 3,
-            width: `${progress * 100}%`,
-            background: "var(--primary)",
-          }}
-        />
-      </div>
-
-      {/* transport */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          padding: "0 0.15rem",
-        }}
-      >
-        <button
-          className="btn-primary"
-          onClick={onTogglePlay}
-          disabled={!activeClip}
-          style={{
-            padding: "0.3rem 0.6rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.3rem",
-            fontSize: "0.75rem",
-          }}
-        >
-          {playing ? <Pause size={13} /> : <Play size={13} />}{" "}
-          {playing ? "Pause" : "Play"}
-        </button>
-        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-          {fmtTime(playhead)} / {fmtTime(totalDuration)}
-        </span>
-        <div style={{ flex: 1 }} />
-        <span className="badge" title="Preview aspect ratio">
-          {ratio?.id ?? "16:9"} ·{" "}
-          {ratio ? `${ratio.width}×${ratio.height}` : "1920×1080"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function EqBars() {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "flex-end",
-        gap: 2,
-        height: 12,
-      }}
-    >
-      {[0, 1, 2, 3].map((i) => (
-        <span
-          key={i}
-          style={{
-            width: 2,
-            height: "100%",
-            background: "#8fe3a0",
-            display: "inline-block",
-            transformOrigin: "bottom",
-            animation: `tl-eq 0.7s ease-in-out ${i * 0.12}s infinite`,
-          }}
-        />
-      ))}
-    </span>
-  );
-}
-
-interface ClipBoxProps {
-  clip: TimelineClip;
-  pxPerSec: number;
-  selected: boolean;
-  kind: "video" | "narration";
-  onClick: () => void;
-  onDragStart: (e: React.PointerEvent, id: string, mode: DragMode) => void;
-  onDragMove: (e: React.PointerEvent) => void;
-  onDragEnd: () => void;
-  mediaUrl: (path: string | null | undefined) => string;
-  sceneLabel?: number;
-}
-
-function ClipBox({
-  clip,
-  pxPerSec,
-  selected,
-  kind,
-  onClick,
-  onDragStart,
-  onDragMove,
-  onDragEnd,
-  mediaUrl,
-  sceneLabel,
-}: ClipBoxProps) {
-  const width = clip.duration * pxPerSec;
-  const left = clip.start * pxPerSec;
-  const isVideo = kind === "video";
-  const isClip = isVideo && !!clip.video_path;
-  const hasAudio = !!clip.audio_path;
-  const waveform = isVideo ? null : useWaveform(mediaUrl(clip.audio_path));
-
-  return (
-    <div
-      onPointerDown={(e) => {
-        onClick();
-        onDragStart(e, clip.id, "move");
-      }}
-      onPointerMove={onDragMove}
-      onPointerUp={onDragEnd}
-      onPointerCancel={onDragEnd}
-      style={{
-        position: "absolute",
-        left,
-        top: isVideo ? 4 : 4,
-        width,
-        height: isVideo ? 64 : 32,
-        borderRadius: 6,
-        overflow: "hidden",
-        cursor: "grab",
-        background: isClip
-          ? "rgba(139,92,246,0.16)"
-          : isVideo
-            ? "var(--surface)"
-            : "rgba(62,166,255,0.12)",
-        border: `1.5px solid ${selected ? "var(--accent)" : isClip ? "rgba(139,92,246,0.7)" : isVideo ? "var(--border)" : "rgba(62,166,255,0.5)"}`,
-        boxShadow: selected ? "0 0 0 2px rgba(62,166,255,0.25)" : "none",
-        touchAction: "none",
-        userSelect: "none",
-      }}
-      title={`${isClip ? "Video clip" : `Scene ${sceneLabel ?? clip.scene_id}`} — ${clip.duration.toFixed(1)}s`}
-    >
-      {isVideo ? (
-        <>
-          {isClip && (
-            <video
-              src={mediaUrl(clip.video_path)}
-              muted
-              playsInline
-              preload="metadata"
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                opacity: 0.65,
-              }}
-            />
-          )}
-          {!isClip && clip.image_path && (
-            <img
-              src={mediaUrl(clip.image_path)}
-              alt=""
-              draggable={false}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                opacity: 0.65,
-              }}
-            />
-          )}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "linear-gradient(to right, rgba(0,0,0,0.55), rgba(0,0,0,0.1) 60%, rgba(0,0,0,0.55))",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              padding: "2px 6px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "0.62rem",
-                fontWeight: 700,
-                color: "#fff",
-                textShadow: "0 1px 2px #000",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.3rem",
-              }}
-            >
-              {isClip ? <Film size={11} /> : `#${sceneLabel ?? clip.scene_id}`}{" "}
-              · {clip.duration.toFixed(1)}s
-            </span>
-            <span
-              style={{
-                fontSize: "0.58rem",
-                color: hasAudio ? "#8fe3a0" : "var(--text-muted)",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.25rem",
-              }}
-            >
-              {isClip ? (
-                "video clip"
-              ) : hasAudio ? (
-                <>
-                  <Mic size={10} /> narration
-                </>
-              ) : (
-                "no audio"
-              )}
-            </span>
-          </div>
-          <div
-            style={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              height: 3,
-              background: isClip
-                ? "var(--accent)"
-                : hasAudio
-                  ? "var(--success)"
-                  : "transparent",
-              width: "100%",
-            }}
-          />
-        </>
-      ) : (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            padding: "2px 6px",
-            gap: 4,
-          }}
-        >
-          <span
-            style={{
-              fontSize: "0.58rem",
-              color: "#a9d4ff",
-              whiteSpace: "nowrap",
-            }}
-          >
-            #{sceneLabel ?? clip.scene_id}
-          </span>
-          {waveform && waveform.length > 0 && (
-            <div
-              style={{
-                flex: 1,
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                overflow: "hidden",
-              }}
-            >
-              {waveform.map((v, i) => (
+              {E.clips.length === 0 && (
                 <div
-                  key={i}
                   style={{
-                    width: 2,
-                    height: `${Math.max(8, v * 100)}%`,
-                    background: "var(--accent)",
-                    borderRadius: 1,
-                    flexShrink: 0,
+                    position: "absolute",
+                    left: GUTTER_W,
+                    right: 0,
+                    top: RULER_H,
+                    bottom: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    pointerEvents: "none",
                   }}
-                />
-              ))}
+                >
+                  <div
+                    style={{
+                      border: "1.5px dashed #3a3a44",
+                      borderRadius: 14,
+                      padding: "18px 30px",
+                      textAlign: "center",
+                      color: "#8e8e98",
+                      background: "rgba(27,27,31,0.72)",
+                      display: "grid",
+                      gap: 8,
+                      justifyItems: "center",
+                    }}
+                  >
+                    <strong style={{ fontSize: 13, color: "#c9c9d1" }}>
+                      Timeline is empty
+                    </strong>
+                    <span style={{ fontSize: 11.5 }}>
+                      Generate scenes &amp; voice in the pipeline steps, then
+                      use "Reset from scenes".
+                    </span>
+                    <button
+                      className="btn-secondary"
+                      style={{
+                        fontSize: 11.5,
+                        padding: "5px 12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        pointerEvents: "auto",
+                      }}
+                      onClick={() => E.addTextClip()}
+                    >
+                      <Plus size={13} /> Add caption
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
-      {!isVideo && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            paddingRight: 6,
-          }}
-        >
-          <span style={{ fontSize: "0.55rem", color: "#a9d4ff" }}>
-            {clip.duration.toFixed(1)}s
-          </span>
-        </div>
+          </div>
+      </div>
+
+      {sel && selDef && (
+        <Inspector
+          clip={sel}
+          orderIndex={
+            sel.scene_id >= 0
+              ? E.sceneById.get(sel.scene_id)?.order_index
+              : undefined
+          }
+          canSplit={
+            t > sel.start + MIN_DUR && t < sel.start + sel.duration - MIN_DUR
+          }
+          canTrimStart={t > sel.start + MIN_DUR}
+          canTrimEnd={t < sel.start + sel.duration - MIN_DUR}
+          canMoveUp={!!E.adjacentRow(sel.track, -1)}
+          canMoveDown={!!E.adjacentRow(sel.track, 1)}
+          textAreaRef={E.textAreaRef}
+          sourceDuration={selSrcDur}
+          onPatch={(patch, mergeKey) => E.patchClip(sel.id, patch, mergeKey)}
+          onSplit={() => E.splitClipAt(sel, t)}
+          onTrimStart={() => E.trimSelectedEdge("start")}
+          onTrimEnd={() => E.trimSelectedEdge("end")}
+          onCleanSilence={
+            sel.audio_path
+              ? () => void E.removeSilentEdges(sel.id)
+              : undefined
+          }
+          onDuplicate={() => E.duplicateClip(sel)}
+          onDelete={() => E.deleteClipOp(sel, E.rippleOn)}
+          onMoveRow={(dir) => E.moveClipRow(sel, dir)}
+        />
       )}
 
-      {/* Trim handles */}
-      {["left", "right"].map((side) => (
-        <div
-          key={side}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            onDragStart(
-              e,
-              clip.id,
-              side === "left" ? "trim-left" : "trim-right",
-            );
-          }}
-          onPointerMove={onDragMove}
-          onPointerUp={onDragEnd}
-          onPointerCancel={onDragEnd}
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            width: 10,
-            [side]: 0,
-            cursor: "ew-resize",
-            background: selected ? "rgba(62,166,255,0.35)" : "transparent",
-            touchAction: "none",
-          }}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems}
+          onClose={() => setMenu(null)}
         />
-      ))}
+      )}
     </div>
   );
 }

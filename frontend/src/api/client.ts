@@ -82,9 +82,9 @@ export const api = {
 
   // YouTube
   getYoutubeConfig: () =>
-    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string }>("/youtube/config"),
-  saveYoutubeConfig: (data: { youtube_api_key?: string; youtube_playlist_id?: string }) =>
-    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string }>("/youtube/config", {
+    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean }>("/youtube/config"),
+  saveYoutubeConfig: (data: { youtube_api_key?: string; youtube_playlist_id?: string; youtube_client_id?: string; youtube_client_secret?: string }) =>
+    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean }>("/youtube/config", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -92,6 +92,17 @@ export const api = {
     request<{ title: string; description: string; published_at: string; video_id: string; channel_title: string }[]>(
       `/youtube/recent${maxResults ? `?max_results=${maxResults}` : ""}`,
     ),
+  getYoutubeAuthUrl: () =>
+    request<{ url: string }>("/youtube/auth/url"),
+  getYoutubeChannel: () =>
+    request<{ connected: boolean; channel_id?: string; title?: string; description?: string; avatar?: string; subscribers?: string; videos?: string }>("/youtube/channel"),
+  uploadToYouTube: (projectId: number, privacyStatus: string) =>
+    request<{ message: string; slug: string }>(`/youtube/upload/${projectId}`, {
+      method: "POST",
+      body: JSON.stringify({ privacy_status: privacyStatus }),
+    }),
+  getYoutubeUploadStatus: (projectId: number) =>
+    request<{ running: boolean; progress: number; stage: string; message: string; video_id: string | null; video_url: string | null; error: string | null }>(`/youtube/upload/${projectId}/status`),
 
   generateScript: (
     projectId: number,
@@ -140,6 +151,22 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  exportScriptJson: async (scriptId: number, filename: string) => {
+    const response = await fetch(`${API_BASE}/scripts/${scriptId}/export`);
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || "Request failed");
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 
   listScenes: (projectId: number) =>
     request<import("../types").Scene[]>(`/scenes/project/${projectId}`),
@@ -308,6 +335,11 @@ export const api = {
   },
   clearSceneAudio: (sceneId: number) =>
     request<void>(`/voice/scene/${sceneId}`, { method: "DELETE" }),
+  combineAudioPreview: (projectId: number) =>
+    request<{ message: string; preview_path: string }>(
+      `/voice/project/${projectId}/preview`,
+      { method: "POST" },
+    ),
 
   listVideoRatios: () =>
     request<import("../types").VideoRatioCatalog>("/video/ratios"),
@@ -348,6 +380,7 @@ export const api = {
       subtitle_outline_color?: string;
       subtitle_outline?: number;
       subtitle_font_size?: number | null;
+      force_rebuild?: boolean;
     },
   ) =>
     request<{ message: string; detail: string }>(

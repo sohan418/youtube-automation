@@ -21,10 +21,12 @@ import ScriptStep from "../steps/ScriptStep";
 import ScenesStep from "../steps/ScenesStep";
 import ImagesStep from "../steps/ImagesStep";
 import VoiceStep from "../steps/VoiceStep";
+import TimelineStep from "../steps/TimelineStep";
 import VideoStep from "../steps/VideoStep";
 import CaptionsStep from "../steps/CaptionsStep";
 import ThumbnailStep from "../steps/ThumbnailStep";
 import SeoStep from "../steps/SeoStep";
+import UploadStep from "../steps/UploadStep";
 
 interface PromptPair {
   system: string;
@@ -35,7 +37,7 @@ interface Props {
   activeTab: string;
   onTabChange: (tab: string) => void;
   projectId: number;
-  project: { name: string; language: string } | null;
+  project: { name: string; language: string; category?: string | null } | null;
   ideas: Idea[];
   scripts: Script[];
   activeScript: Script | null;
@@ -52,6 +54,9 @@ interface Props {
   setActiveSceneIdx: React.Dispatch<React.SetStateAction<number>>;
   prompts: Record<string, PromptPair>;
   recentVideos: YouTubeVideo[];
+  youtubeConfig: { youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean } | null;
+  youtubeUploadStatus: import("../../types").YouTubeUploadStatus | null;
+  onUploadYouTube: (privacy: string) => void;
 
   ideaTopic: string;
   setIdeaTopic: (v: string) => void;
@@ -84,8 +89,8 @@ interface Props {
   openAddScene: (pos: number | null) => void;
   closeAddScene: () => void;
   editingSceneId: number | null;
-  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string };
-  setSceneEditForm: React.Dispatch<React.SetStateAction<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string }>>;
+  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null };
+  setSceneEditForm: React.Dispatch<React.SetStateAction<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null }>>;
   openSceneEdit: (scene: Scene) => void;
   cancelSceneEdit: () => void;
   saveSceneEdit: (id: number) => Promise<void>;
@@ -135,6 +140,8 @@ interface Props {
   stopRecording: () => void;
   handleAudioFileSelected: (id: number, file: File) => Promise<void>;
   clearSceneAudio: (id: number) => Promise<void>;
+  combineAudioPreview: () => Promise<void>;
+  audioPreviewUrl: string | null;
   setSelectedProvider: (v: string) => void;
   setSelectedVoice: (v: string) => void;
   setSelectedVoiceRate: (v: string) => void;
@@ -326,6 +333,8 @@ export default function StudioStepContent(p: Props) {
           audioInputRef={p.audioInputRef}
           onFileSelected={p.handleAudioFileSelected}
           onClearAudio={p.clearSceneAudio}
+          onCombineAudioPreview={p.combineAudioPreview}
+          audioPreviewUrl={p.audioPreviewUrl}
           mediaUrl={mediaUrl}
           audioVersion={p.audioVersion}
           formatRecordTime={p.formatRecordTime}
@@ -353,6 +362,19 @@ export default function StudioStepContent(p: Props) {
           subtitleFontSize={p.subtitleFontSize}
           setSubtitleFontSize={p.setSubtitleFontSize}
           onSave={p.saveCaptions}
+        />
+      )}
+
+      {p.activeTab === "timeline" && (
+        <TimelineStep
+          projectId={p.projectId}
+          scenes={p.scenes}
+          actionLoading={p.actionLoading}
+          videoStatus={p.videoStatus}
+          ratio={p.selectedRatio}
+          mediaUrl={mediaUrl}
+          timeline={p.timeline}
+          onTimelineChange={p.setTimeline}
         />
       )}
 
@@ -424,19 +446,13 @@ export default function StudioStepContent(p: Props) {
         <SeoStep
           seo={p.seo}
           scenes={p.scenes}
-          categories={p.categories}
           activeScript={p.activeScript}
           actionLoading={p.actionLoading}
+          projectCategory={p.project?.category ?? ""}
           onGenerate={() =>
             p.runAction("seo", async () => {
               await api.generateSEO(p.projectId, p.project?.language ?? "en");
               p.setSuccess("SEO metadata generated!");
-            })
-          }
-          onCategoryChange={(categoryId) =>
-            p.runAction("seo-category", async () => {
-              await api.updateSEOCategory(p.projectId, categoryId);
-              p.setSuccess("YouTube category saved");
             })
           }
           onSave={async (data) => {
@@ -458,6 +474,18 @@ export default function StudioStepContent(p: Props) {
             })
           }
           prompts={p.prompts.seo}
+        />
+      )}
+
+      {p.activeTab === "upload" && (
+        <UploadStep
+          projectId={p.projectId}
+          actionLoading={p.actionLoading}
+          videoStatus={p.videoStatus}
+          seo={p.seo}
+          youtubeConfig={p.youtubeConfig}
+          youtubeUploadStatus={p.youtubeUploadStatus}
+          onUploadYouTube={p.onUploadYouTube}
         />
       )}
 

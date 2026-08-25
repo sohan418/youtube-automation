@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Sparkles, Download, Upload, X, Clock, ShieldAlert, FileText, Edit2, Check, RotateCcw } from "lucide-react";
-import type { SEOCategory, SEOConstants, SEOMetadata, Scene, Script } from "../../types";
+import type { SEOConstants, SEOMetadata, Scene, Script } from "../../types";
 import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
 
@@ -70,11 +70,10 @@ function combineDescription(body: string, timestamps: string, disclaimer: string
 interface Props {
   seo: SEOMetadata | null;
   scenes: Scene[];
-  categories: SEOCategory[];
   activeScript: Script | null;
   actionLoading: string;
+  projectCategory: string;
   onGenerate: () => void;
-  onCategoryChange: (categoryId: number) => void;
   onSave: (data: { title?: string; description?: string; tags?: string; hashtags?: string }) => Promise<void>;
   onFreeAIResponse?: (data: Partial<SEOMetadata>) => void;
   prompts?: { system: string; user: string };
@@ -177,8 +176,8 @@ const compactBtnStyle: React.CSSProperties = {
 };
 
 export default function SeoStep({
-  seo, scenes, categories, activeScript, actionLoading,
-  onGenerate, onCategoryChange, onSave, onFreeAIResponse, prompts,
+  seo, scenes, activeScript, actionLoading, projectCategory,
+  onGenerate, onSave, onFreeAIResponse, prompts,
 }: Props) {
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
@@ -307,16 +306,13 @@ export default function SeoStep({
         <div style={{ display: "grid", gap: "0.7rem", marginTop: "0.75rem" }}>
 
           {/* Category */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <label style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <label style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Category
             </label>
-            <select value={seo.category_id ?? ""} disabled={!!actionLoading}
-              onChange={(e) => { const v = Number(e.target.value); if (v) onCategoryChange(v); }}
-              style={{ flex: 1, maxWidth: 260, fontSize: "0.76rem", padding: "0.28rem 0.4rem", background: "var(--bg)", color: "var(--text)" }}>
-              <option value="" disabled>Select…</option>
-              {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-            </select>
+            <span style={{ fontSize: "0.78rem", color: "var(--text)", fontWeight: 500 }}>
+              {seo.category || projectCategory || "Uncategorized"}
+            </span>
           </div>
 
           {/* Title */}

@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Clapperboard, Video, Package, Mic, Image, Check, ChevronLeft, ChevronRight } from "lucide-react";
-import type { Scene, VideoStatus, ExportResult } from "../../types";
+import type { Scene, VideoStatus, ExportResult, TimelineData } from "../../types";
 
 interface Props {
   projectId: number;
@@ -12,7 +12,8 @@ interface Props {
     ratio?: string; subtitles?: boolean; subtitle_style?: string;
     subtitle_position?: string; subtitle_color?: string;
     subtitle_outline_color?: string; subtitle_outline?: number;
-    subtitle_font_size?: number | null;
+    subtitle_font_size?: number | null; force_rebuild?: boolean;
+    timeline?: TimelineData | null;
   }) => Promise<void>;
   mediaUrl: (path: string | null | undefined) => string;
   enableSubtitles: boolean;
@@ -65,6 +66,10 @@ export default function VideoStep({
   const building = actionLoading === "video" || videoStatus?.running;
   const portrait = ratio === "9:16";
   const hasBuiltVideo = !!videoStatus?.output;
+  const [forceRebuild, setForceRebuild] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const sceneStatuses = videoStatus?.scene_statuses || {};
 
   const safeIdx = scenes.length > 0 ? Math.min(Math.max(activeSceneIdx, 0), scenes.length - 1) : 0;
   const activeScene: Scene | null = scenes[safeIdx] ?? null;
@@ -140,12 +145,22 @@ export default function VideoStep({
                   subtitle_outline_color: subtitleOutlineColor,
                   subtitle_outline: subtitleOutline,
                   subtitle_font_size: subtitleFontSize,
+                  force_rebuild: forceRebuild,
                 })
               }
               style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
             >
               {building ? `Building...` : <><Clapperboard size={13} /> Build</>}
             </button>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem", color: "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap" }}>
+              <input
+                type="checkbox"
+                checked={forceRebuild}
+                onChange={(e) => setForceRebuild(e.target.checked)}
+                disabled={building}
+              />
+              Rebuild
+            </label>
             <button
               className="btn-secondary"
               disabled={!!actionLoading || scenes.length === 0}
@@ -253,7 +268,152 @@ export default function VideoStep({
             </div>
           )}
         </div>
-      </div>
+
+        {showPreview && hasBuiltVideo ? (
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+              <Video size={16} color="var(--primary)" />
+              <h3 style={{ margin: 0, fontSize: "0.95rem" }}>Preview</h3>
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  fontWeight: 600,
+                  padding: "0.15rem 0.5rem",
+                  borderRadius: "999px",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-muted)",
+                  background: "var(--bg)",
+                }}
+              >
+                {ratio}
+              </span>
+              <span style={{ ...badgeStyle(true), background: "var(--bg)" }}>
+                <Check size={11} /> Built
+              </span>
+              <div style={{ marginLeft: "auto", display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowPreview(false)}
+                  style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
+                >
+                  Hide Preview
+                </button>
+              </div>
+            </div>
+            <div
+              style={{
+                position: "relative",
+                background: "#000",
+                borderRadius: "calc(var(--radius) - 2px)",
+                overflow: "hidden",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                aspectRatio: portrait ? "9 / 16" : "16 / 9",
+                maxHeight: portrait ? "520px" : "380px",
+                margin: "0 auto",
+                border: "1px solid var(--border)",
+                width: "100%",
+              }}
+            >
+              <video
+                src={mediaUrl(videoStatus!.output)}
+                controls
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: "0.55rem 0.7rem", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h3 style={{ margin: 0, fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Video size={16} color="var(--primary)" /> Editor
+                <span
+                  style={{
+                    fontSize: "0.65rem",
+                    fontWeight: 600,
+                    padding: "0.15rem 0.5rem",
+                    borderRadius: "999px",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-muted)",
+                    background: "var(--bg)",
+                  }}
+                >
+                  {ratio}
+                </span>
+                {hasBuiltVideo && (
+                  <span style={{ ...badgeStyle(true), background: "var(--bg)" }}>
+                    <Check size={11} /> Built
+                  </span>
+                )}
+              </h3>
+              <p style={{ margin: "0.25rem 0 0", fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                {hasBuiltVideo
+                  ? "Final video is ready. Click below to preview it."
+                  : "Build your video to see the preview here."}
+              </p>
+            </div>
+            {hasBuiltVideo && (
+              <button
+                className="btn-primary"
+                onClick={() => setShowPreview(true)}
+                style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
+              >
+                <Video size={13} /> Show Preview
+              </button>
+            )}
+            <div style={{ marginLeft: "auto", display: "flex", gap: "0.35rem", alignItems: "center" }}>
+              {building && videoStatus && (
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                    {videoStatus.message}
+                  </span>
+                  <div style={{ width: 80, height: 4, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${videoStatus.progress}%`, background: "var(--primary)", transition: "width 0.3s" }} />
+                  </div>
+                  <span style={{ fontSize: "0.68rem", fontWeight: 700 }}>{videoStatus.progress}%</span>
+                </div>
+              )}
+              <button
+                className="btn-primary"
+                disabled={!!actionLoading || scenes.length === 0}
+                onClick={() =>
+                  onBuild({
+                    ratio,
+                    subtitles: enableSubtitles,
+                    subtitle_style: subtitleStyle,
+                    subtitle_position: subtitlePosition,
+                    subtitle_color: subtitleColor,
+                    subtitle_outline_color: subtitleOutlineColor,
+                    subtitle_outline: subtitleOutline,
+                    subtitle_font_size: subtitleFontSize,
+                  force_rebuild: forceRebuild,
+                })
+                }
+                style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
+              >
+                {building ? `Building...` : <><Clapperboard size={13} /> Build</>}
+              </button>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem", color: "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap" }}>
+                <input
+                  type="checkbox"
+                  checked={forceRebuild}
+                  onChange={(e) => setForceRebuild(e.target.checked)}
+                  disabled={building}
+                />
+                Rebuild
+              </label>
+              <button
+                className="btn-secondary"
+                disabled={!!actionLoading || scenes.length === 0}
+                onClick={onExport}
+                style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
+              >
+                {actionLoading === "export" ? "Exporting..." : <><Package size={13} /> Export</>}
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Horizontal Scene Strip */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
@@ -320,6 +480,43 @@ export default function VideoStep({
                   >
                     {idx + 1}
                   </span>
+                )}
+                {sceneStatuses[idx + 1] === "rendering" && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      border: "2px solid var(--primary)",
+                      borderRadius: "var(--radius)",
+                      background: "rgba(59,130,246,0.15)",
+                      animation: "pulse 1.5s infinite",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
+                {sceneStatuses[idx + 1] === "done" && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      border: "2px solid var(--success)",
+                      borderRadius: "var(--radius)",
+                      background: "rgba(34,197,94,0.1)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
+                {sceneStatuses[idx + 1] === "failed" && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      border: "2px solid #ef4444",
+                      borderRadius: "var(--radius)",
+                      background: "rgba(239,68,68,0.15)",
+                      pointerEvents: "none",
+                    }}
+                  />
                 )}
                 <span
                   style={{
@@ -391,7 +588,9 @@ export default function VideoStep({
                 padding: "0.12rem 0.5rem",
               }}
             >
-              {(activeScene?.duration_seconds ?? 0).toFixed(1)}s
+              {activeScene?.duration_seconds != null
+                ? `${activeScene.duration_seconds.toFixed(1)}s`
+                : "—"}
             </span>
           </div>
 
@@ -474,6 +673,7 @@ export default function VideoStep({
             ))}
           </div>
         </div>
+      </div>
       </div>
   );
 }

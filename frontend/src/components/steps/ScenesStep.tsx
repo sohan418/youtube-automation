@@ -79,8 +79,8 @@ interface Props {
   onOpenAdd: (pos: number | null) => void;
   onCloseAdd: () => void;
   editingSceneId: number | null;
-  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string };
-  onEditFormChange: (patch: Partial<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string }>) => void;
+  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null };
+  onEditFormChange: (patch: Partial<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null }>) => void;
   onStartEdit: (scene: Scene) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: number) => void;
@@ -152,7 +152,7 @@ export default function ScenesStep({
 
   const activeScene = scenes[activeIdx];
   const filteredScenes = scenes.filter((s) => s.narration.toLowerCase().includes(searchQuery.toLowerCase()));
-  const getDuration = (scene: Scene) => scene.duration_seconds ?? Math.max(3, Math.round(scene.narration.length * 0.15));
+  const getDuration = (scene: Scene) => scene.duration_seconds;
   const fmtDuration = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
 
   const currentEffect = activeScene
@@ -307,7 +307,7 @@ export default function ScenesStep({
                         {scene.narration}
                       </p>
                     </div>
-                    <span style={{ fontSize: "0.6rem", color: "var(--text-muted)", flexShrink: 0 }}>{fmtDuration(getDuration(scene))}</span>
+                    <span style={{ fontSize: "0.6rem", color: "var(--text-muted)", flexShrink: 0 }}>{getDuration(scene) != null ? fmtDuration(getDuration(scene)!) : "—"}</span>
                   </button>
                 );
               })}
@@ -398,11 +398,40 @@ export default function ScenesStep({
                     )}
                   </div>
 
-                  {/* Duration badge */}
+                  {/* Duration badge — editable */}
                   <div style={{ display: "flex", gap: "0.3rem" }}>
-                    <span style={{ fontSize: "0.62rem", padding: "0.12rem 0.4rem", borderRadius: "10px", background: "rgba(62, 166, 255, 0.08)", color: "var(--accent)", border: "1px solid rgba(62, 166, 255, 0.15)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.2rem" }}>
-                      <Clock size={10} /> ~{fmtDuration(getDuration(activeScene))}
-                    </span>
+                    <label
+                      title="Scene duration in seconds — you control this; the renderer fades voice out if narration is longer"
+                      style={{ fontSize: "0.62rem", padding: "0.12rem 0.4rem", borderRadius: "10px", background: "rgba(62, 166, 255, 0.08)", color: "var(--accent)", border: "1px solid rgba(62, 166, 255, 0.15)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", cursor: "text" }}
+                    >
+                      <Clock size={10} />
+                      <input
+                        type="number"
+                        min={0.5}
+                        step={0.1}
+                        value={
+                          editingSceneId === activeScene.id
+                            ? sceneEditForm.duration_seconds ?? ""
+                            : getDuration(activeScene) ?? ""
+                        }
+                        placeholder="—"
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const v = raw === "" ? null : Number(raw);
+                          if (editingSceneId !== activeScene.id) onStartEdit(activeScene);
+                          onEditFormChange({ duration_seconds: v });
+                        }}
+                        onBlur={() => {
+                          if (editingSceneId === activeScene.id && sceneEditForm.duration_seconds != null)
+                            onSaveEdit(activeScene.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        }}
+                        style={{ width: 44, background: "transparent", border: "none", outline: "none", color: "inherit", font: "inherit", fontWeight: 600, padding: 0, textAlign: "center" }}
+                      />
+                      s
+                    </label>
                   </div>
 
                   {/* Motion selector */}

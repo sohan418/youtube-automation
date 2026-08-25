@@ -135,7 +135,16 @@ def upload_scene_video(
 
     info = video_service._probe_video_info(storage_service.root.parent / file_path)
     clip_duration = (info or {}).get("duration")
+
+    existing_media = _scene_media_count(db, scene.id)
     if (
+        existing_media == 0
+        and not scene.duration_manual
+        and clip_duration
+        and clip_duration > 0
+    ):
+        scene.duration_seconds = round(clip_duration, 3)
+    elif (
         clip_duration
         and scene.duration_seconds
         and clip_duration > scene.duration_seconds + DURATION_TOLERANCE

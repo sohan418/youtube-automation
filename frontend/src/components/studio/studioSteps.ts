@@ -6,8 +6,10 @@ import {
   Image as ImageIcon,
   Lightbulb,
   Mic,
+  Scissors,
   Search,
   Subtitles,
+  Upload,
   Video,
 } from "lucide-react";
 import type { ExportResult, Scene, Script, SEOMetadata, Thumbnail, TimelineData, VideoStatus } from "../../types";
@@ -23,6 +25,7 @@ export type StudioStep =
   | "video"
   | "thumbnail"
   | "seo"
+  | "upload"
   | "export";
 
 export type StepGroup = "plan" | "create" | "publish";
@@ -42,9 +45,11 @@ export const STUDIO_STEPS: StepDef[] = [
   { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene", group: "create" },
   { key: "voice", label: "Voice", icon: Mic, hint: "Add narration (AI or recorded)", group: "create" },
   { key: "captions", label: "Captions", icon: Subtitles, hint: "Subtitle and caption settings", group: "create" },
+  { key: "timeline", label: "Timeline", icon: Scissors, hint: "Arrange, trim and edit clips", group: "create" },
   { key: "video", label: "Editor", icon: Video, hint: "Build and preview final video", group: "create" },
   { key: "thumbnail", label: "Thumbnail", icon: Camera, hint: "Design a cover image", group: "publish" },
   { key: "seo", label: "SEO", icon: Search, hint: "Title, tags and description", group: "publish" },
+  { key: "upload", label: "Upload", icon: Upload, hint: "Publish to YouTube", group: "publish" },
 ];
 
 export const STEP_GROUPS: { key: StepGroup; label: string }[] = [
@@ -62,6 +67,7 @@ export interface StepStatusData {
   exportInfo: ExportResult | null;
   videoStatus: VideoStatus | null;
   timeline: TimelineData | null;
+  youtubeUploaded: boolean;
 }
 
 export function getDoneMap(d: StepStatusData): Record<StudioStep, boolean> {
@@ -73,24 +79,25 @@ export function getDoneMap(d: StepStatusData): Record<StudioStep, boolean> {
     images: scenesReady && d.scenes.every((s) => !!s.image_path || ((s.images?.length ?? 0) > 0) || ((s.videos?.length ?? 0) > 0)),
     voice: scenesReady && d.scenes.every((s) => !!s.audio_path),
     captions: true,
-    timeline: true,
+    timeline: !!d.timeline,
     video:
       !!d.videoStatus && !d.videoStatus.running && !d.videoStatus.error && !!d.videoStatus.output,
     thumbnail: d.thumbnails.length > 0,
     seo: !!d.seo,
+    upload: d.youtubeUploaded,
     export: true,
   };
 }
 
 export function getProgressPercent(d: StepStatusData): number {
   const done = getDoneMap(d);
-  const keys: StudioStep[] = ["ideas", "script", "scenes", "images", "voice", "captions", "video", "thumbnail", "seo"];
+  const keys: StudioStep[] = ["ideas", "script", "scenes", "images", "voice", "captions", "timeline", "video", "thumbnail", "seo"];
   const completed = keys.filter((k) => done[k]).length;
   return Math.round((completed / keys.length) * 100);
 }
 
 export function getCompletedCount(d: StepStatusData): number {
   const done = getDoneMap(d);
-  const keys: StudioStep[] = ["ideas", "script", "scenes", "images", "voice", "captions", "video", "thumbnail", "seo"];
+  const keys: StudioStep[] = ["ideas", "script", "scenes", "images", "voice", "captions", "timeline", "video", "thumbnail", "seo"];
   return keys.filter((k) => done[k]).length;
 }

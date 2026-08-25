@@ -10,6 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import type { Scene, VoiceProvider } from "../../types";
+import Select from "../ui/Select";
 
 const WAVEFORM_HEIGHTS = [
   8, 12, 16, 8, 4, 16, 24, 32, 20, 12, 24, 36, 28, 16, 8, 20, 32, 24, 16, 8,
@@ -189,6 +190,8 @@ interface Props {
   audioInputRef: React.RefObject<HTMLInputElement | null>;
   onFileSelected: (sceneId: number, file: File) => void;
   onClearAudio: (sceneId: number) => void;
+  onCombineAudioPreview: () => void;
+  audioPreviewUrl: string | null;
   mediaUrl: (p: string) => string;
   audioVersion: Record<number, number>;
   formatRecordTime: (s: number) => string;
@@ -219,6 +222,8 @@ export default function VoiceStep({
   audioInputRef,
   onFileSelected,
   onClearAudio,
+  onCombineAudioPreview,
+  audioPreviewUrl,
   mediaUrl,
   audioVersion,
   formatRecordTime,
@@ -291,53 +296,48 @@ export default function VoiceStep({
             <Mic size={13} /> Voice
           </span>
 
-          <select
+          <Select
             value={selectedProvider}
             disabled={!!actionLoading}
-            onChange={(e) => onProviderChange(e.target.value)}
-            title="Provider"
-            style={{ padding: "0.25rem 0.4rem", fontSize: "0.74rem", flex: 1, minWidth: "105px" }}
-          >
-            {voiceProviders.length === 0 ? (
-              <option value="gemini">Google Gemini</option>
-            ) : (
-              voiceProviders.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))
-            )}
-          </select>
+            onChange={(v) => onProviderChange(String(v))}
+            size="sm"
+            options={
+              voiceProviders.length === 0
+                ? [{ label: "Google Gemini", value: "gemini" }]
+                : voiceProviders.map((p) => ({ label: p.name, value: p.id }))
+            }
+            style={{ flex: 1, minWidth: "105px" }}
+          />
 
-          <select
+          <Select
             value={selectedVoice}
             disabled={!!actionLoading}
-            onChange={(e) => onVoiceChange(e.target.value)}
-            title="Voice"
-            style={{ padding: "0.25rem 0.4rem", fontSize: "0.74rem", flex: 1, minWidth: "110px" }}
-          >
-            {currentVoices.length === 0 ? (
-              <option value="Kore">Kore</option>
-            ) : (
-              [...(currentVoices.includes(selectedVoice) ? [] : [selectedVoice]), ...currentVoices].map((voice) => (
-                <option key={voice} value={voice}>
-                  {currentProvider?.voice_labels?.[voice] ?? voice}
-                </option>
-              ))
-            )}
-          </select>
+            onChange={(v) => onVoiceChange(String(v))}
+            size="sm"
+            options={
+              currentVoices.length === 0
+                ? [{ label: "Kore", value: "Kore" }]
+                : [...(currentVoices.includes(selectedVoice) ? [] : [selectedVoice]), ...currentVoices].map((voice) => ({
+                    label: currentProvider?.voice_labels?.[voice] ?? voice,
+                    value: voice,
+                  }))
+            }
+            style={{ flex: 1, minWidth: "110px" }}
+          />
 
-          <select
+          <Select
             value={selectedVoiceRate}
             disabled={!!actionLoading}
-            onChange={(e) => onVoiceRateChange(e.target.value)}
+            onChange={(v) => onVoiceRateChange(String(v))}
+            size="sm"
             title={currentProvider?.id === "gemini" ? "Gemini TTS does not support speed control" : "Speed"}
-            style={{ padding: "0.25rem 0.4rem", fontSize: "0.74rem", width: "66px" }}
-          >
-            {["-50%", "-25%", "+0%", "+10%", "+20%", "+30%", "+40%", "+50%", "+75%", "+100%"].map((rate) => (
-              <option key={rate} value={rate} disabled={currentProvider?.id === "gemini" && rate !== "+0%"}>
-                {rate}
-              </option>
-            ))}
-          </select>
+            options={["-50%", "-25%", "+0%", "+10%", "+20%", "+30%", "+40%", "+50%", "+75%", "+100%"].map((rate) => ({
+              label: rate,
+              value: rate,
+              disabled: currentProvider?.id === "gemini" && rate !== "+0%",
+            }))}
+            style={{ width: "66px" }}
+          />
 
           <button
             className="btn-primary"
@@ -421,6 +421,39 @@ export default function VoiceStep({
               {activeScene.narration}
             </p>
           </div>
+
+          {audioPreviewUrl && (
+            <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "8px", padding: "0.4rem 0.6rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--primary)" }}>🎧 Full Audio Preview</span>
+                <span style={{ fontSize: "0.62rem", color: "var(--text-muted)" }}>All scenes combined</span>
+              </div>
+              <CustomAudioPlayer src={audioPreviewUrl} audioVersionKey={0} />
+            </div>
+          )}
+
+          <button
+            onClick={onCombineAudioPreview}
+            disabled={!!actionLoading || scenes.length === 0}
+            style={{
+              width: "100%",
+              padding: "0.35rem",
+              fontSize: "0.72rem",
+              fontWeight: 600,
+              background: "var(--surface)",
+              border: "1px dashed var(--primary)",
+              color: "var(--primary)",
+              borderRadius: "8px",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.35rem",
+            }}
+          >
+            <Volume2 size={13} />
+            {actionLoading === "audio-preview" ? "Combining..." : "Preview All Audio"}
+          </button>
 
           {activeScene.audio_path ? (
             <CustomAudioPlayer

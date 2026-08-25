@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { X, Key, Play } from "lucide-react";
 import type { Project, SEOCategory, VoiceConfig } from "../../types";
+import Select from "../ui/Select";
 
 interface Props {
   isOpen: boolean;
   project: Project;
   categories: SEOCategory[];
   voiceConfig: VoiceConfig | null;
-  youtubeConfig: { youtube_api_key_configured: boolean; youtube_playlist_id: string } | null;
+  youtubeConfig: { youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean } | null;
   actionLoading: string;
   onClose: () => void;
   onSave: (
@@ -26,6 +27,8 @@ interface Props {
     youtubeKeys: {
       youtube_api_key: string;
       youtube_playlist_id: string;
+      youtube_client_id: string;
+      youtube_client_secret: string;
     },
   ) => Promise<void>;
 }
@@ -57,6 +60,8 @@ export default function ProjectSettingsDialog({
   const [youtubeKeys, setYoutubeKeys] = useState({
     youtube_api_key: "",
     youtube_playlist_id: "",
+    youtube_client_id: "",
+    youtube_client_secret: "",
   });
 
   useEffect(() => {
@@ -76,6 +81,8 @@ export default function ProjectSettingsDialog({
       setYoutubeKeys({
         youtube_api_key: "",
         youtube_playlist_id: "",
+        youtube_client_id: "",
+        youtube_client_secret: "",
       });
     }
   }, [isOpen, project]);
@@ -221,30 +228,21 @@ export default function ProjectSettingsDialog({
               >
                 Category
               </span>
-              <select
+              <Select
                 value={settingsForm.category}
-                onChange={(e) =>
-                  setSettingsForm((f) => ({ ...f, category: e.target.value }))
+                onChange={(v) =>
+                  setSettingsForm((f) => ({ ...f, category: String(v) }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "0.45rem 0.65rem",
-                  marginTop: "2px",
-                }}
-              >
-                <option value="">Uncategorized</option>
-                {settingsForm.category &&
-                  !categories.some((c) => c.name === settingsForm.category) && (
-                    <option value={settingsForm.category}>
-                      {settingsForm.category}
-                    </option>
-                  )}
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
+                placeholder="Uncategorized"
+                options={[
+                  ...(settingsForm.category &&
+                    !categories.some((c) => c.name === settingsForm.category)
+                      ? [{ label: settingsForm.category, value: settingsForm.category }]
+                      : []),
+                  ...categories.map((cat) => ({ label: cat.name, value: cat.name })),
+                ]}
+                style={{ marginTop: "2px" }}
+              />
             </label>
 
             <label>
@@ -257,21 +255,18 @@ export default function ProjectSettingsDialog({
               >
                 Language
               </span>
-              <select
+              <Select
                 value={settingsForm.language}
-                onChange={(e) =>
-                  setSettingsForm((f) => ({ ...f, language: e.target.value }))
+                onChange={(v) =>
+                  setSettingsForm((f) => ({ ...f, language: String(v) }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "0.45rem 0.65rem",
-                  marginTop: "2px",
-                }}
-              >
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="hinglish">Hinglish</option>
-              </select>
+                options={[
+                  { label: "English", value: "en" },
+                  { label: "Hindi", value: "hi" },
+                  { label: "Hinglish", value: "hinglish" },
+                ]}
+                style={{ marginTop: "2px" }}
+              />
             </label>
           </div>
 
@@ -512,7 +507,7 @@ export default function ProjectSettingsDialog({
               margin: 0,
             }}
           >
-            Connect your YouTube channel to get AI suggestions based on your recent videos.
+            Connect your YouTube channel for AI suggestions and direct uploads.
           </p>
 
           <div style={{ display: "grid", gap: "0.55rem" }}>
@@ -526,63 +521,100 @@ export default function ProjectSettingsDialog({
                   alignItems: "center",
                 }}
               >
-                <span>YouTube API Key</span>
+                <span>YouTube API Key (Data API)</span>
                 {youtubeConfig?.youtube_api_key_configured && (
-                  <span
-                    style={{ color: "var(--success)", fontSize: "0.65rem" }}
-                  >
-                    ✓ Configured
-                  </span>
+                  <span style={{ color: "var(--success)", fontSize: "0.65rem" }}>✓ Configured</span>
                 )}
               </span>
               <input
                 type="password"
-                placeholder={
-                  youtubeConfig?.youtube_api_key_configured
-                    ? "••••••••••••••••"
-                    : "Paste YouTube Data API key"
-                }
+                placeholder={youtubeConfig?.youtube_api_key_configured ? "••••••••••••••••" : "Paste YouTube Data API key"}
                 value={youtubeKeys.youtube_api_key}
-                onChange={(e) =>
-                  setYoutubeKeys((prev) => ({
-                    ...prev,
-                    youtube_api_key: e.target.value,
-                  }))
-                }
-                style={{
-                  width: "100%",
-                  padding: "0.38rem 0.6rem",
-                  marginTop: "2px",
-                }}
+                onChange={(e) => setYoutubeKeys((prev) => ({ ...prev, youtube_api_key: e.target.value }))}
+                style={{ width: "100%", padding: "0.38rem 0.6rem", marginTop: "2px" }}
               />
             </label>
 
             <label>
-              <span
-                style={{
-                  fontSize: "0.7rem",
-                  color: "var(--text-muted)",
-                }}
-              >
+              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
                 <span>Channel Uploads Playlist ID</span>
               </span>
               <input
                 type="text"
                 placeholder="e.g. UU-Tj0urQxuwGt-B3kXMcMTg"
                 value={youtubeKeys.youtube_playlist_id || youtubeConfig?.youtube_playlist_id || ""}
-                onChange={(e) =>
-                  setYoutubeKeys((prev) => ({
-                    ...prev,
-                    youtube_playlist_id: e.target.value,
-                  }))
-                }
-                style={{
-                  width: "100%",
-                  padding: "0.38rem 0.6rem",
-                  marginTop: "2px",
-                }}
+                onChange={(e) => setYoutubeKeys((prev) => ({ ...prev, youtube_playlist_id: e.target.value }))}
+                style={{ width: "100%", padding: "0.38rem 0.6rem", marginTop: "2px" }}
               />
             </label>
+
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
+              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 600, display: "block", marginBottom: "0.35rem" }}>
+                OAuth (for Upload)
+              </span>
+            </div>
+
+            <label>
+              <span
+                style={{
+                  fontSize: "0.7rem",
+                  color: "var(--text-muted)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>Client ID</span>
+                {youtubeConfig?.youtube_client_id_configured && (
+                  <span style={{ color: "var(--success)", fontSize: "0.65rem" }}>✓ Configured</span>
+                )}
+              </span>
+              <input
+                type="password"
+                placeholder={youtubeConfig?.youtube_client_id_configured ? "••••••••••••••••" : "Google OAuth Client ID"}
+                value={youtubeKeys.youtube_client_id}
+                onChange={(e) => setYoutubeKeys((prev) => ({ ...prev, youtube_client_id: e.target.value }))}
+                style={{ width: "100%", padding: "0.38rem 0.6rem", marginTop: "2px" }}
+              />
+            </label>
+
+            <label>
+              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Client Secret</span>
+              <input
+                type="password"
+                placeholder="Google OAuth Client Secret"
+                value={youtubeKeys.youtube_client_secret}
+                onChange={(e) => setYoutubeKeys((prev) => ({ ...prev, youtube_client_secret: e.target.value }))}
+                style={{ width: "100%", padding: "0.38rem 0.6rem", marginTop: "2px" }}
+              />
+            </label>
+
+            {youtubeConfig?.youtube_connected ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 0.65rem", borderRadius: "6px", background: "rgba(34,197,94,0.1)", border: "1px solid var(--success)" }}>
+                <span style={{ color: "var(--success)", fontWeight: 600, fontSize: "0.78rem" }}>✓ YouTube Connected</span>
+                <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>— Ready to upload</span>
+              </div>
+            ) : youtubeConfig?.youtube_client_id_configured ? (
+              <a
+                href="#"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  try {
+                    const res = await fetch("/api/youtube/auth/url");
+                    const data = await res.json();
+                    if (data.url) window.open(data.url, "_blank");
+                  } catch {}
+                }}
+                className="btn-primary"
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", padding: "0.5rem", fontSize: "0.8rem", textDecoration: "none", background: "#ff0000", border: "none" }}
+              >
+                <Play size={14} /> Connect YouTube Account
+              </a>
+            ) : (
+              <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                Enter Client ID and Secret above, save, then click Connect
+              </div>
+            )}
           </div>
         </div>
 

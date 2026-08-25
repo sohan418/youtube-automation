@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Project, ProjectStatus, Scene, SceneImage, Thumbnail
+from app.models import Project, ProjectStatus, SEOMetadata, Scene, SceneImage, Thumbnail
 from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.storage import storage_service
 
@@ -81,6 +81,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
         description=payload.description,
         category=payload.category,
         language=payload.language,
+        ratio=payload.ratio,
         status=ProjectStatus.DRAFT,
         folder_path=str(folder.relative_to(storage_service.root.parent)),
     )
@@ -106,8 +107,19 @@ def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    old_category = project.category
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(project, field, value)
+
+    if payload.category and payload.category != old_category:
+        seo = db.query(SEOMetadata).filter(SEOMetadata.project_id == project_id).first()
+        if seo:
+            match = next(
+                (c for c in YOUTUBE_CATEGORIES if c["name"] == payload.category), None
+            )
+            if match:
+                seo.category = match["name"]
+                seo.category_id = match["id"]
 
     db.commit()
     db.refresh(project)

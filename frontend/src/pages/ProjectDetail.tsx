@@ -62,6 +62,7 @@ export default function ProjectDetail() {
     exportInfo: h.exportInfo,
     videoStatus: h.videoStatus,
     timeline: h.timeline,
+    youtubeUploaded: h.youtubeUploadStatus?.stage === "done",
   });
 
   return (
@@ -78,8 +79,11 @@ export default function ProjectDetail() {
           exportInfo: h.exportInfo,
           videoStatus: h.videoStatus,
           timeline: h.timeline,
+          youtubeUploaded: h.youtubeUploadStatus?.stage === "done",
         }}
         openSettings={h.openSettings}
+        selectedRatio={h.selectedRatio}
+        onRatioChange={h.onRatioChange}
       />
 
       {/* Dialogs */}
@@ -135,6 +139,9 @@ export default function ProjectDetail() {
             selectIdea={h.selectIdea}
             importFreeIdeas={h.importFreeIdeas}
             recentVideos={h.recentVideos}
+            youtubeConfig={h.youtubeConfig}
+            youtubeUploadStatus={h.youtubeUploadStatus}
+            onUploadYouTube={h.uploadYouTube}
             scriptTopic={h.scriptTopic}
             setScriptTopic={h.setScriptTopic}
             editingScript={h.editingScript}
@@ -208,6 +215,8 @@ export default function ProjectDetail() {
             stopRecording={h.stopRecording}
             handleAudioFileSelected={h.handleAudioFileSelected}
             clearSceneAudio={h.clearSceneAudio}
+            combineAudioPreview={h.combineAudioPreview}
+            audioPreviewUrl={h.audioPreviewUrl}
             setSelectedProvider={h.setSelectedProvider}
             setSelectedVoice={h.setSelectedVoice}
             setSelectedVoiceRate={h.setSelectedVoiceRate}

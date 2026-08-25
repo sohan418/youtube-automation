@@ -116,7 +116,8 @@ class Scene(Base):
     video_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     audio_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True, default=5.0)
+    duration_manual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     motion_effect: Mapped[str | None] = mapped_column(String(50), default="zoom_in", nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

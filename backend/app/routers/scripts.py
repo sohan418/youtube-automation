@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+import json
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -169,6 +172,37 @@ def create_script(
     db.commit()
     db.refresh(script)
     return script
+
+
+@router.get("/{script_id}/export")
+def export_script(script_id: int, db: Session = Depends(get_db)):
+    script = db.query(Script).filter(Script.id == script_id).first()
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+
+    project = db.query(Project).filter(Project.id == script.project_id).first()
+
+    payload = {
+        "title": script.title,
+        "hook": script.hook,
+        "body": script.body,
+        "ending": script.ending,
+        "language": script.language,
+        "word_count": script.word_count,
+        "project": project.name if project else None,
+        "exported_at": datetime.utcnow().isoformat(),
+    }
+    content = json.dumps(payload, indent=2, ensure_ascii=False)
+
+    filename = f"script-{project.slug}.json" if project else f"script-{script.id}.json"
+    if project:
+        storage_service.save_text(project.slug, "script", "script.json", content)
+
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch("/{script_id}", response_model=ScriptResponse)

@@ -232,12 +232,13 @@ def upload_voice(
         )
 
     scene.audio_path = relative_path
-    if probed_duration and probed_duration > 0:
-        scene.duration_seconds = round(probed_duration, 3)
-    else:
-        scene.duration_seconds = (
-            duration if duration > 0 else voice_service._estimate_duration(scene.narration)
-        )
+    if scene.duration_seconds is None:
+        if probed_duration and probed_duration > 0:
+            scene.duration_seconds = round(probed_duration, 3)
+        else:
+            scene.duration_seconds = (
+                duration if duration > 0 else voice_service._estimate_duration(scene.narration)
+            )
     project.status = ProjectStatus.AUDIO
     db.commit()
     db.refresh(scene)
@@ -291,7 +292,8 @@ def generate_voice(payload: VoiceGenerateRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     scene.audio_path = audio_path
-    scene.duration_seconds = duration
+    if scene.duration_seconds is None:
+        scene.duration_seconds = duration
     project.status = ProjectStatus.AUDIO
     db.commit()
     db.refresh(scene)
@@ -337,7 +339,8 @@ def generate_all_voice(
                 rate=rate,
             )
             scene.audio_path = audio_path
-            scene.duration_seconds = duration
+            if scene.duration_seconds is None:
+                scene.duration_seconds = duration
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -347,3 +350,127 @@ def generate_all_voice(
     for scene in scenes:
         db.refresh(scene)
     return scenes
+
+
+@router.post("/project/{project_id}/preview")
+def combine_audio_preview(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    scenes = (
+        db.query(Scene)
+        .filter(Scene.project_id == project_id)
+        .filter(Scene.audio_path.isnot(None))
+        .order_by(Scene.order_index)
+        .all()
+    )
+    if not scenes:
+        raise HTTPException(status_code=400, detail="No scene audio found. Generate or upload audio first.")
+
+    project_path = storage_service.get_project_path(project.slug)
+    audio_dir = project_path / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    preview_path = audio_dir / "preview.mp3"
+
+    if len(scenes) == 1:
+        source = storage_service.root.parent / scenes[0].audio_path
+        if source.exists() and source.stat().st_size > 0:
+            try:
+                import shutil
+                shutil.copy2(source, preview_path)
+                return {
+                    "message": "Preview ready",
+                    "preview_path": str(preview_path.relative_to(storage_service.root.parent)),
+                }
+            except OSError:
+                pass
+
+    lines = []
+    valid_files = []
+    for scene in scenes:
+        if not scene.audio_path:
+            continue
+        source = storage_service.root.parent / scene.audio_path
+        if not source.exists() or source.stat().st_size == 0:
+            continue
+        lines.append(f"file '{source.as_posix()}'")
+        valid_files.append(source)
+
+    if not valid_files:
+        raise HTTPException(status_code=400, detail="No valid audio files found.")
+
+    concat_file = audio_dir / "preview_concat.txt"
+    try:
+        concat_file.write_text("\n".join(lines), encoding="utf-8")
+        
+        if len(valid_files) == 1:
+            cmd = [
+                settings.ffmpeg_path,
+                "-y",
+                "-i", str(valid_files[0]),
+                "-c:a", "libmp3lame",
+                "-b:a", "192k",
+                "-ar", "44100",
+                "-ac", "2",
+                str(preview_path),
+            ]
+        else:
+            converted = []
+            for idx, source in enumerate(valid_files):
+                tmp = audio_dir / f"preview_tmp_{idx}.wav"
+                cmd_conv = [
+                    settings.ffmpeg_path, "-y",
+                    "-i", str(source),
+                    "-ar", "44100",
+                    "-ac", "2",
+                    "-c:a", "pcm_s16le",
+                    str(tmp),
+                ]
+                r = subprocess.run(cmd_conv, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds)
+                if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
+                    converted.append(tmp)
+            
+            if not converted:
+                raise HTTPException(status_code=500, detail="Failed to prepare audio files for preview.")
+            
+            filter_parts = []
+            for i in range(len(converted)):
+                filter_parts.append(f"[{i}:a]")
+            fc = "".join(filter_parts) + f"concat=n={len(converted)}:v=0:a=1[outa]"
+            
+            cmd = [settings.ffmpeg_path, "-y"]
+            for tmp in converted:
+                cmd += ["-i", str(tmp)]
+            cmd += [
+                "-filter_complex", fc,
+                "-map", "[outa]",
+                "-c:a", "libmp3lame",
+                "-b:a", "192k",
+                str(preview_path),
+            ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=settings.ffmpeg_timeout_seconds,
+        )
+        if result.returncode != 0 or not preview_path.exists() or preview_path.stat().st_size == 0:
+            logger.error("Audio preview concat failed: %s", result.stderr)
+            raise HTTPException(status_code=500, detail="Failed to combine audio preview.")
+    finally:
+        try:
+            concat_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+        for tmp in audio_dir.glob("preview_tmp_*.wav"):
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    return {
+        "message": "Preview ready",
+        "preview_path": str(preview_path.relative_to(storage_service.root.parent)),
+    }

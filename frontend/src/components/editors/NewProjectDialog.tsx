@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import type { SEOCategory } from "../../types";
+import Select from "../ui/Select";
 
 interface Props {
   isOpen: boolean;
@@ -93,29 +94,27 @@ export default function NewProjectDialog({ isOpen, categories, creating, onClose
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
             <label>
               <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>Category</span>
-              <select
+              <Select
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                style={{ width: "100%", padding: "0.45rem 0.65rem", marginTop: "2px" }}
-              >
-                <option value="">Uncategorized</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>{cat.name}</option>
-                ))}
-              </select>
+                onChange={(v) => setForm({ ...form, category: String(v) })}
+                placeholder="Uncategorized"
+                options={categories.map((cat) => ({ label: cat.name, value: cat.name }))}
+                style={{ marginTop: "2px" }}
+              />
             </label>
 
             <label>
               <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>Language</span>
-              <select
+              <Select
                 value={form.language}
-                onChange={(e) => setForm({ ...form, language: e.target.value })}
-                style={{ width: "100%", padding: "0.45rem 0.65rem", marginTop: "2px" }}
-              >
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="hinglish">Hinglish</option>
-              </select>
+                onChange={(v) => setForm({ ...form, language: String(v) })}
+                options={[
+                  { label: "English", value: "en" },
+                  { label: "Hindi", value: "hi" },
+                  { label: "Hinglish", value: "hinglish" },
+                ]}
+                style={{ marginTop: "2px" }}
+              />
             </label>
           </div>
 

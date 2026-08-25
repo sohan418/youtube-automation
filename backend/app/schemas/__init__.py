@@ -14,7 +14,7 @@ class ProjectBase(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
-    pass
+    ratio: str = "16:9"
 
 
 class ProjectUpdate(BaseModel):
@@ -155,6 +155,7 @@ class SceneUpdate(BaseModel):
     video_prompt: str | None = None
     motion_effect: str | None = None
     order_index: int | None = None
+    duration_seconds: float | None = None
 
 
 class SceneImageResponse(BaseModel):
@@ -194,6 +195,7 @@ class SceneResponse(BaseModel):
     video_path: str | None
     audio_path: str | None
     duration_seconds: float | None
+    duration_manual: bool = False
     images: list[SceneImageResponse] = Field(default_factory=list, validation_alias="scene_images")
     videos: list[SceneVideoResponse] = Field(default_factory=list, validation_alias="scene_videos")
     created_at: datetime
@@ -253,6 +255,11 @@ class TimelineClip(BaseModel):
     audio_out: float | None = None
     volume: float = 1.0
     motion_effect: str | None = "none"
+    text: str | None = None
+    locked: bool = False
+    muted: bool = False
+    fade_in: float = 0.0
+    fade_out: float = 0.0
 
 
 class TimelineMusic(BaseModel):
@@ -286,6 +293,7 @@ class VideoBuildRequest(BaseModel):
     subtitle_outline_color: str = "#000000"
     subtitle_outline: float = Field(default=2.0, ge=0.0, le=10.0)
     subtitle_font_size: int | None = Field(default=None, ge=8, le=200)
+    force_rebuild: bool = False
 
 
 class MusicTrackResponse(BaseModel):
@@ -323,6 +331,7 @@ class VideoStatusResponse(BaseModel):
     output: str | None = None
     error: str | None = None
     updated_at: str | None = None
+    scene_statuses: dict[int, str] = Field(default_factory=dict)
 
 
 class ThumbnailGenerateRequest(BaseModel):

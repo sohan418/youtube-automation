@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { Scene } from "../../types";
 import FreeAIGuide from "../editors/FreeAIGuide";
+import Select from "../ui/Select";
 
 export interface DragMedia {
   kind: "image" | "video";
@@ -405,16 +406,14 @@ export default function ImagesStep({
                     <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
                       Motion FX:
                     </span>
-                    <select
+                    <Select
                       value={scene.motion_effect || "none"}
                       disabled={!!actionLoading}
-                      onChange={(e) => onUpdateSceneEffect && onUpdateSceneEffect(scene.id, e.target.value)}
-                      style={{ padding: "0.28rem 0.45rem", fontSize: "0.77rem", flex: 1, maxWidth: "200px" }}
-                    >
-                      {MOTION_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => onUpdateSceneEffect && onUpdateSceneEffect(scene.id, String(v))}
+                      options={MOTION_OPTIONS.map((opt) => ({ label: opt.label, value: opt.value }))}
+                      size="sm"
+                      style={{ flex: 1, maxWidth: "200px" }}
+                    />
 
                     {/* Action buttons row */}
                     <div style={{ display: "flex", gap: "0.35rem", marginLeft: "auto", alignItems: "center" }}>
