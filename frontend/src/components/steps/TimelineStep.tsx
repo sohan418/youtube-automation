@@ -3,6 +3,7 @@ import { api } from "../../api/client";
 import type { Scene, TimelineClip, TimelineData, VideoStatus } from "../../types";
 import TimelineEditor from "../editor/TimelineEditor";
 import { resolveMediaDuration } from "../editor/timeline/mediaMeta";
+import "./TimelineStep.css";
 
 async function applyOriginalMediaLengths(
   clips: TimelineClip[],
@@ -217,7 +218,7 @@ export default function TimelineStep({
   }, [timeline]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", minWidth: 0, width: "100%" }}>
+    <div className="timeline-wrapper">
       {timeline && (
         <TimelineEditor
           timeline={timeline}
@@ -243,7 +244,7 @@ export default function TimelineStep({
       )}
 
       {!timeline && (
-        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+        <p className="timeline-hint">
           {scenes.length === 0
             ? "Add scenes first to build a timeline."
             : "Preparing timeline from scenes..."}
@@ -252,29 +253,16 @@ export default function TimelineStep({
 
       {/* Build controls */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          flexWrap: "wrap",
-          paddingTop: "0.25rem",
-          borderTop: "1px solid var(--border)",
-        }}
+        className="timeline-build-controls"
       >
         {building && videoStatus && (
           <div
-            style={{
-              flex: 1,
-              minWidth: 200,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
+            className="timeline-building-status"
           >
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+            <span className="timeline-building-message">
               {videoStatus.message}
             </span>
-            <strong style={{ fontSize: "0.75rem" }}>
+            <strong className="timeline-building-progress">
               {videoStatus.progress}%
             </strong>
           </div>

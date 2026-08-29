@@ -22,6 +22,7 @@ import {
 import type { Scene, Script } from "../../types";
 import { api, mediaUrl } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
+import "./ScenesStep.css";
 
 function parseImportedText(
   text: string,
@@ -186,12 +187,12 @@ export default function ScenesStep({
     if (!addingScene || addSceneAt !== position) return null;
     const label = addSceneAt == null ? "Add scene at end" : addSceneAt === 1 ? "Insert at top" : `Insert after scene #${addSceneAt - 1}`;
     return (
-      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "6px", padding: "0.6rem", display: "grid", gap: "0.35rem", marginBottom: "0.4rem" }}>
-        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 600 }}>{label}</span>
-        <textarea value={newSceneNarration} onChange={(e) => onNewSceneNarration(e.target.value)} placeholder="Narration text..." rows={2} style={{ width: "100%", fontSize: "0.78rem" }} />
-        <div style={{ display: "flex", gap: "0.35rem", justifyContent: "flex-end" }}>
-          <button className="btn-secondary" onClick={onCloseAdd} style={{ padding: "0.2rem 0.5rem", fontSize: "0.72rem" }}>Cancel</button>
-          <button className="btn-primary" disabled={!newSceneNarration.trim() || !!actionLoading} onClick={onAddScene} style={{ padding: "0.2rem 0.6rem", fontSize: "0.72rem" }}>
+      <div className="scenes-form">
+        <span className="scenes-form-label">{label}</span>
+        <textarea className="scenes-form-textarea" value={newSceneNarration} onChange={(e) => onNewSceneNarration(e.target.value)} placeholder="Narration text..." rows={2} />
+        <div className="scenes-form-actions">
+          <button className="btn-secondary scenes-form-btn" onClick={onCloseAdd}>Cancel</button>
+          <button className="btn-primary scenes-form-primary-btn" disabled={!newSceneNarration.trim() || !!actionLoading} onClick={onAddScene}>
             {actionLoading === "add-scene" ? "Adding..." : "Add"}
           </button>
         </div>
@@ -200,62 +201,53 @@ export default function ScenesStep({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", height: "100%", overflow: "hidden" }}>
-      <style>{`
-        @keyframes scene-zoom-in { 0% { transform: scale(1); } 100% { transform: scale(1.2); } }
-        @keyframes scene-zoom-out { 0% { transform: scale(1.2); } 100% { transform: scale(1); } }
-        @keyframes scene-pan-right { 0% { transform: scale(1.2) translateX(-4%); } 100% { transform: scale(1.2) translateX(4%); } }
-        @keyframes scene-pan-left { 0% { transform: scale(1.2) translateX(4%); } 100% { transform: scale(1.2) translateX(-4%); } }
-        @keyframes scene-pan-up { 0% { transform: scale(1.2) translateY(4%); } 100% { transform: scale(1.2) translateY(-4%); } }
-        @keyframes scene-pan-down { 0% { transform: scale(1.2) translateY(-4%); } 100% { transform: scale(1.2) translateY(4%); } }
-      `}</style>
-
+    <div className="scenes-root">
       {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: 0 }}>Scenes ({scenes.length})</h2>
-        <div style={{ display: "flex", gap: "0.25rem", alignItems: "center", flexWrap: "wrap" }}>
-          <button className="btn-primary" disabled={!!actionLoading || !activeScript} onClick={onGenerate} style={{ padding: "0.3rem 0.7rem", fontSize: "0.75rem" }}>
+      <div className="scenes-header">
+        <h2 className="scenes-title">Scenes ({scenes.length})</h2>
+        <div className="scenes-header-actions">
+          <button className="btn-primary scenes-generate-btn" disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
             {actionLoading === "scenes" ? "Generating..." : <><Sparkles size={12} /> Generate</>}
           </button>
-          <input type="number" min={1} max={30} value={sceneCount} onChange={(e) => onSceneCountChange(e.target.value)} placeholder="Auto" title="Scene count" style={{ width: "3rem", textAlign: "center", padding: "0.28rem 0.25rem", fontSize: "0.75rem" }} />
-          <button className="btn-accent" disabled={!!actionLoading} onClick={() => onOpenAdd(null)} style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}>
+          <input type="number" min={1} max={30} value={sceneCount} onChange={(e) => onSceneCountChange(e.target.value)} placeholder="Auto" title="Scene count" className="scenes-count-input" />
+          <button className="btn-accent scenes-add-btn" disabled={!!actionLoading} onClick={() => onOpenAdd(null)}>
             <Plus size={12} /> Add
           </button>
-          <button className="btn-secondary" disabled={!!actionLoading} onClick={() => onAddBlank?.()} title="Add a blank scene (fill in later)" style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}>
+          <button className="btn-secondary scenes-add-btn" disabled={!!actionLoading} onClick={() => onAddBlank?.()} title="Add a blank scene (fill in later)">
             <Plus size={12} /> Blank
           </button>
-          <button className="btn-secondary" onClick={() => setShowFreeAI(!showFreeAI)} style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}>
+          <button className="btn-secondary scenes-add-btn" onClick={() => setShowFreeAI(!showFreeAI)}>
             {showFreeAI ? "Hide Free AI" : "Free AI"}
           </button>
-          <button className="btn-secondary" onClick={() => setShowImportModal(true)} style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "0.2rem" }}>
+          <button className="btn-secondary scenes-add-btn scenes-import-btn" onClick={() => setShowImportModal(true)}>
             <Upload size={12} /> Import
           </button>
 
-          <div ref={menuRef} style={{ position: "relative" }}>
-            <button className="btn-secondary" disabled={scenes.length === 0} onClick={() => setShowMenu(!showMenu)} style={{ padding: "0.3rem 0.5rem", fontSize: "0.75rem" }}>
+          <div ref={menuRef} className="scenes-menu-wrap">
+            <button className="btn-secondary scenes-menu-btn" disabled={scenes.length === 0} onClick={() => setShowMenu(!showMenu)}>
               <MoreHorizontal size={14} />
             </button>
             {showMenu && (
-              <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", zIndex: 100, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "6px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)", width: 200, padding: "0.25rem", display: "grid", gap: "2px" }}>
-                <button onClick={() => { navigator.clipboard.writeText(scenes.map((s, i) => `${i + 1}. ${s.image_prompt || s.narration}`).join("\n\n")); setCopiedAllType("prompts"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
+              <div className="scenes-menu">
+                <button onClick={() => { navigator.clipboard.writeText(scenes.map((s, i) => `${i + 1}. ${s.image_prompt || s.narration}`).join("\n\n")); setCopiedAllType("prompts"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
                   <Copy size={12} /> {copiedAllType === "prompts" ? "Copied!" : "Copy All Prompts"}
                 </button>
-                <button onClick={() => { navigator.clipboard.writeText(scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n")); setCopiedAllType("full"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
+                <button onClick={() => { navigator.clipboard.writeText(scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n")); setCopiedAllType("full"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
                   <Copy size={12} /> {copiedAllType === "full" ? "Copied!" : "Copy All Text"}
                 </button>
-                <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2)); setCopiedAllType("json"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
+                <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2)); setCopiedAllType("json"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
                   <Copy size={12} /> {copiedAllType === "json" ? "Copied!" : "Copy All JSON"}
                 </button>
-                <div style={{ height: 1, background: "var(--border)", margin: "2px 0" }} />
-                <button onClick={() => { const j = JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2); downloadFile(j, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, "application/json"); setShowMenu(false); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
+                <div className="scenes-menu-divider" />
+                <button onClick={() => { const j = JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2); downloadFile(j, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, "application/json"); setShowMenu(false); }} className="scenes-menu-item">
                   <Download size={12} /> Export JSON
                 </button>
-                <button onClick={() => { const t = scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n"); downloadFile(t, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, "text/plain"); setShowMenu(false); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
+                <button onClick={() => { const t = scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n"); downloadFile(t, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, "text/plain"); setShowMenu(false); }} className="scenes-menu-item">
                   <Download size={12} /> Export Text
                 </button>
 
-                <div style={{ height: 1, background: "var(--border)", margin: "2px 0" }} />
-                <button disabled={!!actionLoading} onClick={() => { onClearAll(); setShowMenu(false); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--danger)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
+                <div className="scenes-menu-divider" />
+                <button disabled={!!actionLoading} onClick={() => { onClearAll(); setShowMenu(false); }} className="scenes-menu-item scenes-menu-item-danger">
                   <Trash2 size={12} /> Clear All
                 </button>
               </div>
@@ -288,23 +280,23 @@ export default function ScenesStep({
       )}
 
       {scenes.length === 0 ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1.5rem" }}>
-          <Film size={28} style={{ color: "var(--text-muted)", opacity: 0.4, marginBottom: "0.5rem" }} />
-          <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", margin: "0 0 0.6rem" }}>No scenes yet. Generate from your script or add manually.</p>
-          <button className="btn-primary" disabled={!!actionLoading || !activeScript} onClick={onGenerate} style={{ padding: "0.35rem 0.8rem", fontSize: "0.78rem" }}>
+        <div className="scenes-empty">
+          <Film size={28} className="scenes-empty-icon" />
+          <p className="scenes-empty-text">No scenes yet. Generate from your script or add manually.</p>
+          <button className="btn-primary scenes-generate-from-script-btn" disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
             <Sparkles size={13} /> Generate from Script
           </button>
         </div>
       ) : (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem", minHeight: 0, overflow: "hidden" }}>
+        <div className="scenes-main">
           {/* ── Left: Sidebar ── */}
-          <div style={{ width: "100%", height: "180px", minHeight: "180px", flexShrink: 0, border: "1px solid var(--border)", borderRadius: "6px", display: "flex", flexDirection: "column", background: "var(--surface)", overflow: "hidden" }}>
-            <div style={{ padding: "0.4rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <div className="scenes-sidebar">
+            <div className="scenes-search-bar">
               <Search size={12} color="var(--text-muted)" />
-              <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ border: "none", background: "transparent", outline: "none", fontSize: "0.72rem", color: "var(--text)", width: "100%", padding: 0 }} />
-              {searchQuery && <button onClick={() => setSearchQuery("")} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}><X size={11} color="var(--text-muted)" /></button>}
+              <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="scenes-search-input" />
+              {searchQuery && <button onClick={() => setSearchQuery("")} className="scenes-search-clear"><X size={11} color="var(--text-muted)" /></button>}
             </div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
+            <div className="scenes-search-list">
               {filteredScenes.map((scene) => {
                 const idx = scenes.findIndex((s) => s.id === scene.id);
                 const active = idx === activeIdx;
@@ -331,33 +323,31 @@ export default function ScenesStep({
                 );
               })}
             </div>
-            <button onClick={() => onOpenAdd(null)} disabled={!!actionLoading} style={{ width: "100%", background: "transparent", border: "none", borderTop: "1px solid var(--border)", color: "var(--text-muted)", padding: "0.4rem", cursor: "pointer", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>
+            <button onClick={() => onOpenAdd(null)} disabled={!!actionLoading} className="scenes-add-scene-btn">
               <Plus size={12} /> Add Scene
             </button>
           </div>
 
           {/* ── Right: Editor ── */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.4rem", minWidth: 0, overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Scene {activeIdx + 1} / {scenes.length}</span>
+          <div className="scenes-editor">
+            <div className="scenes-editor-toolbar">
+              <span className="scenes-counter">Scene {activeIdx + 1} / {scenes.length}</span>
               
               {/* Toolbar Actions */}
               {activeScene && (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                <div className="scenes-toolbar-actions">
                   {editingSceneId === activeScene.id ? (
                     <>
                       <button
-                        className="btn-primary"
+                        className="btn-primary scenes-toolbar-btn"
                         disabled={!!actionLoading || !sceneEditForm.narration.trim()}
                         onClick={() => onSaveEdit(activeScene.id)}
-                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", display: "flex", alignItems: "center", gap: "0.2rem" }}
                       >
                         <Check size={11} /> Save
                       </button>
                       <button
-                        className="btn-secondary"
+                        className="btn-secondary scenes-toolbar-btn"
                         onClick={onCancelEdit}
-                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", display: "flex", alignItems: "center", gap: "0.2rem" }}
                       >
                         <X size={11} /> Cancel
                       </button>
@@ -365,29 +355,27 @@ export default function ScenesStep({
                   ) : (
                     <>
                       <button
-                        className="btn-secondary"
+                        className="btn-secondary scenes-toolbar-btn"
                         onClick={() => onStartEdit(activeScene)}
                         disabled={!!actionLoading}
-                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", display: "flex", alignItems: "center", gap: "0.2rem" }}
                       >
                         <Pencil size={11} /> Edit
                       </button>
                       <button
-                        className="btn-secondary"
+                        className="btn-secondary scenes-toolbar-btn scenes-toolbar-delete-btn"
                         onClick={() => { if (window.confirm(`Delete Scene #${activeIdx + 1}?`)) onRemove(activeScene.id); }}
                         disabled={!!actionLoading}
-                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", color: "var(--danger)", borderColor: "rgba(255,0,0,0.15)", display: "flex", alignItems: "center", gap: "0.2rem" }}
                       >
                         <Trash2 size={11} /> Delete
                       </button>
                     </>
                   )}
 
-                  <span style={{ color: "var(--border)", fontSize: "0.75rem", margin: "0 0.15rem" }}>|</span>
+                  <span className="scenes-separator">|</span>
                   
-                  <div style={{ display: "flex", gap: "0.15rem" }}>
-                    <button className="btn-secondary" disabled={activeIdx <= 0} onClick={() => setActiveIdx(activeIdx - 1)} style={{ padding: "0.1rem 0.3rem" }}><ChevronLeft size={12} /></button>
-                    <button className="btn-secondary" disabled={activeIdx >= scenes.length - 1} onClick={() => setActiveIdx(activeIdx + 1)} style={{ padding: "0.1rem 0.3rem" }}><ChevronRight size={12} /></button>
+                  <div className="scenes-nav-wrap">
+                    <button className="btn-secondary scenes-nav-btn" disabled={activeIdx <= 0} onClick={() => setActiveIdx(activeIdx - 1)}><ChevronLeft size={12} /></button>
+                    <button className="btn-secondary scenes-nav-btn" disabled={activeIdx >= scenes.length - 1} onClick={() => setActiveIdx(activeIdx + 1)}><ChevronRight size={12} /></button>
                   </div>
                 </div>
               )}
@@ -396,76 +384,76 @@ export default function ScenesStep({
             {sceneForm(null)}
 
             {activeScene && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", flex: 1, minHeight: 0 }}>
+              <div className="scenes-active-body">
                 {/* Left: Content */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                <div className="scenes-content">
                   {/* Narration */}
-                  <div style={{ padding: "0.5rem 0.65rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "6px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                      <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.03em" }}>Narration</span>
-                      <div style={{ display: "flex", gap: "0.25rem" }}>
-                        <button onClick={() => copy(activeScene.id, activeScene.narration, setCopiedId)} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: copiedId === activeScene.id ? "var(--success)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.15rem" }}>
+                  <div className="scenes-box">
+                    <div className="scenes-box-header">
+                      <span className="scenes-box-label">Narration</span>
+                      <div className="scenes-box-actions">
+                        <button onClick={() => copy(activeScene.id, activeScene.narration, setCopiedId)} className="scenes-copy-btn" style={{ color: copiedId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
                           <Copy size={10} /> {copiedId === activeScene.id ? "Copied" : "Copy"}
                         </button>
                       </div>
                     </div>
                     {editingSceneId === activeScene.id ? (
-                      <textarea value={sceneEditForm.narration} onChange={(e) => onEditFormChange({ narration: e.target.value })} rows={3} style={{ width: "100%", fontSize: "0.8rem", lineHeight: 1.45 }} />
+                      <textarea className="scenes-narration-textarea" value={sceneEditForm.narration} onChange={(e) => onEditFormChange({ narration: e.target.value })} rows={3} />
                     ) : (
-                      <p style={{ fontSize: "0.82rem", lineHeight: 1.45, margin: 0, color: "var(--text)" }}>{activeScene.narration}</p>
+                      <p className="scenes-narration-text">{activeScene.narration}</p>
                     )}
                   </div>
 
                   {/* Image Prompt */}
-                  <div style={{ padding: "0.45rem 0.65rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "6px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
-                      <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Image size={11} /> Image Prompt</span>
-                      <button onClick={() => copy(activeScene.id, activeScene.image_prompt || "", setCopiedImageId)} disabled={!activeScene.image_prompt} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: copiedImageId === activeScene.id ? "var(--success)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.15rem" }}>
+                  <div className="scenes-prompt-box">
+                    <div className="scenes-prompt-header">
+                      <span className="scenes-prompt-label"><Image size={11} /> Image Prompt</span>
+                      <button onClick={() => copy(activeScene.id, activeScene.image_prompt || "", setCopiedImageId)} disabled={!activeScene.image_prompt} className="scenes-copy-btn" style={{ color: copiedImageId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
                         <Copy size={10} /> {copiedImageId === activeScene.id ? "Copied" : "Copy"}
                       </button>
                     </div>
                     {editingSceneId === activeScene.id ? (
-                      <textarea value={sceneEditForm.image_prompt} onChange={(e) => onEditFormChange({ image_prompt: e.target.value })} rows={2} placeholder="Image prompt..." style={{ width: "100%", fontSize: "0.75rem", fontStyle: "italic" }} />
+                      <textarea className="scenes-prompt-textarea" value={sceneEditForm.image_prompt} onChange={(e) => onEditFormChange({ image_prompt: e.target.value })} rows={2} placeholder="Image prompt..." />
                     ) : (
-                      <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.4 }}>{activeScene.image_prompt || "—"}</p>
+                      <p className="scenes-prompt-text">{activeScene.image_prompt || "—"}</p>
                     )}
                   </div>
 
                   {/* Video Prompt */}
-                  <div style={{ padding: "0.45rem 0.65rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "6px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
-                      <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Video size={11} /> Video Prompt</span>
-                      <button onClick={() => copy(activeScene.id, activeScene.video_prompt || "", setCopiedVideoId)} disabled={!activeScene.video_prompt} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: copiedVideoId === activeScene.id ? "var(--success)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.15rem" }}>
+                  <div className="scenes-prompt-box">
+                    <div className="scenes-prompt-header">
+                      <span className="scenes-prompt-label"><Video size={11} /> Video Prompt</span>
+                      <button onClick={() => copy(activeScene.id, activeScene.video_prompt || "", setCopiedVideoId)} disabled={!activeScene.video_prompt} className="scenes-copy-btn" style={{ color: copiedVideoId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
                         <Copy size={10} /> {copiedVideoId === activeScene.id ? "Copied" : "Copy"}
                       </button>
                     </div>
                     {editingSceneId === activeScene.id ? (
-                      <textarea value={sceneEditForm.video_prompt} onChange={(e) => onEditFormChange({ video_prompt: e.target.value })} rows={2} placeholder="Video motion prompt..." style={{ width: "100%", fontSize: "0.75rem", fontStyle: "italic" }} />
+                      <textarea className="scenes-prompt-textarea" value={sceneEditForm.video_prompt} onChange={(e) => onEditFormChange({ video_prompt: e.target.value })} rows={2} placeholder="Video motion prompt..." />
                     ) : (
-                      <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.4 }}>{activeScene.video_prompt || "—"}</p>
+                      <p className="scenes-prompt-text">{activeScene.video_prompt || "—"}</p>
                     )}
                   </div>
                 </div>
 
                 {/* Right: Preview & Actions */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                <div className="scenes-preview-col">
                   {/* Preview */}
-                  <div style={{ position: "relative", aspectRatio: "16/9", width: "100%", background: "rgba(0,0,0,0.2)", borderRadius: "6px", overflow: "hidden", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div className="scenes-preview">
                     {activeScene.image_path ? (
-                      <img src={mediaUrl(activeScene.image_path)} alt={`Scene ${activeIdx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", animation: animationStyle, transformOrigin: "center" }} />
+                      <img src={mediaUrl(activeScene.image_path)} alt={`Scene ${activeIdx + 1}`} className="scenes-preview-img" style={{ animation: animationStyle }} />
                     ) : (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem", color: "var(--text-muted)" }}>
-                        <Image size={20} style={{ opacity: 0.3 }} />
-                        <span style={{ fontSize: "0.65rem" }}>No media yet</span>
+                      <div className="scenes-no-media">
+                        <Image size={20} className="scenes-no-media-icon" />
+                        <span className="scenes-no-media-text">No media yet</span>
                       </div>
                     )}
                   </div>
 
                   {/* Duration badge — editable */}
-                  <div style={{ display: "flex", gap: "0.3rem" }}>
+                  <div className="scenes-duration-wrap">
                     <label
                       title="Scene duration in seconds — you control this; the renderer fades voice out if narration is longer"
-                      style={{ fontSize: "0.62rem", padding: "0.12rem 0.4rem", borderRadius: "10px", background: "rgba(62, 166, 255, 0.08)", color: "var(--accent)", border: "1px solid rgba(62, 166, 255, 0.15)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", cursor: "text" }}
+                      className="scenes-duration-label"
                     >
                       <Clock size={10} />
                       <input
@@ -491,7 +479,7 @@ export default function ScenesStep({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                         }}
-                        style={{ width: 44, background: "transparent", border: "none", outline: "none", color: "inherit", font: "inherit", fontWeight: 600, padding: 0, textAlign: "center" }}
+                        className="scenes-duration-input"
                       />
                       s
                     </label>
@@ -507,34 +495,34 @@ export default function ScenesStep({
 
       {/* Import Modal */}
       {showImportModal && (
-        <div onClick={() => setShowImportModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 500, background: "var(--surface)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-              <h3 style={{ fontSize: "0.95rem" }}>Import Scenes</h3>
-              <button onClick={() => setShowImportModal(false)} style={{ background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}><X size={16} /></button>
+        <div onClick={() => setShowImportModal(false)} className="scenes-modal-overlay">
+          <div onClick={(e) => e.stopPropagation()} className="card scenes-modal-card">
+            <div className="scenes-modal-header">
+              <h3 className="scenes-modal-title">Import Scenes</h3>
+              <button onClick={() => setShowImportModal(false)} className="scenes-modal-close"><X size={16} /></button>
             </div>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>Upload a JSON/TXT file or paste directly below.</p>
-            <input type="file" ref={fileInputRef} accept=".json,.txt,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = (ev) => setImportText(ev.target?.result as string); r.readAsText(f); }} style={{ display: "none" }} />
-            <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: "0.75rem", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", marginBottom: "0.5rem" }}>
+            <p className="scenes-modal-desc">Upload a JSON/TXT file or paste directly below.</p>
+            <input type="file" ref={fileInputRef} accept=".json,.txt,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = (ev) => setImportText(ev.target?.result as string); r.readAsText(f); }} hidden />
+            <button className="btn-secondary scenes-upload-btn" onClick={() => fileInputRef.current?.click()}>
               <FileText size={13} /> Upload File
             </button>
-            <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='[{"narration": "...", "image_prompt": "..."}]' rows={5} style={{ width: "100%", fontSize: "0.75rem", marginBottom: "0.5rem" }} />
+            <textarea className="scenes-import-textarea" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='[{"narration": "...", "image_prompt": "..."}]' rows={5} />
             {importText.trim() && (
-              <div style={{ fontSize: "0.75rem", color: "var(--accent)", marginBottom: "0.5rem", fontWeight: 600 }}>
+              <div className="scenes-detected">
                 <Check size={12} /> {parseImportedText(importText).length} scene(s) detected
               </div>
             )}
-            <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.6rem", fontSize: "0.75rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", cursor: "pointer" }}>
+            <div className="scenes-radio-row">
+              <label className="scenes-radio-label">
                 <input type="radio" name="importOption" checked={importReplace} onChange={() => setImportReplace(true)} /> Replace
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", cursor: "pointer" }}>
+              <label className="scenes-radio-label">
                 <input type="radio" name="importOption" checked={!importReplace} onChange={() => setImportReplace(false)} /> Append
               </label>
             </div>
-            <div style={{ display: "flex", gap: "0.35rem", justifyContent: "flex-end" }}>
-              <button className="btn-secondary" onClick={() => setShowImportModal(false)} style={{ fontSize: "0.75rem" }}>Cancel</button>
-              <button className="btn-primary" disabled={parseImportedText(importText).length === 0 || !!actionLoading} onClick={async () => { if (onImportScenes) { await onImportScenes(parseImportedText(importText), importReplace); setShowImportModal(false); setImportText(""); } }} style={{ fontSize: "0.75rem" }}>
+            <div className="scenes-modal-actions">
+              <button className="btn-secondary scenes-modal-action-btn" onClick={() => setShowImportModal(false)}>Cancel</button>
+              <button className="btn-primary scenes-modal-action-btn" disabled={parseImportedText(importText).length === 0 || !!actionLoading} onClick={async () => { if (onImportScenes) { await onImportScenes(parseImportedText(importText), importReplace); setShowImportModal(false); setImportText(""); } }}>
                 {actionLoading === "import-scenes" ? "Importing..." : "Import"}
               </button>
             </div>

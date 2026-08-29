@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Sparkles, Check, Upload, Copy } from "lucide-react";
 import type { Thumbnail } from "../../types";
+import "./ThumbnailStep.css";
 
 interface Props {
   thumbnails: Thumbnail[];
@@ -35,47 +36,22 @@ export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onG
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const cardStyle: React.CSSProperties = {
-    borderRadius: "8px",
-    border: "1px solid var(--border)",
-    overflow: "hidden",
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-    background: "var(--bg-secondary, transparent)",
-  };
-
-  const imgStyle: React.CSSProperties = {
-    width: "100%",
-    aspectRatio: "16/9",
-    objectFit: "cover",
-    display: "block",
-  };
-
-  const badgeStyle: React.CSSProperties = {
-    position: "absolute", top: 5, right: 5,
-    background: "var(--primary)", color: "#fff",
-    fontSize: "0.6rem", fontWeight: 700, padding: "0.12rem 0.35rem", borderRadius: "999px",
-    display: "flex", alignItems: "center", gap: "0.15rem",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.35)",
-  };
-
   return (
-    <div className="card" style={{ padding: "0.6rem 0.85rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-        <h3 style={{ margin: 0, fontSize: "0.95rem" }}>Thumbnails</h3>
-        <button className="btn-primary" disabled={!!actionLoading} onClick={onGenerate} style={{ fontSize: "0.75rem", padding: "0.3rem 0.65rem" }}>
+    <div className="card thumb-card-padding">
+      <div className="thumb-header">
+        <h3 className="thumb-title">Thumbnails</h3>
+        <button className="btn-primary thumb-generate-btn" disabled={!!actionLoading} onClick={onGenerate}>
           {actionLoading === "thumbnails" ? "Generating..." : <><Sparkles size={13} /> Generate</>}
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "0.5rem" }}>
+      <div className="thumb-grid">
         {/* Thumbnail cards */}
         {thumbnails.map((thumb) => (
-          <div key={thumb.id} style={cardStyle}>
-            <img src={mediaUrl(thumb.file_path)} alt="Thumbnail" loading="lazy" style={imgStyle} />
+          <div key={thumb.id} className="thumb-card">
+            <img src={mediaUrl(thumb.file_path)} alt="Thumbnail" loading="lazy" className="thumb-img" />
             {thumb.is_selected && (
-              <span style={badgeStyle}>
+              <span className="thumb-badge">
                 <Check size={10} /> Selected
               </span>
             )}
@@ -83,22 +59,20 @@ export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onG
               <button
                 onClick={() => handleCopy(thumb.id, thumb.prompt!)}
                 title="Copy prompt"
+                className="thumb-copy-btn"
                 style={{
-                  position: "absolute", top: 5, right: thumb.is_selected ? 78 : 5,
-                  background: "rgba(0,0,0,0.55)", color: copiedId === thumb.id ? "var(--success)" : "#fff",
-                  fontSize: "0.6rem", fontWeight: copiedId === thumb.id ? 700 : 500, padding: "0.12rem 0.3rem",
-                  borderRadius: "4px", border: "none", cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: "0.15rem", transition: "color 0.15s",
+                  right: thumb.is_selected ? 78 : 5,
+                  color: copiedId === thumb.id ? "var(--success)" : "#fff",
+                  fontWeight: copiedId === thumb.id ? 700 : 500,
                 }}
               >
                 <Copy size={9} /> {copiedId === thumb.id ? "Copied!" : "Prompt"}
               </button>
             )}
             <button
-              className={thumb.is_selected ? "btn-primary" : "btn-secondary"}
+              className={`${thumb.is_selected ? "btn-primary" : "btn-secondary"} thumb-select-btn`}
               disabled={!!actionLoading}
               onClick={() => onSelect(thumb.id)}
-              style={{ width: "100%", border: "none", borderRadius: 0, fontSize: "0.72rem", padding: "0.28rem 0.4rem" }}
             >
               {thumb.is_selected ? <><Check size={11} /> Selected</> : "Use this"}
             </button>
@@ -107,34 +81,27 @@ export default function ThumbnailStep({ thumbnails, actionLoading, mediaUrl, onG
 
         {/* Drop card */}
         <div
+          className="thumb-card thumb-drop-card"
           onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
           onClick={() => fileInputRef.current?.click()}
           style={{
-            ...cardStyle,
-            borderStyle: "dashed",
             borderColor: dragOver ? "var(--accent)" : "var(--border)",
             background: dragOver ? "rgba(139, 92, 246, 0.08)" : "transparent",
-            cursor: "pointer",
-            transition: "all 0.15s",
             opacity: uploading ? 0.5 : 1,
             pointerEvents: uploading ? "none" : "auto",
-            minHeight: "110px",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.25rem",
           }}
         >
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            style={{ display: "none" }}
+            hidden
             onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
           />
           <Upload size={16} style={{ color: dragOver ? "var(--accent)" : "var(--text-muted)" }} />
-          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+          <span className="thumb-drop-text">
             {uploading ? "Uploading..." : "Drop image"}
           </span>
         </div>

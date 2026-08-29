@@ -3,6 +3,7 @@ import { Sparkles, Download, Upload, FileText, X, Pencil } from "lucide-react";
 import type { Idea, Script } from "../../types";
 import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
+import "./ScriptStep.css";
 
 interface Props {
   projectId: number;
@@ -160,24 +161,24 @@ export default function ScriptStep({
   const parsedImport = parseImportedScript(importText);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className="script-step">
       {/* Header */}
       <div>
-        <h2 style={{ fontSize: "1.3rem", fontWeight: 700, margin: 0 }}>Script</h2>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "0.25rem 0 0" }}>Write or generate your script</p>
+        <h2 className="script-header-title">Script</h2>
+        <p className="script-subtitle">Write or generate your script</p>
       </div>
 
       {/* Topic + Action buttons */}
-      <div className="card" style={{ padding: "1rem" }}>
+      <div className="card script-topic-card">
         <input
           value={scriptTopic}
           onChange={(e) => onTopicChange(e.target.value)}
           placeholder={ideas.find((i) => i.is_selected)?.title || projectName || "Topic..."}
-          style={{ width: "100%", marginBottom: "0.6rem" }}
+          className="script-topic-input"
           title="Change the topic before regenerating"
         />
-        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn-primary" disabled={!!actionLoading} onClick={onGenerate} style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}>
+        <div className="script-action-row">
+          <button className="btn-primary script-btn-generate" disabled={!!actionLoading} onClick={onGenerate}>
             {actionLoading === "script" ? (
               "Generating..."
             ) : (
@@ -187,31 +188,28 @@ export default function ScriptStep({
             )}
           </button>
           {activeScript && !editing && (
-            <button className="btn-secondary" disabled={!!actionLoading} onClick={onStartEdit} style={{ display: "flex", alignItems: "center", gap: "0.2rem", padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}>
+            <button className="btn-secondary script-btn-edit" disabled={!!actionLoading} onClick={onStartEdit}>
               <Pencil size={11} /> Edit
             </button>
           )}
           {!activeScript && !creating && (
-            <button className="btn-secondary" disabled={!!actionLoading} onClick={onStartCreate} style={{ padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}>
+            <button className="btn-secondary script-btn-md" disabled={!!actionLoading} onClick={onStartCreate}>
               Paste Your Own
             </button>
           )}
           <button
-            className="btn-secondary"
+            className="btn-secondary script-btn-md"
             onClick={() => setShowFreeAI(!showFreeAI)}
-            style={{
-              padding: "0.3rem 0.55rem",
-              fontSize: "0.74rem",
-              ...(showFreeAI ? { background: "var(--primary)", color: "#fff", borderColor: "var(--primary)" } : {})
-            }}
+            style={
+              showFreeAI ? { background: "var(--primary)", color: "#fff", borderColor: "var(--primary)" } : {}
+            }
           >
             Free AI
           </button>
           <button
-            className="btn-secondary"
+            className="btn-secondary script-btn-import"
             disabled={!!actionLoading}
             onClick={() => setShowImportModal(true)}
-            style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}
             title="Import script from JSON or Text file"
           >
             <Upload size={12} /> Import
@@ -253,45 +251,45 @@ export default function ScriptStep({
 
       {/* Editor form */}
       {(creating || (editing && activeScript)) && (
-        <div className="card" style={{ padding: "1rem", display: "grid", gap: "0.75rem" }}>
-          <label style={{ display: "grid", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)" }}>Title</span>
+        <div className="card script-editor-card">
+          <label className="script-field-label">
+            <span className="script-field-text">Title</span>
             <input
               value={form.title}
               onChange={(e) => onFormChange({ title: e.target.value })}
               placeholder="Video title"
-              style={{ width: "100%" }}
+              className="script-editor-input"
             />
           </label>
-          <label style={{ display: "grid", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)" }}>Hook (optional)</span>
+          <label className="script-field-label">
+            <span className="script-field-text">Hook (optional)</span>
             <textarea
               value={form.hook}
               onChange={(e) => onFormChange({ hook: e.target.value })}
               rows={2}
-              style={{ width: "100%" }}
+              className="script-editor-input"
             />
           </label>
-          <label style={{ display: "grid", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)" }}>Body</span>
+          <label className="script-field-label">
+            <span className="script-field-text">Body</span>
             <textarea
               value={form.body}
               onChange={(e) => onFormChange({ body: e.target.value })}
               rows={8}
               placeholder="Paste or write the main script here..."
-              style={{ width: "100%" }}
+              className="script-editor-input"
             />
           </label>
-          <label style={{ display: "grid", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)" }}>Ending (optional)</span>
+          <label className="script-field-label">
+            <span className="script-field-text">Ending (optional)</span>
             <textarea
               value={form.ending}
               onChange={(e) => onFormChange({ ending: e.target.value })}
               rows={2}
-              style={{ width: "100%" }}
+              className="script-editor-input"
             />
           </label>
-          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+          <div className="script-form-actions">
             <button className="btn-secondary" disabled={!!actionLoading} onClick={onCancelEditor}>
               Cancel
             </button>
@@ -308,62 +306,62 @@ export default function ScriptStep({
 
       {/* Script view: single column stacked, secondary actions side-by-side */}
       {activeScript && !editing && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", minWidth: 0 }}>
+        <div className="script-view">
           {/* Top: script sections (full-width) */}
-          <div className="card" style={{ padding: "1rem" }}>
-            <h3 style={{ margin: "0 0 0.25rem", fontSize: "1.05rem" }}>{activeScript.title}</h3>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0 0 1rem" }}>
+          <div className="card script-main-card">
+            <h3 className="script-preview-title">{activeScript.title}</h3>
+            <p className="script-preview-meta">
               {activeScript.word_count} words · {activeScript.language.toUpperCase()}
             </p>
             {activeScript.hook && (
-              <div style={{ marginBottom: "1rem" }}>
-                <span style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--primary)" }}>HOOK</span>
-                <p style={{ marginTop: "0.35rem", fontSize: "0.88rem" }}>{activeScript.hook}</p>
+              <div className="script-section">
+                <span className="script-section-label hook">HOOK</span>
+                <p className="script-section-text">{activeScript.hook}</p>
               </div>
             )}
-            <div style={{ marginBottom: "1rem" }}>
-              <span style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-muted)" }}>BODY</span>
-              <p style={{ marginTop: "0.35rem", whiteSpace: "pre-wrap", fontSize: "0.88rem" }}>{activeScript.body}</p>
+            <div className="script-section">
+              <span className="script-section-label body">BODY</span>
+              <p className="script-section-text body">{activeScript.body}</p>
             </div>
             {activeScript.ending && (
               <div>
-                <span style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--success)" }}>ENDING</span>
-                <p style={{ marginTop: "0.35rem", fontSize: "0.88rem" }}>{activeScript.ending}</p>
+                <span className="script-section-label ending">ENDING</span>
+                <p className="script-section-text">{activeScript.ending}</p>
               </div>
             )}
           </div>
 
           {/* Bottom: AI Actions & Export Cards Side-by-Side */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-            <div className="card" style={{ padding: "0.75rem", display: "flex", flexDirection: "column" }}>
-              <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-muted)" }}>AI ACTIONS</span>
-              <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.5rem", flex: 1 }}>
-                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
+          <div className="script-actions-grid">
+            <div className="card script-action-card">
+              <span className="script-action-card-label">AI ACTIONS</span>
+              <div className="script-buttons-col">
+                <button className="btn-secondary script-ai-btn">
                   Improve
                 </button>
-                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
+                <button className="btn-secondary script-ai-btn">
                   Shorten
                 </button>
-                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
+                <button className="btn-secondary script-ai-btn">
                   Expand
                 </button>
               </div>
             </div>
 
-            <div className="card" style={{ padding: "0.75rem", display: "flex", flexDirection: "column" }}>
+            <div className="card script-action-card">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.2rem", width: "100%" }}
+                className="script-export-toggle"
               >
-                <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-muted)" }}>EXPORT</span>
-                <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>{showExportMenu ? "▾" : "▸"}</span>
+                <span className="script-action-card-label">EXPORT</span>
+                <span className="script-export-chevron">{showExportMenu ? "▾" : "▸"}</span>
               </button>
               {showExportMenu && (
-                <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.5rem", flex: 1 }}>
-                  <button className="btn-secondary" onClick={handleExportJson} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
+                <div className="script-buttons-col">
+                  <button className="btn-secondary script-export-btn" onClick={handleExportJson}>
                     <Download size={11} /> JSON
                   </button>
-                  <button className="btn-secondary" onClick={handleExportTxt} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
+                  <button className="btn-secondary script-export-btn" onClick={handleExportTxt}>
                     <FileText size={11} /> Text
                   </button>
                 </div>
@@ -375,9 +373,9 @@ export default function ScriptStep({
 
       {/* Empty state */}
       {!activeScript && !creating && (
-        <div className="card" style={{ padding: "2.5rem 1rem", textAlign: "center" }}>
-          <FileText size={36} style={{ color: "var(--text-muted)", opacity: 0.6 }} />
-          <p style={{ color: "var(--text-muted)", marginTop: "0.75rem", marginBottom: 0, fontSize: "0.9rem" }}>
+        <div className="card script-empty-card">
+          <FileText size={36} className="script-empty-icon" />
+          <p className="script-empty-text">
             No script yet. Select an idea and generate a script, or paste your own.
           </p>
         </div>
@@ -387,41 +385,36 @@ export default function ScriptStep({
       {showImportModal && (
         <div
           onClick={() => setShowImportModal(false)}
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000,
-            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem",
-          }}
+          className="script-modal-overlay"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="card"
-            style={{ width: "100%", maxWidth: 560, background: "var(--surface)", boxShadow: "var(--shadow)" }}
+            className="card script-modal-card"
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-              <h3 style={{ fontSize: "1.1rem" }}>Import Script</h3>
-              <button onClick={() => setShowImportModal(false)} style={{ background: "transparent", color: "var(--text-muted)", fontSize: "1.1rem" }}>
+            <div className="script-modal-header">
+              <h3 className="script-modal-title">Import Script</h3>
+              <button onClick={() => setShowImportModal(false)} className="script-modal-close">
                 <X size={18} />
               </button>
             </div>
 
-            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+            <p className="script-modal-note">
               Upload a <strong>JSON</strong> or <strong>Text</strong> file, or paste your script directly into the box below.
               Accepts JSON like <code>{"{\"title\": ..., \"hook\": ..., \"body\": ..., \"ending\": ...}"}</code> or a
               plain text script (it will be imported as the body).
             </p>
 
-            <div style={{ marginBottom: "0.75rem" }}>
+            <div className="script-upload-row">
               <input
                 type="file"
                 ref={fileInputRef}
                 accept=".json,.txt"
                 onChange={handleFileUpload}
-                style={{ display: "none" }}
+                hidden
               />
               <button
-                className="btn-secondary"
+                className="btn-secondary script-upload-btn"
                 onClick={() => fileInputRef.current?.click()}
-                style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.4rem", width: "100%", justifyContent: "center" }}
               >
                 <FileText size={14} /> Upload Script File (.json / .txt)
               </button>
@@ -432,17 +425,17 @@ export default function ScriptStep({
               onChange={(e) => setImportText(e.target.value)}
               placeholder={`Paste script JSON or plain text here:\n\n{\n  "title": "My Video Title",\n  "hook": "Opening hook...",\n  "body": "Main script body...",\n  "ending": "Closing..."\n}`}
               rows={8}
-              style={{ width: "100%", fontSize: "0.8rem", marginBottom: "0.75rem" }}
+              className="script-import-textarea"
             />
 
             {importText.trim() && (
-              <div style={{ fontSize: "0.8rem", color: "var(--success)", marginBottom: "0.75rem", fontWeight: 600 }}>
+              <div className="script-import-status">
                 ✓ Detected{parsedImport?.body ? ` "${(parsedImport.title || "Untitled").slice(0, 40)}"` : " nothing"} ready to import
               </div>
             )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", fontSize: "0.8rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
+            <div className="script-import-options">
+              <label className="script-import-option-label">
                 <input
                   type="radio"
                   name="scriptImportOption"
@@ -451,7 +444,7 @@ export default function ScriptStep({
                 />
                 Replace current script
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
+              <label className="script-import-option-label">
                 <input
                   type="radio"
                   name="scriptImportOption"
@@ -462,7 +455,7 @@ export default function ScriptStep({
               </label>
             </div>
 
-            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+            <div className="script-import-actions">
               <button className="btn-secondary" onClick={() => setShowImportModal(false)}>
                 Cancel
               </button>

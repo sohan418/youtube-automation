@@ -1,0 +1,42 @@
+.timeline-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.timeline-guide h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.timeline-guide p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.timeline-guide-box {
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.timeline-guide-box strong {
+  color: var(--text);
+}
+
+.timeline-guide-box ul {
+  padding-left: 1.2rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}

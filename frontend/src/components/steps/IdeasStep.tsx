@@ -3,6 +3,7 @@ import { Sparkles, Download, Upload, X, ArrowRight, Lightbulb, Play, ChevronDown
 import type { Idea, YouTubeVideo } from "../../types";
 import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
+import "./IdeasStep.css";
 
 interface Props {
   projectId: number;
@@ -109,42 +110,42 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
     : ideas;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className="ideas-step">
       {/* Header */}
-      <div>
-        <h2 style={{ fontSize: "1.3rem", fontWeight: 700, margin: 0 }}>Video Ideas</h2>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "0.25rem 0 0" }}>Find your next video idea</p>
+      <div className="ideas-header">
+        <h2>Video Ideas</h2>
+        <p>Find your next video idea</p>
       </div>
 
       {/* Input row */}
-      <div className="card" style={{ padding: "1rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+      <div className="card ideas-input-card">
+        <div className="ideas-input-row">
           <input
             value={ideaTopic}
             onChange={(e) => onTopicChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !actionLoading && onGenerate()}
             placeholder="What do you want to make?"
-            style={{ flex: 1, fontSize: "0.9rem", padding: "0.6rem 0.85rem" }}
+            className="ideas-topic-input"
           />
-          <button className="btn-primary" disabled={!!actionLoading} onClick={onGenerate} style={{ padding: "0.6rem 1.2rem", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.4rem", whiteSpace: "nowrap" }}>
+          <button className="btn-primary ideas-generate-btn" disabled={!!actionLoading} onClick={onGenerate}>
             {actionLoading === "ideas" ? "Generating..." : <><Sparkles size={15} /> Generate with AI</>}
           </button>
         </div>
 
         {/* Action buttons row */}
-        <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
-          <button className="btn-secondary" onClick={() => setShowFreeAI(!showFreeAI)} style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}>
+        <div className="ideas-action-row">
+          <button className="btn-secondary ideas-action-btn" onClick={() => setShowFreeAI(!showFreeAI)}>
             {showFreeAI ? "Hide Free AI" : "Free AI"}
           </button>
-          <button className="btn-secondary" onClick={() => setShowImport(!showImport)} style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+          <button className="btn-secondary ideas-action-btn-flex" onClick={() => setShowImport(!showImport)}>
             <Upload size={11} /> Import
           </button>
           {ideas.length > 0 && (
             <>
-              <button className="btn-secondary" onClick={() => downloadFile(JSON.stringify(ideas.map((i) => ({ title: i.title, description: i.description, category: i.category })), null, 2), "ideas.json", "application/json")} style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <button className="btn-secondary ideas-action-btn-flex" onClick={() => downloadFile(JSON.stringify(ideas.map((i) => ({ title: i.title, description: i.description, category: i.category })), null, 2), "ideas.json", "application/json")}>
                 <Download size={11} /> JSON
               </button>
-              <button className="btn-secondary" onClick={() => downloadFile(ideas.map((i, idx) => `${idx + 1}. ${i.title}\n${i.description}`).join("\n\n"), "ideas.txt", "text/plain")} style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <button className="btn-secondary ideas-action-btn-flex" onClick={() => downloadFile(ideas.map((i, idx) => `${idx + 1}. ${i.title}\n${i.description}`).join("\n\n"), "ideas.txt", "text/plain")}>
                 <Download size={11} /> Text
               </button>
             </>
@@ -165,59 +166,41 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
 
       {/* Recent Videos from YouTube */}
       {recentVideos && recentVideos.length > 0 && (
-        <div className="card" style={{ padding: "0.75rem" }}>
+        <div className="card ideas-recent-card">
           <button
+            className="ideas-recent-toggle"
             onClick={() => setShowRecentVideos(!showRecentVideos)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-              width: "100%",
-              textAlign: "left",
-            }}
           >
             <Play size={16} color="#ff0000" />
-            <span style={{ fontSize: "0.8rem", fontWeight: 600, flex: 1,color: "var(--text-muted)" }}>
+            <span className="ideas-recent-title">
               Your Recent Videos ({recentVideos.length})
             </span>
             {showRecentVideos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           {showRecentVideos && (
-            <div style={{ marginTop: "0.6rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <div className="ideas-recent-list">
               {recentVideos.map((v, i) => (
                 <div
                   key={v.video_id || i}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "0.5rem",
-                    padding: "0.4rem 0.5rem",
-                    borderRadius: "6px",
-                    background: "var(--bg)",
-                    fontSize: "0.75rem",
-                  }}
+                  className="ideas-recent-item"
                 >
-                  <span style={{ color: "var(--text-muted)", minWidth: "1.2rem", fontWeight: 600 }}>#{i + 1}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span className="ideas-recent-index">#{i + 1}</span>
+                  <div className="ideas-recent-body">
+                    <div className="ideas-recent-title-text">
                       {v.title}
                     </div>
                     {v.description && (
-                      <div style={{ color: "var(--text-muted)", fontSize: "0.68rem", marginTop: "0.15rem", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      <div className="ideas-recent-desc">
                         {v.description.slice(0, 120)}
                       </div>
                     )}
                   </div>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.65rem", whiteSpace: "nowrap" }}>
+                  <span className="ideas-recent-date">
                     {v.published_at ? new Date(v.published_at).toLocaleDateString() : ""}
                   </span>
                 </div>
               ))}
-              <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", margin: "0.25rem 0 0", fontStyle: "italic" }}>
+              <p className="ideas-recent-note">
                 AI uses these as context to generate new, different ideas.
               </p>
             </div>
@@ -227,13 +210,13 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
 
       {/* Import panel */}
       {showImport && (
-        <div className="card" style={{ padding: "0.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Paste AI Response / JSON</span>
-            <button onClick={() => setShowImport(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={14} /></button>
+        <div className="card ideas-import-card">
+          <div className="ideas-import-header">
+            <span className="ideas-import-title">Paste AI Response / JSON</span>
+            <button className="ideas-close-btn" onClick={() => setShowImport(false)}><X size={14} /></button>
           </div>
-          <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Paste AI response here..." rows={4} style={{ fontSize: "0.8rem" }} />
-          <button className="btn-primary" onClick={handleImport} disabled={!importText.trim()} style={{ marginTop: "0.4rem", width: "100%", fontSize: "0.8rem" }}>
+          <textarea className="ideas-import-textarea" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Paste AI response here..." rows={4} />
+          <button className="btn-primary ideas-import-submit" onClick={handleImport} disabled={!importText.trim()}>
             Import Ideas
           </button>
         </div>
@@ -241,18 +224,14 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
 
       {/* Category chips */}
       {ideas.length > 0 && (
-        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+        <div className="ideas-category-row">
           <button
+            className="ideas-chip"
             onClick={() => setActiveCategory(null)}
             style={{
-              padding: "0.25rem 0.65rem",
-              borderRadius: "999px",
-              fontSize: "0.72rem",
-              fontWeight: 600,
               background: !activeCategory ? "var(--primary)" : "var(--surface)",
               color: !activeCategory ? "#fff" : "var(--text-muted)",
               border: `1px solid ${!activeCategory ? "var(--primary)" : "var(--border)"}`,
-              cursor: "pointer",
             }}
           >
             All ({ideas.length})
@@ -263,16 +242,12 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
             return (
               <button
                 key={cat}
+                className="ideas-chip"
                 onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
                 style={{
-                  padding: "0.25rem 0.65rem",
-                  borderRadius: "999px",
-                  fontSize: "0.72rem",
-                  fontWeight: 600,
                   background: activeCategory === cat ? "var(--primary)" : "var(--surface)",
                   color: activeCategory === cat ? "#fff" : "var(--text-muted)",
                   border: `1px solid ${activeCategory === cat ? "var(--primary)" : "var(--border)"}`,
-                  cursor: "pointer",
                 }}
               >
                 {cat} ({count})
@@ -285,57 +260,50 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
       {/* Ideas grid */}
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <Lightbulb size={40} strokeWidth={1.5} style={{ opacity: 0.3 }} />
+          <Lightbulb size={40} strokeWidth={1.5} className="ideas-empty-icon" />
           <div className="empty-state-title">No ideas yet</div>
           <div className="empty-state-desc">Enter a topic above and click Generate with AI to brainstorm video ideas.</div>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "0.75rem" }}>
+        <div className="ideas-grid">
           {filtered.map((idea) => (
             <div
               key={idea.id}
-              className="card"
+              className="card ideas-idea-card"
               style={{
                 borderColor: idea.is_selected ? "var(--primary)" : "var(--border)",
                 background: idea.is_selected ? "rgba(124,92,255,0.08)" : "var(--card-bg)",
-                padding: "0.85rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                cursor: "pointer",
-                transition: "border-color var(--transition)",
               }}
               onClick={() => setPreviewIdea(idea)}
             >
               {/* Category badge */}
               {idea.category && (
-                <span style={{ fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary)" }}>
+                <span className="ideas-category-badge">
                   {idea.category}
                 </span>
               )}
 
               {/* Title */}
-              <h4 style={{ fontSize: "0.92rem", fontWeight: 600, margin: 0, lineHeight: 1.3 }}>{idea.title}</h4>
+              <h4 className="ideas-idea-title">{idea.title}</h4>
 
               {/* Description */}
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.4, flex: 1 }}>
+              <p className="ideas-idea-desc">
                 {idea.description && idea.description.length > 120 ? idea.description.slice(0, 120) + "..." : idea.description || ""}
               </p>
 
               {/* Footer */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div className="ideas-idea-footer">
+                <div className="ideas-idea-score">
                   {idea.trending_score != null && (
-                    <span style={{ fontSize: "0.7rem", color: "var(--accent)" }}>
+                    <span className="ideas-idea-score-text">
                       &#9733; {idea.trending_score}
                     </span>
                   )}
                 </div>
                 <button
-                  className={idea.is_selected ? "btn-primary" : "btn-secondary"}
+                  className={`${idea.is_selected ? "btn-primary" : "btn-secondary"} ideas-idea-use-btn`}
                   disabled={!!actionLoading}
                   onClick={(e) => { e.stopPropagation(); onSelect(idea.id); }}
-                  style={{ fontSize: "0.72rem", padding: "0.25rem 0.6rem", display: "flex", alignItems: "center", gap: "0.25rem" }}
                 >
                   {idea.is_selected ? "Selected" : <>Use Idea <ArrowRight size={11} /></>}
                 </button>
@@ -348,42 +316,37 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
       {/* Preview modal */}
       {previewIdea && (
         <div
+          className="ideas-preview-overlay"
           onClick={() => setPreviewIdea(null)}
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000,
-            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem",
-          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="card"
-            style={{ maxWidth: 480, width: "100%", background: "var(--surface)", padding: "1.25rem" }}
+            className="card ideas-preview-card"
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "0.75rem" }}>
+            <div className="ideas-preview-header">
               <div>
                 {previewIdea.category && (
-                  <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary)" }}>
+                  <span className="ideas-category-badge">
                     {previewIdea.category}
                   </span>
                 )}
-                <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "0.25rem 0 0" }}>{previewIdea.title}</h3>
+                <h3 className="ideas-preview-title">{previewIdea.title}</h3>
               </div>
-              <button onClick={() => setPreviewIdea(null)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
+              <button className="ideas-close-btn" onClick={() => setPreviewIdea(null)}>
                 <X size={18} />
               </button>
             </div>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.6, marginBottom: "1rem" }}>{previewIdea.description}</p>
-            <div style={{ display: "flex", gap: "1rem", fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+            <p className="ideas-preview-desc">{previewIdea.description}</p>
+            <div className="ideas-preview-meta">
               {previewIdea.trending_score != null && <span>&#9733; Score: {previewIdea.trending_score}</span>}
               <span>Format: YouTube Video</span>
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+            <div className="ideas-preview-actions">
               <button className="btn-secondary" onClick={() => setPreviewIdea(null)}>Close</button>
               <button
-                className="btn-primary"
+                className="btn-primary ideas-preview-use-btn"
                 onClick={() => { onSelect(previewIdea.id); setPreviewIdea(null); }}
                 disabled={!!actionLoading}
-                style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
               >
                 Use This Idea <ArrowRight size={13} />
               </button>

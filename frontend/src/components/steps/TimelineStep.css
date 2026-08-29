@@ -1,0 +1,38 @@
+.timeline-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.timeline-hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.timeline-build-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.timeline-building-status {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.timeline-building-message {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.timeline-building-progress {
+  font-size: 0.75rem;
+}

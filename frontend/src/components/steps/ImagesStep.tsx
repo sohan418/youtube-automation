@@ -20,6 +20,7 @@ import {
 import type { Scene } from "../../types";
 import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
+import "./ImagesStep.css";
 
 
 export interface DragMedia {
@@ -185,51 +186,20 @@ export default function ImagesStep({
   });
 
   return (
-    <div style={{ display: "grid", gap: "0.5rem" }}>
-      <style>{`
-        @keyframes scene-zoom-in {
-          0% { transform: scale(1); }
-          100% { transform: scale(1.2); }
-        }
-        @keyframes scene-pan-right {
-          0% { transform: scale(1.2) translateX(-4%); }
-          100% { transform: scale(1.2) translateX(4%); }
-        }
-        .tile-action-btn:hover { background: rgba(255,255,255,0.08) !important; }
-        .tile-action-btn-danger:hover { background: rgba(255,0,60,0.12) !important; color: var(--danger) !important; }
-        .tile-action-btn-star:hover { background: rgba(255,184,0,0.12) !important; color: #f0b429 !important; }
-        .tile-action-btn-copy:hover { background: rgba(0,184,212,0.1) !important; color: var(--accent) !important; }
-      `}</style>
-
+    <div className="images-root">
       {/* ── Compact Header Toolbar ─────────────────────────────────────── */}
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: "0.5rem",
-        paddingBottom: "0.35rem",
-        borderBottom: "1px solid var(--border)",
-        marginBottom: "0.45rem"
-      }}>
+      <div className="images-header">
         {/* Left Side: Title */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-          <Film size={14} color="var(--primary)" style={{ verticalAlign: "-2px" }} />
-          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text)" }}>Scene Media Strip</span>
+        <div className="images-header-title">
+          <Film size={14} color="var(--primary)" className="images-header-title-icon" />
+          <span className="images-header-title-text">Scene Media Strip</span>
         </div>
 
         {/* Right Side: Generate All Button */}
         <button
-          className="btn-secondary"
+          className="btn-secondary images-generate-btn"
           disabled={!!actionLoading || scenes.length === 0}
           onClick={onGenerateAll}
-          style={{
-            fontSize: "0.72rem",
-            padding: "0.25rem 0.5rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.2rem",
-          }}
         >
           {actionLoading === "images" ? (
             "Generating..."
@@ -241,10 +211,10 @@ export default function ImagesStep({
         </button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div className="images-column">
         {scenes.length === 0 ? (
-          <div style={{ marginTop: "0.5rem" }}>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+          <div className="images-empty-wrapper">
+            <p className="images-empty-text">
               No scenes yet. Generate scenes first.
             </p>
             <FreeAIGuide
@@ -256,26 +226,24 @@ export default function ImagesStep({
             />
           </div>
         ) : (
-          <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.45rem" }}>
+          <div className="images-scene-list">
 
             {/* ── Pager ─────────────────────────────────────────────────── */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="images-pager">
               <button
-                className="btn-secondary"
+                className="btn-secondary images-pager-btn"
                 disabled={activeIdx <= 0}
                 onClick={() => setActiveIdx(activeIdx - 1)}
-                style={{ fontSize: "0.78rem", padding: "0.3rem 0.65rem", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
               >
                 <ChevronLeft size={14} /> Prev
               </button>
-              <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text)" }}>
+              <span className="images-pager-text">
                 Scene {scenes[activeIdx]?.order_index ?? activeIdx + 1} of {scenes.length}
               </span>
               <button
-                className="btn-secondary"
+                className="btn-secondary images-pager-btn"
                 disabled={activeIdx >= scenes.length - 1}
                 onClick={() => setActiveIdx(activeIdx + 1)}
-                style={{ fontSize: "0.78rem", padding: "0.3rem 0.65rem", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
               >
                 Next <ChevronRight size={14} />
               </button>
@@ -300,7 +268,7 @@ export default function ImagesStep({
               return (
                 <div
                   key={scene.id}
-                  className="card"
+                  className="card images-card"
                   onDragOver={(e) => {
                     e.preventDefault();
                     if (dragMedia && dragMedia.sourceSceneId !== scene.id) {
@@ -313,64 +281,31 @@ export default function ImagesStep({
                   }
                   onDrop={(e) => handleSceneDrop(e, scene.id)}
                   style={{
-                    background: "var(--bg)",
-                    padding: "0.65rem 0.85rem",
                     borderColor: draggingOverScene === scene.id ? "var(--accent)" : undefined,
                     borderStyle: draggingOverScene === scene.id ? "dashed" : undefined,
-                    display: "grid",
-                    gap: "0.55rem",
                   }}
                 >
                   {/* ── Task #3: Scene narration (2-line truncated) ──────── */}
                   {scene.narration && (
-                    <p
-                      style={{
-                        fontSize: "0.78rem",
-                        color: "var(--text-muted)",
-                        margin: 0,
-                        lineHeight: 1.45,
-                        overflow: "hidden",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        borderLeft: "2px solid var(--border)",
-                        paddingLeft: "0.5rem",
-                      }}
-                    >
+                    <p className="images-narration">
                       {scene.narration}
                     </p>
                   )}
 
                   {/* ── Task #6: Tabbed prompt block ─────────────────────── */}
                   {(hasImagePrompt || hasVideoPrompt) && (
-                    <div
-                      style={{
-                        border: "1px solid var(--border)",
-                        borderRadius: "6px",
-                        overflow: "hidden",
-                      }}
-                    >
+                    <div className="images-prompt-block">
                       {/* Tab bar */}
-                      <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+                      <div className="images-tab-bar">
                         {hasImagePrompt && (
                           <button
                             type="button"
                             onClick={() => setPromptTab("image")}
+                            className="images-tab-btn"
                             style={{
-                              flex: 1,
-                              padding: "0.3rem 0.5rem",
-                              fontSize: "0.7rem",
-                              fontWeight: 700,
-                              border: "none",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: "0.25rem",
                               background: promptTab === "image" ? "rgba(255,255,255,0.06)" : "transparent",
                               color: promptTab === "image" ? "var(--text)" : "var(--text-muted)",
                               borderBottom: promptTab === "image" ? "2px solid var(--primary)" : "2px solid transparent",
-                              transition: "all 0.12s ease",
                             }}
                           >
                             <Image size={11} /> Image Prompt
@@ -380,21 +315,11 @@ export default function ImagesStep({
                           <button
                             type="button"
                             onClick={() => setPromptTab("video")}
+                            className="images-tab-btn"
                             style={{
-                              flex: 1,
-                              padding: "0.3rem 0.5rem",
-                              fontSize: "0.7rem",
-                              fontWeight: 700,
-                              border: "none",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: "0.25rem",
                               background: promptTab === "video" ? "rgba(255,255,255,0.06)" : "transparent",
                               color: promptTab === "video" ? "var(--text)" : "var(--text-muted)",
                               borderBottom: promptTab === "video" ? "2px solid var(--primary)" : "2px solid transparent",
-                              transition: "all 0.12s ease",
                             }}
                           >
                             <Video size={11} /> Video Prompt
@@ -403,48 +328,28 @@ export default function ImagesStep({
                       </div>
 
                       {/* Prompt body */}
-                      <div style={{ padding: "0.5rem 0.7rem", background: "rgba(255,255,255,0.012)", display: "flex", justifyContent: "space-between", gap: "0.5rem", alignItems: "flex-start" }}>
-                        <p style={{ fontSize: "0.77rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.45, flex: 1 }}>
+                      <div className="images-prompt-body">
+                        <p className="images-prompt-text">
                           {activePromptText}
                         </p>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                        <div className="images-prompt-btns">
                           <button
-                            className="btn-secondary"
+                            className="btn-secondary images-prompt-btn"
                             onClick={() => handleCopyPrompt(scene)}
                             style={{
-                              fontSize: "0.65rem",
-                              padding: "0.15rem 0.4rem",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.2rem",
                               color: copiedPrompt ? "var(--success)" : "var(--text)",
                               borderColor: copiedPrompt ? "var(--success)" : "var(--border)",
-                              background: "transparent",
-                              borderRadius: "4px",
-                              flexShrink: 0,
-                              width: "100%",
-                              justifyContent: "center",
                             }}
                           >
                             {copiedPrompt ? <Check size={10} /> : <Copy size={10} />}
                             {copiedPrompt ? "Copied" : "Copy"}
                           </button>
                           <button
-                            className="btn-secondary"
+                            className="btn-secondary images-prompt-btn"
                             onClick={() => handleCopyBothPrompts(scene)}
                             style={{
-                              fontSize: "0.65rem",
-                              padding: "0.15rem 0.4rem",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.2rem",
                               color: copiedBoth ? "var(--success)" : "var(--text)",
                               borderColor: copiedBoth ? "var(--success)" : "var(--border)",
-                              background: "transparent",
-                              borderRadius: "4px",
-                              flexShrink: 0,
-                              width: "100%",
-                              justifyContent: "center",
                             }}
                           >
                             {copiedBoth ? <Check size={10} /> : <Copy size={10} />}
@@ -456,22 +361,20 @@ export default function ImagesStep({
                   )}
 
                   {/* Action buttons row */}
-                  <div style={{ display: "flex", gap: "0.35rem", justifyContent: "flex-end", alignItems: "center" }}>
+                  <div className="images-action-row">
                     <button
-                      className="btn-accent"
+                      className="btn-accent images-action-btn"
                       disabled={!!actionLoading || generatingSceneId !== null}
                       onClick={() => onGenerateScene(scene.id)}
-                      style={{ fontSize: "0.74rem", padding: "0.28rem 0.55rem" }}
                     >
                       {generatingSceneId === scene.id ? "Generating..." : (
-                        <><Sparkles size={12} style={{ verticalAlign: "middle" }} /> Generate</>
+                        <><Sparkles size={12} className="images-generate-icon" /> Generate</>
                       )}
                     </button>
                     <button
-                      className="btn-secondary"
+                      className="btn-secondary images-action-btn"
                       disabled={!!actionLoading || clipboardImageId == null}
                       onClick={() => onPaste(scene.id)}
-                      style={{ fontSize: "0.74rem", padding: "0.28rem 0.55rem" }}
                       title="Paste the copied image into this scene"
                     >
                       Paste
@@ -479,49 +382,34 @@ export default function ImagesStep({
                   </div>
 
                   {/* ── Strip stats + warnings ───────────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "0.73rem", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                  <div className="images-strip-stats">
+                    <span className="images-strip-stat">
                       {strip.length > 0 ? (
-                        <><Check size={12} style={{ color: "var(--success)" }} /> {strip.length} item{strip.length > 1 ? "s" : ""}</>
+                        <><Check size={12} className="images-strip-stat-check" /> {strip.length} item{strip.length > 1 ? "s" : ""}</>
                       ) : (
                         <><Square size={11} /> Empty strip</>
                       )}
                     </span>
                     {narrationDur && narrationDur > 0 && (
-                      <span style={{ fontSize: "0.73rem", color: "var(--text-muted)", background: "var(--surface2, var(--bg))", padding: "0.1rem 0.4rem", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                      <span className="images-strip-dur">
                         <Mic size={11} /> {narrationDur.toFixed(1)}s
                       </span>
                     )}
                     {maxFit && strip.length > 0 && strip.length <= maxFit && (
-                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>(max {maxFit})</span>
+                      <span className="images-strip-max">(max {maxFit})</span>
                     )}
                   </div>
 
                   {/* ── Task #8: Exceeds narration banner ────────────────── */}
                   {maxFit && strip.length > maxFit && (
-                    <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      background: "rgba(255,180,0,0.08)",
-                      border: "1px solid rgba(255,180,0,0.3)",
-                      borderRadius: "6px",
-                      padding: "0.35rem 0.6rem",
-                      fontSize: "0.73rem",
-                      color: "#f0b429",
-                      fontWeight: 600,
-                    }}>
+                    <div className="images-exceeds-banner">
                       <AlertTriangle size={13} />
                       Strip has {strip.length} items but narration is {narrationDur!.toFixed(1)}s — max {maxFit} items at 0.5s each
                     </div>
                   )}
 
                   {/* ── Media tile grid ──────────────────────────────────── */}
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-                    gap: "0.55rem",
-                  }}>
+                  <div className="images-tile-grid">
                     {strip.map((tile) => {
                       if (tile.kind === "video") {
                         const clipDur = videoDurations[tile.id];
@@ -540,13 +428,9 @@ export default function ImagesStep({
                             onDrop={(e) => handleTileDrop(e, scene, tile)}
                             onClick={() => onPreview(tile.file_path, "video")}
                             title="Click to preview; drag to reorder"
+                            className="images-tile"
                             style={{
-                              position: "relative",
-                              borderRadius: "var(--radius)",
-                              overflow: "hidden",
                               border: tooLong ? "2px solid var(--danger)" : "2px solid var(--accent)",
-                              background: "#000",
-                              cursor: "zoom-in",
                             }}
                           >
                             <video
@@ -559,32 +443,17 @@ export default function ImagesStep({
                                   setVideoDurations((prev) => ({ ...prev, [tile.id]: d }));
                                 }
                               }}
-                              style={{
-                                width: "100%",
-                                aspectRatio: "16 / 10",
-                                objectFit: "cover",
-                                display: "block",
-                                background: "#000",
-                                pointerEvents: "none",
-                              }}
+                              className="images-tile-media"
                             />
-                            <span style={{
-                              position: "absolute", bottom: 6, left: 6,
-                              fontSize: "0.6rem", color: "#fff",
-                              background: "rgba(0,0,0,0.6)",
-                              padding: "0.1rem 0.3rem", borderRadius: 3,
-                              display: "inline-flex", alignItems: "center", gap: "0.2rem",
-                            }}>
+                            <span className="images-tile-badge images-tile-badge-left">
                               <Clapperboard size={10} /> Clip
                             </span>
-                            <span style={{
-                              position: "absolute", bottom: 6, right: 6,
-                              fontSize: "0.6rem", color: "#fff",
-                              background: tooLong ? "rgba(220,53,69,0.85)" : "rgba(0,0,0,0.6)",
-                              padding: "0.1rem 0.3rem", borderRadius: 3,
-                              fontWeight: 600,
-                              display: "inline-flex", alignItems: "center", gap: "0.2rem",
-                            }}>
+                            <span
+                              className="images-tile-badge images-tile-badge-right"
+                              style={{
+                                background: tooLong ? "rgba(220,53,69,0.85)" : "rgba(0,0,0,0.6)",
+                              }}
+                            >
                               {tooLong ? (
                                 <><AlertTriangle size={10} /> {clipDur!.toFixed(1)}s</>
                               ) : (
@@ -596,8 +465,7 @@ export default function ImagesStep({
                               title="Remove video clip"
                               disabled={!!actionLoading}
                               onClick={(e) => { e.stopPropagation(); onRemoveVideo(scene.id, tile.id); }}
-                              className="tile-action-btn tile-action-btn-danger"
-                              style={{ position: "absolute", top: 5, right: 5, border: "none", cursor: "pointer", borderRadius: "4px", padding: "0.2rem 0.4rem", background: "rgba(0,0,0,0.65)", color: "var(--danger)", display: "inline-flex", alignItems: "center" }}
+                              className="tile-action-btn tile-action-btn-danger images-tile-remove-btn"
                             >
                               <X size={13} />
                             </button>
@@ -620,57 +488,35 @@ export default function ImagesStep({
                           onDrop={(e) => handleTileDrop(e, scene, tile)}
                           onClick={() => onPreview(tile.file_path, "image")}
                           title="Click to preview; drag to reorder; drag to another scene to copy"
+                          className="images-tile images-tile-img-tile"
                           style={{
-                            position: "relative",
-                            borderRadius: "var(--radius)",
-                            overflow: "hidden",
                             border: tile.isPrimary ? "2px solid var(--accent)" : "1px solid var(--border)",
-                            background: "var(--surface)",
-                            cursor: "zoom-in",
                           }}
                         >
                           <img
                             src={mediaUrl(tile.file_path)}
                             alt={`Scene ${scene.order_index} image`}
                             loading="lazy"
+                            className="images-tile-media"
                             style={{
-                              width: "100%",
-                              aspectRatio: "16 / 10",
-                              objectFit: "cover",
-                              display: "block",
-                              pointerEvents: "none",
                               animation:
                                 tile.isPrimary && scene.motion_effect === "zoom_in"
                                   ? "scene-zoom-in 10s ease-in-out infinite alternate"
                                   : tile.isPrimary && scene.motion_effect === "pan_right"
                                   ? "scene-pan-right 12s ease-in-out infinite alternate"
                                   : "none",
-                              transformOrigin: "center",
                             }}
                           />
                           {/* Task #8: action bar with hover colors */}
-                          <div style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: "0.2rem",
-                            padding: "0.3rem 0.4rem",
-                          }}>
-                            <span style={{
-                              fontSize: "0.63rem",
-                              color: "var(--text-muted)",
-                              textTransform: "capitalize",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.2rem",
-                            }}>
+                          <div className="images-tile-actions">
+                            <span className="images-tile-source">
                               {tile.isPrimary ? (
-                                <strong style={{ color: "var(--accent)", display: "inline-flex", alignItems: "center", gap: "0.15rem" }}>
+                                <strong className="images-tile-primary">
                                   <Star size={10} fill="currentColor" /> Primary
                                 </strong>
                               ) : tile.source}
                             </span>
-                            <div style={{ display: "flex", gap: "0.2rem", flexShrink: 0 }}>
+                            <div className="images-tile-btns">
                               <button
                                 title="Copy image"
                                 disabled={!!actionLoading}
@@ -709,18 +555,8 @@ export default function ImagesStep({
                     {/* ── Task #4: Upload tiles — 80px min-height ─────────── */}
                     {/* Task #7: Show empty state when no media */}
                     {strip.length === 0 && (
-                      <div style={{
-                        gridColumn: "1 / -1",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        padding: "0.6rem 0.85rem",
-                        border: "1px dashed var(--border)",
-                        borderRadius: "var(--radius)",
-                        color: "var(--text-muted)",
-                        fontSize: "0.75rem",
-                      }}>
-                        <Film size={16} style={{ flexShrink: 0, opacity: 0.4 }} />
+                      <div className="images-empty-state">
+                        <Film size={16} className="images-upload-empty-icon" />
                         <span>No media yet — generate AI images or upload your own using the tiles below.</span>
                       </div>
                     )}
@@ -729,24 +565,10 @@ export default function ImagesStep({
                       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
                       onDrop={(e) => handleUploadTileDrop(e, scene.id)}
                       title="Click to upload image or drag & drop here"
-                      style={{
-                        position: "relative",
-                        borderRadius: "var(--radius)",
-                        border: "2px dashed var(--border)",
-                        minHeight: 80,   // Task #4: was 120px
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexDirection: "column",
-                        cursor: "pointer",
-                        color: "var(--text-muted)",
-                        background: "var(--surface)",
-                        gap: "0.2rem",
-                        transition: "border-color 0.15s ease",
-                      }}
+                      className="images-upload-tile"
                     >
                       <Plus size={20} />
-                      <span style={{ fontSize: "0.68rem" }}>Upload Image</span>
+                      <span className="images-upload-tile-text">Upload Image</span>
                       <input
                         type="file"
                         accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
@@ -756,7 +578,7 @@ export default function ImagesStep({
                           if (file) onUpload(scene.id, file);
                           e.target.value = "";
                         }}
-                        style={{ display: "none" }}
+                        className="images-hidden-input"
                       />
                     </label>
 
@@ -764,24 +586,10 @@ export default function ImagesStep({
                       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
                       onDrop={(e) => handleUploadTileDrop(e, scene.id)}
                       title="Click to upload video clip or drag & drop here"
-                      style={{
-                        position: "relative",
-                        borderRadius: "var(--radius)",
-                        border: "2px dashed var(--border)",
-                        minHeight: 80,   // Task #4: was 120px
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexDirection: "column",
-                        cursor: "pointer",
-                        color: "var(--text-muted)",
-                        background: "var(--surface)",
-                        gap: "0.2rem",
-                        transition: "border-color 0.15s ease",
-                      }}
+                      className="images-upload-tile"
                     >
                       <Clapperboard size={20} />
-                      <span style={{ fontSize: "0.68rem" }}>Add Video Clip</span>
+                      <span className="images-upload-tile-text">Add Video Clip</span>
                       <input
                         type="file"
                         accept="video/mp4,video/mov,video/m4v,video/webm,video/x-matroska,video/avi,video/*"
@@ -791,13 +599,13 @@ export default function ImagesStep({
                           if (file) onUploadVideo(scene.id, file);
                           e.target.value = "";
                         }}
-                        style={{ display: "none" }}
+                        className="images-hidden-input"
                       />
                     </label>
                   </div>
 
                   {/* ── URL bar — Task #2: Upload button removed ─────────── */}
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <div className="images-url-bar">
                     <input
                       type="text"
                       placeholder="Paste image URL and press Enter..."
@@ -805,21 +613,12 @@ export default function ImagesStep({
                       disabled={!!actionLoading}
                       onChange={(e) => onUrlChange(scene.id, e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") onAddUrl(scene.id); }}
-                      style={{
-                        flex: 1,
-                        padding: "0.4rem 0.6rem",
-                        borderRadius: "var(--radius)",
-                        border: "1px solid var(--border)",
-                        background: "var(--surface)",
-                        color: "var(--text)",
-                        fontSize: "0.8rem",
-                      }}
+                      className="images-url-input"
                     />
                     <button
-                      className="btn-secondary"
+                      className="btn-secondary images-url-btn"
                       disabled={!!actionLoading || !(imageUrlInputs[scene.id] || "").trim()}
                       onClick={() => onAddUrl(scene.id)}
-                      style={{ fontSize: "0.78rem", padding: "0.4rem 0.7rem" }}
                     >
                       Add URL
                     </button>

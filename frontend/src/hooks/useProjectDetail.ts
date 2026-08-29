@@ -14,7 +14,6 @@ import type {
   VoiceConfig,
   VoiceProvider,
 } from "../types";
-import { usePrompts } from "./usePrompts";
 import type { DragMedia, MediaTile } from "../components/steps/ImagesStep";
 import { buildMediaStrip } from "../components/steps/ImagesStep";
 
@@ -37,8 +36,6 @@ export function useProjectDetail(projectId: number) {
   useEffect(() => {
     localStorage.setItem(`project-${projectId}-tab`, activeTab);
   }, [activeTab, projectId]);
-  const prompts = usePrompts(projectId, scripts.length + scenes.length);
-
   useEffect(() => {
     setActiveSceneIdx(0);
   }, [activeTab]);
@@ -254,6 +251,21 @@ export function useProjectDetail(projectId: number) {
     }
   };
 
+  const mutate = async (label: string, task: () => Promise<void>, successMsg: string) => {
+    try {
+      setActionLoading(label);
+      setError("");
+      setSuccess("");
+      await task();
+      setSuccess(successMsg);
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operation failed");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
   const openSettings = () => setEditingSettings(true);
 
   const onRatioChange = async (ratio: string) => {
@@ -445,19 +457,10 @@ export function useProjectDetail(projectId: number) {
   const addSceneImageUrl = async (sceneId: number) => {
     const url = (imageUrlInputs[sceneId] || "").trim();
     if (!url) return;
-    try {
-      setActionLoading(`url-${sceneId}`);
-      setError("");
-      setSuccess("");
+    await mutate(`url-${sceneId}`, async () => {
       await api.addSceneImageUrl(sceneId, url);
       setImageUrlInputs((prev) => ({ ...prev, [sceneId]: "" }));
-      setSuccess("Image added from URL.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add image");
-    } finally {
-      setActionLoading("");
-    }
+    }, "Image added from URL.");
   };
 
   const handleImageFileSelected = (sceneId: number, file: File) => {
@@ -470,30 +473,17 @@ export function useProjectDetail(projectId: number) {
     setCropFile(null);
     if (!target) return;
     const file = new File([blob], name, { type: blob.type });
-    try {
-      setActionLoading(`upload-${target.sceneId}`);
-      setError("");
-      setSuccess("");
+    await mutate(`upload-${target.sceneId}`, async () => {
       await api.uploadSceneImage(target.sceneId, file);
-      setSuccess("Image uploaded.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload image");
-    } finally {
-      setActionLoading("");
-    }
+    }, "Image uploaded.");
   };
 
   const generateSceneImage = async (sceneId: number) => {
+    setGeneratingSceneId(sceneId);
     try {
-      setGeneratingSceneId(sceneId);
-      setError("");
-      setSuccess("");
-      await api.generateImage(sceneId);
-      setSuccess("Image generated for scene.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed");
+      await mutate(`gen-${sceneId}`, async () => {
+        await api.generateImage(sceneId);
+      }, "Image generated for scene.");
     } finally {
       setGeneratingSceneId(null);
     }
@@ -509,93 +499,46 @@ export function useProjectDetail(projectId: number) {
     setTrimFile(null);
     if (!target) return;
     const file = new File([blob], name, { type: blob.type });
-    try {
-      setActionLoading(`video-${target.sceneId}`);
-      setError("");
-      setSuccess("");
+    await mutate(`video-${target.sceneId}`, async () => {
       await api.uploadSceneVideo(target.sceneId, file);
-      setSuccess("Video clip added to scene.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload video clip");
-    } finally {
-      setActionLoading("");
-    }
+    }, "Video clip added to scene.");
   };
 
   const removeSceneVideo = async (sceneId: number, videoId: number) => {
-    try {
-      setActionLoading(`video-del-${videoId}`);
-      setError("");
-      setSuccess("");
+    await mutate(`video-del-${videoId}`, async () => {
       await api.removeSceneVideo(sceneId, videoId);
-      setSuccess("Scene video clip removed.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove video clip");
-    } finally {
-      setActionLoading("");
-    }
+    }, "Scene video clip removed.");
   };
 
   const removeSceneImage = async (imageId: number) => {
-    try {
-      setActionLoading(`del-${imageId}`);
-      setError("");
-      setSuccess("");
+    await mutate(`del-${imageId}`, async () => {
       await api.deleteSceneImage(imageId);
-      setSuccess("Image removed.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove image");
-    } finally {
-      setActionLoading("");
-    }
+    }, "Image removed.");
   };
 
   const makePrimaryImage = async (imageId: number) => {
-    try {
-      setActionLoading(`primary-${imageId}`);
-      setError("");
-      setSuccess("");
+    await mutate(`primary-${imageId}`, async () => {
       await api.setPrimarySceneImage(imageId);
-      setSuccess("Primary image updated.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to set primary image");
-    } finally {
-      setActionLoading("");
-    }
+    }, "Primary image updated.");
   };
 
   const reorderSceneMedia = async (sceneId: number, items: { type: "image" | "video"; id: number }[]) => {
     try {
       setActionLoading(`reorder-${sceneId}`);
       setError("");
-      setSuccess("");
       await api.reorderSceneMedia(sceneId, items);
-      await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reorder media");
-      await loadAll();
     } finally {
+      await loadAll();
       setActionLoading("");
     }
   };
 
   const copySceneImageTo = async (imageId: number, targetSceneId: number) => {
-    try {
-      setActionLoading(`copy-${imageId}`);
-      setError("");
-      setSuccess("");
+    await mutate(`copy-${imageId}`, async () => {
       await api.copySceneImage(imageId, targetSceneId);
-      setSuccess("Image copied to scene.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to copy image");
-    } finally {
-      setActionLoading("");
-    }
+    }, "Image copied to scene.");
   };
 
   const pollVideoStatus = useCallback(
@@ -1021,16 +964,17 @@ export function useProjectDetail(projectId: number) {
 
   return {
     project, ideas, scripts, scriptTopic, scenes, thumbnails, seo, setSeo, categories,
-    activeTab, activeSceneIdx, prompts, loading, actionLoading, error, success,
+    activeTab, activeSceneIdx, loading, actionLoading, error, success,
     exportInfo, voiceProviders, selectedProvider, selectedVoice, selectedVoiceRate,
     voiceConfig, voiceProgress, selectedRatio, onRatioChange, videoStatus, timeline,
     youtubeConfig, recentVideos, youtubeUploadStatus,
+    projectId,
     imageUrlInputs, generatingSceneId, clipboardImageId, dragMedia, draggingOverScene,
     previewMedia, cropFile, trimFile, addingScene, newSceneNarration, addSceneAt,
     sceneCount, ideaTopic, editingSceneId, sceneEditForm, recordingSceneId,
     recordingSeconds, recordingPaused, micLevel, audioVersion, editingSettings,
     editingScript, creatingScript, scriptForm, showScrollTop, sidebarCollapsed,
-    activeScript, doneMap: null as unknown as ReturnType<typeof import("../components/studio/studioSteps").getDoneMap>,
+    activeScript,
     enableSubtitles, setEnableSubtitles, subtitleStyle, setSubtitleStyle,
     subtitlePosition, setSubtitlePosition, subtitleColor, setSubtitleColor,
     subtitleOutlineColor, setSubtitleOutlineColor, subtitleOutline, setSubtitleOutline,

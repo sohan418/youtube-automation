@@ -1,0 +1,572 @@
+.scenes-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+  overflow: hidden;
+}
+
+@keyframes scene-zoom-in {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.2); }
+}
+@keyframes scene-zoom-out {
+  0% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes scene-pan-right {
+  0% { transform: scale(1.2) translateX(-4%); }
+  100% { transform: scale(1.2) translateX(4%); }
+}
+@keyframes scene-pan-left {
+  0% { transform: scale(1.2) translateX(4%); }
+  100% { transform: scale(1.2) translateX(-4%); }
+}
+@keyframes scene-pan-up {
+  0% { transform: scale(1.2) translateY(4%); }
+  100% { transform: scale(1.2) translateY(-4%); }
+}
+@keyframes scene-pan-down {
+  0% { transform: scale(1.2) translateY(-4%); }
+  100% { transform: scale(1.2) translateY(4%); }
+}
+
+.scenes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.scenes-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.scenes-header-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.scenes-generate-btn {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+}
+
+.scenes-count-input {
+  width: 3rem;
+  text-align: center;
+  padding: 0.28rem 0.25rem;
+  font-size: 0.75rem;
+}
+
+.scenes-add-btn {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+.scenes-import-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.scenes-menu-wrap {
+  position: relative;
+}
+
+.scenes-menu-btn {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.scenes-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 100;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  width: 200px;
+  padding: 0.25rem;
+  display: grid;
+  gap: 2px;
+}
+
+.scenes-menu-item {
+  text-align: left;
+  background: transparent;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 4px;
+}
+
+.scenes-menu-item-danger {
+  color: var(--danger);
+}
+
+.scenes-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+
+.scenes-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.scenes-empty-icon {
+  color: var(--text-muted);
+  opacity: 0.4;
+  margin-bottom: 0.5rem;
+}
+
+.scenes-empty-text {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin: 0 0 0.6rem;
+}
+
+.scenes-generate-from-script-btn {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+}
+
+.scenes-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scenes-sidebar {
+  width: 100%;
+  height: 180px;
+  min-height: 180px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.scenes-search-bar {
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.scenes-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.72rem;
+  color: var(--text);
+  width: 100%;
+  padding: 0;
+}
+
+.scenes-search-clear {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.scenes-search-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.scenes-add-scene-btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.4rem;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.scenes-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.scenes-editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scenes-counter {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.scenes-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.scenes-toolbar-btn {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.scenes-toolbar-delete-btn {
+  border-color: rgba(255,0,0,0.15);
+}
+
+.scenes-separator {
+  color: var(--border);
+  font-size: 0.75rem;
+  margin: 0 0.15rem;
+}
+
+.scenes-nav-wrap {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.scenes-nav-btn {
+  padding: 0.1rem 0.3rem;
+}
+
+.scenes-active-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.scenes-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scenes-box {
+  padding: 0.5rem 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.scenes-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.scenes-box-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.scenes-box-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.scenes-copy-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.65rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.scenes-narration-textarea {
+  width: 100%;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.scenes-narration-text {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+  color: var(--text);
+}
+
+.scenes-prompt-box {
+  padding: 0.45rem 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.scenes-prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.15rem;
+}
+
+.scenes-prompt-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.scenes-prompt-textarea {
+  width: 100%;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.scenes-prompt-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.scenes-preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scenes-preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scenes-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+}
+
+.scenes-no-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-muted);
+}
+
+.scenes-no-media-icon {
+  opacity: 0.3;
+}
+
+.scenes-no-media-text {
+  font-size: 0.65rem;
+}
+
+.scenes-duration-wrap {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.scenes-duration-label {
+  font-size: 0.62rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 10px;
+  background: rgba(62, 166, 255, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(62, 166, 255, 0.15);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: text;
+}
+
+.scenes-duration-input {
+  width: 44px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  text-align: center;
+}
+
+.scenes-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.scenes-modal-card {
+  width: 100%;
+  max-width: 500px;
+  background: var(--surface);
+}
+
+.scenes-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.scenes-modal-title {
+  font-size: 0.95rem;
+}
+
+.scenes-modal-close {
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.scenes-modal-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.scenes-upload-btn {
+  font-size: 0.75rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.scenes-import-textarea {
+  width: 100%;
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.scenes-detected {
+  font-size: 0.75rem;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.scenes-radio-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.75rem;
+}
+
+.scenes-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.scenes-modal-actions {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.scenes-modal-action-btn {
+  font-size: 0.75rem;
+}
+
+.scenes-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.scenes-form-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.scenes-form-textarea {
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+.scenes-form-actions {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.scenes-form-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.scenes-form-primary-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+}

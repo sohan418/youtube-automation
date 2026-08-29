@@ -1,20 +1,7 @@
 import { api, mediaUrl } from "../../api/client";
-import type {
-  ExportResult,
-  Idea,
-  Scene,
-  Script,
-  SEOCategory,
-  SEOMetadata,
-  Thumbnail,
-  TimelineData,
-  VideoStatus,
-  VoiceProvider,
-  YouTubeVideo,
-} from "../../types";
-import type { DragMedia, MediaTile } from "../steps/ImagesStep";
-
-
+import { useProjectDetail } from "../../hooks/useProjectDetail";
+import type { TimelineData } from "../../types";
+import "./StudioStepContent.css";
 
 import IdeasStep from "../steps/IdeasStep";
 import ScriptStep from "../steps/ScriptStep";
@@ -28,332 +15,186 @@ import ThumbnailStep from "../steps/ThumbnailStep";
 import SeoStep from "../steps/SeoStep";
 import UploadStep from "../steps/UploadStep";
 
-interface PromptPair {
-  system: string;
-  user: string;
-}
-
 interface Props {
-  activeTab: string;
-  onTabChange: (tab: string) => void;
-  projectId: number;
-  project: { name: string; language: string; category?: string | null; ratio?: string } | null;
-  ideas: Idea[];
-  scripts: Script[];
-  activeScript: Script | null;
-  scenes: Scene[];
-  thumbnails: Thumbnail[];
-  seo: SEOMetadata | null;
-  setSeo: (v: SEOMetadata | null) => void;
-  categories: SEOCategory[];
-  exportInfo: ExportResult | null;
-  videoStatus: VideoStatus | null;
-  timeline: TimelineData | null;
-  actionLoading: string;
-  activeSceneIdx: number;
-  setActiveSceneIdx: React.Dispatch<React.SetStateAction<number>>;
-  prompts: Record<string, PromptPair>;
-  recentVideos: YouTubeVideo[];
-  youtubeConfig: { youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean } | null;
-  youtubeUploadStatus: import("../../types").YouTubeUploadStatus | null;
-  onUploadYouTube: (privacy: string) => void;
-
-  ideaTopic: string;
-  setIdeaTopic: (v: string) => void;
-  generateIdeas: () => Promise<void>;
-  selectIdea: (id: number) => Promise<void>;
-  importFreeIdeas: (items: { title: string; description: string; category?: string; trending_score?: number }[]) => Promise<void>;
-
-  scriptTopic: string;
-  setScriptTopic: (v: string) => void;
-  editingScript: boolean;
-  creatingScript: boolean;
-  setEditingScript: (v: boolean) => void;
-  setCreatingScript: (v: boolean) => void;
-  openScriptEdit: () => void;
-  saveScript: () => Promise<void>;
-  createScript: () => Promise<void>;
-  generateScript: () => Promise<void>;
-  scriptForm: { title: string; hook: string; body: string; ending: string };
-  setScriptForm: React.Dispatch<React.SetStateAction<{ title: string; hook: string; body: string; ending: string }>>;
-  runAction: (label: string, action: () => Promise<void>) => Promise<void>;
-  setSuccess: (msg: string) => void;
-
-  sceneCount: string;
-  setSceneCount: (v: string) => void;
-  addingScene: boolean;
-  addSceneAt: number | null;
-  newSceneNarration: string;
-  setNewSceneNarration: (v: string) => void;
-  addScene: () => Promise<void>;
-  openAddScene: (pos: number | null) => void;
-  closeAddScene: () => void;
-  quickAddScene: () => Promise<Scene | null>;
-  editingSceneId: number | null;
-  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null };
-  setSceneEditForm: React.Dispatch<React.SetStateAction<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null }>>;
-  openSceneEdit: (scene: Scene) => void;
-  cancelSceneEdit: () => void;
-  saveSceneEdit: (id: number) => Promise<void>;
-  removeScene: (id: number) => Promise<void>;
-  generateScenes: () => Promise<void>;
-  clearScenes: () => Promise<void>;
-  updateSceneEffect: (sceneId: number, effect: string) => Promise<void>;
-
-  generatingSceneId: number | null;
-  clipboardImageId: number | null;
-  setClipboardImageId: (v: number | null) => void;
-  imageUrlInputs: Record<number, string>;
-  dragMedia: DragMedia | null;
-  draggingOverScene: number | null;
-  setImageUrlInputs: React.Dispatch<React.SetStateAction<Record<number, string>>>;
-  setDragMedia: (v: DragMedia | null) => void;
-  setDraggingOverScene: React.Dispatch<React.SetStateAction<number | null>>;
-  generateSceneImage: (id: number) => Promise<void>;
-  addSceneImageUrl: (id: number) => Promise<void>;
-  handleImageFileSelected: (id: number, file: File) => void;
-  handleVideoFileSelected: (id: number, file: File) => void;
-  removeSceneVideo: (sceneId: number, videoId: number) => Promise<void>;
-  removeSceneImage: (id: number) => Promise<void>;
-  makePrimaryImage: (id: number) => Promise<void>;
-  handleTileDragOver: (e: React.DragEvent) => void;
-  handleTileDrop: (e: React.DragEvent, scene: Scene, target: MediaTile) => void;
-  handleSceneDrop: (e: React.DragEvent, sceneId: number) => void;
-  handleUploadTileDrop: (e: React.DragEvent, sceneId: number) => void;
-  handlePaste: (sceneId: number) => Promise<void>;
-  setPreviewMedia: (v: { path: string; kind: "image" | "video" } | null) => void;
-  voiceProviders: VoiceProvider[];
-  selectedProvider: string;
-  selectedVoice: string;
-  selectedVoiceRate: string;
-  voiceProgress: string;
-  recordingSceneId: number | null;
-  recordingSeconds: number;
-  recordingPaused: boolean;
-  micLevel: number;
-  audioVersion: Record<number, number>;
-  audioInputRef: React.RefObject<HTMLInputElement | null>;
-  formatRecordTime: (s: number) => string;
-  generateAllVoice: () => Promise<void>;
-  generateSceneVoice: (id: number) => Promise<void>;
-  startRecording: (id: number) => Promise<void>;
-  toggleRecordingPause: () => void;
-  stopRecording: () => void;
-  handleAudioFileSelected: (id: number, file: File) => Promise<void>;
-  clearSceneAudio: (id: number) => Promise<void>;
-  combineAudioPreview: () => Promise<void>;
-  downloadCombinedAudio: () => void;
-  audioPreviewUrl: string | null;
-  setSelectedProvider: (v: string) => void;
-  setSelectedVoice: (v: string) => void;
-  setSelectedVoiceRate: (v: string) => void;
-  
-  selectedRatio: string;
-  buildVideo: (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number; subtitle_font_size?: number | null }) => Promise<void>;
-  setTimeline: (v: TimelineData | null) => void;
-
-  setExportInfo: (v: ExportResult | null) => void;
-
-  enableSubtitles: boolean;
-  setEnableSubtitles: (v: boolean) => void;
-  subtitleStyle: string;
-  setSubtitleStyle: (v: string) => void;
-  subtitlePosition: string;
-  setSubtitlePosition: (v: string) => void;
-  subtitleColor: string;
-  setSubtitleColor: (v: string) => void;
-  subtitleOutlineColor: string;
-  setSubtitleOutlineColor: (v: string) => void;
-  subtitleOutline: number;
-  setSubtitleOutline: (v: number) => void;
-  subtitleFontSize: number | null;
-  setSubtitleFontSize: (v: number | null) => void;
-  saveCaptions: (patch: {
-    captions_enabled?: boolean;
-    caption_style?: string;
-    caption_position?: string;
-    caption_color?: string;
-    caption_outline_color?: string;
-    caption_outline?: number;
-    caption_font_size?: number | null;
-  }) => Promise<void>;
-
+  ctx: ReturnType<typeof useProjectDetail>;
 }
 
-export default function StudioStepContent(p: Props) {
+export default function StudioStepContent({ ctx }: Props) {
+  const { activeTab } = ctx;
+
   return (
     <div className="studio-main-content">
-      {p.activeTab === "ideas" && (
+      {activeTab === "ideas" && (
         <IdeasStep
-          projectId={p.projectId}
-          projectLanguage={p.project?.language}
-          projectCategory={p.project?.category ?? undefined}
-          ideas={p.ideas}
-          actionLoading={p.actionLoading}
-          ideaTopic={p.ideaTopic}
-          onTopicChange={p.setIdeaTopic}
-          onGenerate={p.generateIdeas}
-          onSelect={p.selectIdea}
-          onFreeAIResponse={p.importFreeIdeas}
-          recentVideos={p.recentVideos}
+          projectId={ctx.projectId}
+          projectLanguage={ctx.project?.language}
+          projectCategory={ctx.project?.category ?? undefined}
+          ideas={ctx.ideas}
+          actionLoading={ctx.actionLoading}
+          ideaTopic={ctx.ideaTopic}
+          onTopicChange={ctx.setIdeaTopic}
+          onGenerate={ctx.generateIdeas}
+          onSelect={ctx.selectIdea}
+          onFreeAIResponse={ctx.importFreeIdeas}
+          recentVideos={ctx.recentVideos}
         />
       )}
 
-      {p.activeTab === "script" && (
+      {activeTab === "script" && (
         <ScriptStep
-          projectId={p.projectId}
-          projectLanguage={p.project?.language}
-          ideas={p.ideas}
-          projectName={p.project?.name ?? ""}
-          scripts={p.scripts}
-          actionLoading={p.actionLoading}
-          scriptTopic={p.scriptTopic}
-          onTopicChange={p.setScriptTopic}
-          onGenerate={p.generateScript}
-          editing={p.editingScript}
-          creating={p.creatingScript}
-          onStartEdit={p.openScriptEdit}
-          onStartCreate={() => p.setCreatingScript(true)}
-          onCancelEditor={() => { p.setEditingScript(false); p.setCreatingScript(false); }}
-          onSave={p.creatingScript ? p.createScript : p.saveScript}
-          form={p.scriptForm}
-          onFormChange={(patch) => p.setScriptForm((f) => ({ ...f, ...patch }))}
+          projectId={ctx.projectId}
+          projectLanguage={ctx.project?.language}
+          ideas={ctx.ideas}
+          projectName={ctx.project?.name ?? ""}
+          scripts={ctx.scripts}
+          actionLoading={ctx.actionLoading}
+          scriptTopic={ctx.scriptTopic}
+          onTopicChange={ctx.setScriptTopic}
+          onGenerate={ctx.generateScript}
+          editing={ctx.editingScript}
+          creating={ctx.creatingScript}
+          onStartEdit={ctx.openScriptEdit}
+          onStartCreate={() => ctx.setCreatingScript(true)}
+          onCancelEditor={() => { ctx.setEditingScript(false); ctx.setCreatingScript(false); }}
+          onSave={ctx.creatingScript ? ctx.createScript : ctx.saveScript}
+          form={ctx.scriptForm}
+          onFormChange={(patch) => ctx.setScriptForm((f) => ({ ...f, ...patch }))}
           onImportScript={async (imported, replace) => {
-            await p.runAction("import-script", async () => {
-              await api.importScript(p.projectId, {
+            await ctx.runAction("import-script", async () => {
+              await api.importScript(ctx.projectId, {
                 title: imported.title,
                 hook: imported.hook,
                 body: imported.body,
                 ending: imported.ending,
-                language: p.project?.language ?? "en",
+                language: ctx.project?.language ?? "en",
                 replace,
               });
-              p.setSuccess(replace ? "Script imported and made active!" : "Script imported as a new version.");
+              ctx.setSuccess(replace ? "Script imported and made active!" : "Script imported as a new version.");
             });
           }}
         />
       )}
 
-      {p.activeTab === "scenes" && (
+      {activeTab === "scenes" && (
         <ScenesStep
-          projectId={p.projectId}
-          projectLanguage={p.project?.language}
-          projectRatio={p.project?.ratio ?? undefined}
-          scenes={p.scenes}
-          activeScript={p.activeScript}
-          actionLoading={p.actionLoading}
-          sceneCount={p.sceneCount}
-          onSceneCountChange={p.setSceneCount}
-          onGenerate={p.generateScenes}
-          onClearAll={p.clearScenes}
-          addingScene={p.addingScene}
-          addSceneAt={p.addSceneAt}
-          newSceneNarration={p.newSceneNarration}
-          onNewSceneNarration={p.setNewSceneNarration}
-          onAddScene={p.addScene}
-          onOpenAdd={p.openAddScene}
-          onAddBlank={() => { void p.quickAddScene(); }}
-          onCloseAdd={p.closeAddScene}
-          editingSceneId={p.editingSceneId}
-          sceneEditForm={p.sceneEditForm}
-          onEditFormChange={(patch) => p.setSceneEditForm((f) => ({ ...f, ...patch }))}
-          onStartEdit={p.openSceneEdit}
-          onCancelEdit={p.cancelSceneEdit}
-          onSaveEdit={p.saveSceneEdit}
-          onRemove={p.removeScene}
+          projectId={ctx.projectId}
+          projectLanguage={ctx.project?.language}
+          projectRatio={ctx.project?.ratio ?? undefined}
+          scenes={ctx.scenes}
+          activeScript={ctx.activeScript}
+          actionLoading={ctx.actionLoading}
+          sceneCount={ctx.sceneCount}
+          onSceneCountChange={ctx.setSceneCount}
+          onGenerate={ctx.generateScenes}
+          onClearAll={ctx.clearScenes}
+          addingScene={ctx.addingScene}
+          addSceneAt={ctx.addSceneAt}
+          newSceneNarration={ctx.newSceneNarration}
+          onNewSceneNarration={ctx.setNewSceneNarration}
+          onAddScene={ctx.addScene}
+          onOpenAdd={ctx.openAddScene}
+          onAddBlank={() => { void ctx.quickAddScene(); }}
+          onCloseAdd={ctx.closeAddScene}
+          editingSceneId={ctx.editingSceneId}
+          sceneEditForm={ctx.sceneEditForm}
+          onEditFormChange={(patch) => ctx.setSceneEditForm((f) => ({ ...f, ...patch }))}
+          onStartEdit={ctx.openSceneEdit}
+          onCancelEdit={ctx.cancelSceneEdit}
+          onSaveEdit={ctx.saveSceneEdit}
+          onRemove={ctx.removeScene}
           onImportScenes={async (importedList, replace) => {
-            await p.runAction("import-scenes", async () => {
-              await api.importScenes(p.projectId, { scenes: importedList, replace });
-              p.setSuccess(`Imported ${importedList.length} scenes successfully!`);
+            await ctx.runAction("import-scenes", async () => {
+              await api.importScenes(ctx.projectId, { scenes: importedList, replace });
+              ctx.setSuccess(`Imported ${importedList.length} scenes successfully!`);
             });
           }}
-          projectName={p.project?.name ?? ""}
+          projectName={ctx.project?.name ?? ""}
         />
       )}
 
-      {p.activeTab === "images" && (
+      {activeTab === "images" && (
         <ImagesStep
-          projectRatio={p.project?.ratio ?? undefined}
-          scenes={p.scenes}
-          activeIdx={p.activeSceneIdx}
-          setActiveIdx={p.setActiveSceneIdx}
-          actionLoading={p.actionLoading}
-          generatingSceneId={p.generatingSceneId}
-          clipboardImageId={p.clipboardImageId}
-          imageUrlInputs={p.imageUrlInputs}
-          dragMedia={p.dragMedia}
-          draggingOverScene={p.draggingOverScene}
+          projectRatio={ctx.project?.ratio ?? undefined}
+          scenes={ctx.scenes}
+          activeIdx={ctx.activeSceneIdx}
+          setActiveIdx={ctx.setActiveSceneIdx}
+          actionLoading={ctx.actionLoading}
+          generatingSceneId={ctx.generatingSceneId}
+          clipboardImageId={ctx.clipboardImageId}
+          imageUrlInputs={ctx.imageUrlInputs}
+          dragMedia={ctx.dragMedia}
+          draggingOverScene={ctx.draggingOverScene}
           mediaUrl={mediaUrl}
           onGenerateAll={() =>
-            p.runAction("images", async () => {
-              await api.generateAllImages(p.projectId);
-              p.setSuccess("All scene images generated!");
+            ctx.runAction("images", async () => {
+              await api.generateAllImages(ctx.projectId);
+              ctx.setSuccess("All scene images generated!");
             })
           }
-          onGenerateScene={p.generateSceneImage}
-          onUrlChange={(sceneId, value) => p.setImageUrlInputs((prev) => ({ ...prev, [sceneId]: value }))}
-          onAddUrl={p.addSceneImageUrl}
-          onUpload={p.handleImageFileSelected}
-          onUploadVideo={p.handleVideoFileSelected}
-          onRemoveVideo={p.removeSceneVideo}
-          onCopy={p.setClipboardImageId}
-          onMakePrimary={p.makePrimaryImage}
-          onRemove={p.removeSceneImage}
-          onPreview={(path, kind) => p.setPreviewMedia({ path, kind })}
-          onPaste={p.handlePaste}
-          setDragMedia={p.setDragMedia}
-          setDraggingOverScene={p.setDraggingOverScene}
-          handleTileDragOver={p.handleTileDragOver}
-          handleTileDrop={p.handleTileDrop}
-          handleSceneDrop={p.handleSceneDrop}
-          handleUploadTileDrop={p.handleUploadTileDrop}
-          onUpdateSceneEffect={p.updateSceneEffect}
+          onGenerateScene={ctx.generateSceneImage}
+          onUrlChange={(sceneId, value) => ctx.setImageUrlInputs((prev) => ({ ...prev, [sceneId]: value }))}
+          onAddUrl={ctx.addSceneImageUrl}
+          onUpload={ctx.handleImageFileSelected}
+          onUploadVideo={ctx.handleVideoFileSelected}
+          onRemoveVideo={ctx.removeSceneVideo}
+          onCopy={ctx.setClipboardImageId}
+          onMakePrimary={ctx.makePrimaryImage}
+          onRemove={ctx.removeSceneImage}
+          onPreview={(path, kind) => ctx.setPreviewMedia({ path, kind })}
+          onPaste={ctx.handlePaste}
+          setDragMedia={ctx.setDragMedia}
+          setDraggingOverScene={ctx.setDraggingOverScene}
+          handleTileDragOver={ctx.handleTileDragOver}
+          handleTileDrop={ctx.handleTileDrop}
+          handleSceneDrop={ctx.handleSceneDrop}
+          handleUploadTileDrop={ctx.handleUploadTileDrop}
+          onUpdateSceneEffect={ctx.updateSceneEffect}
         />
       )}
 
-      {p.activeTab === "voice" && (
+      {activeTab === "voice" && (
         <VoiceStep
-          scenes={p.scenes}
-          activeIdx={p.activeSceneIdx}
-          setActiveIdx={p.setActiveSceneIdx}
-          actionLoading={p.actionLoading}
-          voiceProviders={p.voiceProviders}
-          selectedProvider={p.selectedProvider}
+          scenes={ctx.scenes}
+          activeIdx={ctx.activeSceneIdx}
+          setActiveIdx={ctx.setActiveSceneIdx}
+          actionLoading={ctx.actionLoading}
+          voiceProviders={ctx.voiceProviders}
+          selectedProvider={ctx.selectedProvider}
           onProviderChange={(providerId) => {
-            const provider = p.voiceProviders.find((pr) => pr.id === providerId);
-            p.setSelectedProvider(providerId);
-            if (provider) p.setSelectedVoice(provider.default);
+            const provider = ctx.voiceProviders.find((pr) => pr.id === providerId);
+            ctx.setSelectedProvider(providerId);
+            if (provider) ctx.setSelectedVoice(provider.default);
           }}
-          selectedVoice={p.selectedVoice}
-          onVoiceChange={p.setSelectedVoice}
-          selectedVoiceRate={p.selectedVoiceRate}
-          onVoiceRateChange={p.setSelectedVoiceRate}
-          voiceProgress={p.voiceProgress}
-          onGenerateAll={p.generateAllVoice}
-          onGenerateScene={p.generateSceneVoice}
-          recordingSceneId={p.recordingSceneId}
-          recordingSeconds={p.recordingSeconds}
-          recordingPaused={p.recordingPaused}
-          micLevel={p.micLevel}
-          onToggleRecordingPause={p.toggleRecordingPause}
-          onStopRecording={p.stopRecording}
-          onStartRecording={p.startRecording}
-          audioInputRef={p.audioInputRef}
-          onFileSelected={p.handleAudioFileSelected}
-          onClearAudio={p.clearSceneAudio}
-          onCombineAudioPreview={p.combineAudioPreview}
-          onDownloadCombinedAudio={p.downloadCombinedAudio}
-          audioPreviewUrl={p.audioPreviewUrl}
+          selectedVoice={ctx.selectedVoice}
+          onVoiceChange={ctx.setSelectedVoice}
+          selectedVoiceRate={ctx.selectedVoiceRate}
+          onVoiceRateChange={ctx.setSelectedVoiceRate}
+          voiceProgress={ctx.voiceProgress}
+          onGenerateAll={ctx.generateAllVoice}
+          onGenerateScene={ctx.generateSceneVoice}
+          recordingSceneId={ctx.recordingSceneId}
+          recordingSeconds={ctx.recordingSeconds}
+          recordingPaused={ctx.recordingPaused}
+          micLevel={ctx.micLevel}
+          onToggleRecordingPause={ctx.toggleRecordingPause}
+          onStopRecording={ctx.stopRecording}
+          onStartRecording={ctx.startRecording}
+          audioInputRef={ctx.audioInputRef}
+          onFileSelected={ctx.handleAudioFileSelected}
+          onClearAudio={ctx.clearSceneAudio}
+          onCombineAudioPreview={ctx.combineAudioPreview}
+          onDownloadCombinedAudio={ctx.downloadCombinedAudio}
+          audioPreviewUrl={ctx.audioPreviewUrl}
           mediaUrl={mediaUrl}
-          audioVersion={p.audioVersion}
-          formatRecordTime={p.formatRecordTime}
+          audioVersion={ctx.audioVersion}
+          formatRecordTime={ctx.formatRecordTime}
         />
       )}
 
-      {p.activeTab === "music" && (
+      {activeTab === "music" && (
         <MusicStep
           onAddToTimeline={(track) => {
-            if (!p.timeline) return;
+            if (!ctx.timeline) return;
             const newClip = {
               id: `music-${Date.now()}`,
               track: "music" as const,
@@ -373,48 +214,47 @@ export default function StudioStepContent(p: Props) {
               video_path: null,
             };
             const updated: TimelineData = {
-              ...p.timeline,
-              clips: [...p.timeline.clips, newClip],
+              ...ctx.timeline,
+              clips: [...ctx.timeline.clips, newClip],
               music: { file_path: track.file_path, volume: 0.15 },
             };
-            p.setTimeline(updated);
-            api.saveTimeline(p.projectId, updated).catch(() => {});
+            ctx.setTimeline(updated);
+            api.saveTimeline(ctx.projectId, updated).catch(() => {});
           }}
         />
       )}
 
-
-      {p.activeTab === "captions" && (
+      {activeTab === "captions" && (
         <CaptionsStep
-          scenes={p.scenes}
-          ratio={p.selectedRatio}
-          enableSubtitles={p.enableSubtitles}
-          setEnableSubtitles={p.setEnableSubtitles}
-          subtitleStyle={p.subtitleStyle}
-          setSubtitleStyle={p.setSubtitleStyle}
-          subtitlePosition={p.subtitlePosition}
-          setSubtitlePosition={p.setSubtitlePosition}
-          subtitleColor={p.subtitleColor}
-          setSubtitleColor={p.setSubtitleColor}
-          subtitleOutlineColor={p.subtitleOutlineColor}
-          setSubtitleOutlineColor={p.setSubtitleOutlineColor}
-          subtitleOutline={p.subtitleOutline}
-          setSubtitleOutline={p.setSubtitleOutline}
-          subtitleFontSize={p.subtitleFontSize}
-          setSubtitleFontSize={p.setSubtitleFontSize}
-          onSave={p.saveCaptions}
+          scenes={ctx.scenes}
+          ratio={ctx.selectedRatio}
+          enableSubtitles={ctx.enableSubtitles}
+          setEnableSubtitles={ctx.setEnableSubtitles}
+          subtitleStyle={ctx.subtitleStyle}
+          setSubtitleStyle={ctx.setSubtitleStyle}
+          subtitlePosition={ctx.subtitlePosition}
+          setSubtitlePosition={ctx.setSubtitlePosition}
+          subtitleColor={ctx.subtitleColor}
+          setSubtitleColor={ctx.setSubtitleColor}
+          subtitleOutlineColor={ctx.subtitleOutlineColor}
+          setSubtitleOutlineColor={ctx.setSubtitleOutlineColor}
+          subtitleOutline={ctx.subtitleOutline}
+          setSubtitleOutline={ctx.setSubtitleOutline}
+          subtitleFontSize={ctx.subtitleFontSize}
+          setSubtitleFontSize={ctx.setSubtitleFontSize}
+          onSave={ctx.saveCaptions}
         />
       )}
 
-      {p.activeTab === "timeline" && (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <h3 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>🎞️ Timeline Guide</h3>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: 0, lineHeight: 1.4 }}>
+      {activeTab === "timeline" && (
+        <div className="card timeline-guide">
+          <h3>🎞️ Timeline Guide</h3>
+          <p>
             Use the timeline editor at the bottom right to arrange clips, trim audio narrations, and adjust layout durations.
           </p>
-          <div style={{ padding: "0.75rem", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            <strong style={{ color: "var(--text)" }}>Keyboard & Editor Shortcuts:</strong>
-            <ul style={{ paddingLeft: "1.2rem", margin: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+          <div className="timeline-guide-box">
+            <strong>Keyboard & Editor Shortcuts:</strong>
+            <ul>
               <li><strong>Spacebar:</strong> Play/pause final video preview.</li>
               <li><strong>Shift + Drag:</strong> Hold shift and drag to slide clips horizontally.</li>
               <li><strong>Resize Edges:</strong> Drag crop boundaries to adjust durations.</li>
@@ -423,84 +263,79 @@ export default function StudioStepContent(p: Props) {
         </div>
       )}
 
-
-
-      {p.activeTab === "thumbnail" && (
+      {activeTab === "thumbnail" && (
         <ThumbnailStep
-          thumbnails={p.thumbnails}
-          actionLoading={p.actionLoading}
+          thumbnails={ctx.thumbnails}
+          actionLoading={ctx.actionLoading}
           mediaUrl={mediaUrl}
           onGenerate={() =>
-            p.runAction("thumbnails", async () => {
-              await api.generateThumbnails(p.projectId, 3);
-              p.setSuccess("Generated 3 thumbnail options!");
+            ctx.runAction("thumbnails", async () => {
+              await api.generateThumbnails(ctx.projectId, 3);
+              ctx.setSuccess("Generated 3 thumbnail options!");
             })
           }
           onSelect={(thumbId) =>
-            p.runAction("select-thumb", async () => {
+            ctx.runAction("select-thumb", async () => {
               await api.selectThumbnail(thumbId);
-              p.setSuccess("Thumbnail selected");
+              ctx.setSuccess("Thumbnail selected");
             })
           }
           onUpload={(file) =>
-            p.runAction("upload-thumb", async () => {
-              await api.uploadThumbnail(p.projectId, file);
-              p.setSuccess("Thumbnail uploaded!");
+            ctx.runAction("upload-thumb", async () => {
+              await api.uploadThumbnail(ctx.projectId, file);
+              ctx.setSuccess("Thumbnail uploaded!");
             })
           }
         />
       )}
 
-      {p.activeTab === "seo" && (
+      {activeTab === "seo" && (
         <SeoStep
-          projectId={p.projectId}
-          projectLanguage={p.project?.language}
-          seo={p.seo}
-          scenes={p.scenes}
-          activeScript={p.activeScript}
-          actionLoading={p.actionLoading}
-          projectCategory={p.project?.category ?? ""}
+          projectId={ctx.projectId}
+          projectLanguage={ctx.project?.language}
+          seo={ctx.seo}
+          scenes={ctx.scenes}
+          activeScript={ctx.activeScript}
+          actionLoading={ctx.actionLoading}
+          projectCategory={ctx.project?.category ?? ""}
           onGenerate={() =>
-            p.runAction("seo", async () => {
-              await api.generateSEO(p.projectId, p.project?.language ?? "en");
-              p.setSuccess("SEO metadata generated!");
+            ctx.runAction("seo", async () => {
+              await api.generateSEO(ctx.projectId, ctx.project?.language ?? "en");
+              ctx.setSuccess("SEO metadata generated!");
             })
           }
           onSave={async (data) => {
-            await p.runAction("seo-save", async () => {
-              const updated = await api.updateSEO(p.projectId, data);
-              p.setSeo(updated);
-              p.setSuccess("SEO saved");
+            await ctx.runAction("seo-save", async () => {
+              const updated = await api.updateSEO(ctx.projectId, data);
+              ctx.setSeo(updated);
+              ctx.setSuccess("SEO saved");
             });
           }}
           onFreeAIResponse={(data) =>
-            p.runAction("seo-import", async () => {
+            ctx.runAction("seo-import", async () => {
               const update: { title?: string; description?: string; tags?: string; hashtags?: string } = {};
               if (data.title != null) update.title = data.title;
               if (data.description != null) update.description = data.description;
               if (data.tags != null) update.tags = data.tags;
               if (data.hashtags != null) update.hashtags = data.hashtags;
-              await api.updateSEO(p.projectId, update);
-              p.setSuccess("SEO data imported!");
+              await api.updateSEO(ctx.projectId, update);
+              ctx.setSuccess("SEO data imported!");
             })
           }
         />
       )}
 
-      {p.activeTab === "upload" && (
+      {activeTab === "upload" && (
         <UploadStep
-          projectId={p.projectId}
-          actionLoading={p.actionLoading}
-          videoStatus={p.videoStatus}
-          seo={p.seo}
-          youtubeConfig={p.youtubeConfig}
-          youtubeUploadStatus={p.youtubeUploadStatus}
-          onUploadYouTube={p.onUploadYouTube}
+          projectId={ctx.projectId}
+          actionLoading={ctx.actionLoading}
+          videoStatus={ctx.videoStatus}
+          seo={ctx.seo}
+          youtubeConfig={ctx.youtubeConfig}
+          youtubeUploadStatus={ctx.youtubeUploadStatus}
+          onUploadYouTube={ctx.uploadYouTube}
         />
       )}
-
-
-
     </div>
   );
 }

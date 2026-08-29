@@ -1,5 +1,6 @@
 import { Type, Eye, Zap, Film, Feather, AlignCenter } from "lucide-react";
 import type { Scene } from "../../types";
+import "./CaptionsStep.css";
 
 interface Props {
   scenes: Scene[];
@@ -97,85 +98,59 @@ export default function CaptionsStep({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+    <div className="captions-root">
       {/* Header */}
-      <div className="card" style={{ padding: "0.6rem 0.85rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+      <div className="card captions-header">
+        <div className="captions-header-row">
           <Type size={15} color="var(--primary)" />
-          <h3 style={{ margin: 0, fontSize: "0.9rem" }}>Captions</h3>
-          <span style={{ marginLeft: "auto", display: "flex", gap: "0.85rem", fontSize: "0.72rem", color: "var(--text-muted)" }}>
+          <h3 className="captions-header-title">Captions</h3>
+          <span className="captions-header-stats">
             <span>
-              <strong style={{ color: "var(--text)" }}>{scenes.length}</strong> scenes
+              <strong className="captions-stat">{scenes.length}</strong> scenes
             </span>
             <span>
-              <strong style={{ color: "var(--text)" }}>{totalWords}</strong> words
+              <strong className="captions-stat">{totalWords}</strong> words
             </span>
             {activeStyle.value === "word_by_word" && totalWords > 0 && (
               <span>
-                ~<strong style={{ color: "var(--text)" }}>{Math.ceil(totalWords / 4)}</strong> blocks
+                ~<strong className="captions-stat">{Math.ceil(totalWords / 4)}</strong> blocks
               </span>
             )}
           </span>
         </div>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", margin: "0.25rem 0 0" }}>
+        <p className="captions-header-desc">
           Configure how narration text appears on screen. Applied when building the final video.
         </p>
       </div>
 
       {/* Enable / Disable Toggle */}
-      <div
-        className="card"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0.6rem 0.85rem",
-        }}
-      >
+      <div className="card captions-toggle">
         <div>
-          <div style={{ fontWeight: 600, fontSize: "0.8rem" }}>Burn Captions on Video</div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+          <div className="captions-toggle-title">Burn Captions on Video</div>
+          <div className="captions-toggle-desc">
             Hardcode subtitles onto video frames (not a separate .srt file)
           </div>
         </div>
         <button
           type="button"
           onClick={() => update({ captions_enabled: !enableSubtitles }, () => setEnableSubtitles(!enableSubtitles))}
-          style={{
-            minWidth: "44px",
-            height: "24px",
-            borderRadius: "12px",
-            border: "none",
-            background: enableSubtitles ? "var(--primary)" : "var(--border)",
-            cursor: "pointer",
-            position: "relative",
-            transition: "background 0.2s",
-            flexShrink: 0,
-          }}
+          className="captions-toggle-btn"
+          style={{ background: enableSubtitles ? "var(--primary)" : "var(--border)" }}
         >
           <span
-            style={{
-              position: "absolute",
-              top: "3px",
-              left: enableSubtitles ? "23px" : "3px",
-              width: "18px",
-              height: "18px",
-              borderRadius: "50%",
-              background: "#fff",
-              transition: "left 0.2s",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-            }}
+            className="captions-toggle-knob"
+            style={{ left: enableSubtitles ? "23px" : "3px" }}
           />
         </button>
       </div>
 
       {/* Caption Customizations stacked vertically */}
       {enableSubtitles && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.6rem 0.85rem" }}>
-            <div style={{ fontWeight: 600, fontSize: "0.8rem" }}>Caption Style</div>
+        <div className="captions-column">
+          <div className="card captions-card">
+            <div className="captions-section-title">Caption Style</div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.4rem" }}>
+            <div className="captions-style-grid">
               {STYLES.map((style) => {
                   const Icon = style.icon;
                   const active = subtitleStyle === style.value;
@@ -184,53 +159,31 @@ export default function CaptionsStep({
                       key={style.value}
                       type="button"
                       onClick={() => update({ caption_style: style.value }, () => setSubtitleStyle(style.value))}
+                      className="captions-style-btn"
                       style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-start",
-                        gap: "0.25rem",
-                        padding: "0.45rem 0.55rem",
-                        borderRadius: "var(--radius)",
-                        border: active ? `2px solid var(--primary)` : `1px solid var(--border)`,
+                        border: active ? "2px solid var(--primary)" : "1px solid var(--border)",
                         background: active ? "var(--surface)" : "var(--bg)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        transition: "all 0.15s ease",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div className="captions-style-label-row">
                         <Icon size={13} color={active ? "var(--primary)" : "var(--text-muted)"} />
                         <span
-                          style={{
-                            fontWeight: 600,
-                            fontSize: "0.75rem",
-                            color: active ? "var(--primary)" : "var(--text)",
-                          }}
+                          className="captions-style-label"
+                          style={{ color: active ? "var(--primary)" : "var(--text)" }}
                         >
                           {style.label}
                         </span>
                       </div>
-                      <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", lineHeight: 1.3 }}>
+                      <span className="captions-style-desc">
                         {style.description}
                       </span>
                       <div
+                        className="captions-preview"
                         style={{
-                          marginTop: "0.1rem",
-                          padding: "0.2rem 0.4rem",
-                          borderRadius: "4px",
-                          background: "#000",
-                          fontSize: "0.6rem",
-                          fontWeight: 700,
                           color: subtitleColor,
                           fontFamily: style.value === "shorts" ? "Impact, sans-serif" : "Arial, sans-serif",
                           letterSpacing: style.value === "shorts" ? "0.5px" : "normal",
                           textTransform: style.value === "shorts" ? "uppercase" : "none",
-                          width: "100%",
-                          textAlign: "center",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          boxSizing: "border-box",
                           textShadow: `1px 1px 2px ${subtitleOutlineColor}, -1px -1px 2px ${subtitleOutlineColor}, 1px -1px 2px ${subtitleOutlineColor}, -1px 1px 2px ${subtitleOutlineColor}`,
                         }}
                       >
@@ -243,34 +196,28 @@ export default function CaptionsStep({
             </div>
 
             {/* Position & Appearance */}
-            <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.65rem", padding: "0.6rem 0.85rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <div className="card captions-appearance-card">
+                <div className="captions-appearance-row">
                   <AlignCenter size={14} color="var(--text-muted)" />
-                  <span style={{ fontWeight: 600, fontSize: "0.8rem" }}>Position & Appearance</span>
+                  <span className="captions-section-title">Position & Appearance</span>
                 </div>
 
                 {/* Position */}
                 <div>
-                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "0.25rem" }}>
+                  <label className="captions-label">
                     Text Position
                   </label>
-                  <div style={{ display: "flex", gap: "0.35rem" }}>
+                  <div className="captions-position-group">
                     {POSITIONS.map((pos) => (
                       <button
                         key={pos.value}
                         type="button"
                         onClick={() => update({ caption_position: pos.value }, () => setSubtitlePosition(pos.value))}
+                        className="captions-position-btn"
                         style={{
-                          flex: 1,
-                          padding: "0.35rem 0",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          borderRadius: "6px",
                           border: subtitlePosition === pos.value ? "1.5px solid var(--primary)" : "1px solid var(--border)",
                           background: subtitlePosition === pos.value ? "var(--surface)" : "var(--bg)",
                           color: subtitlePosition === pos.value ? "var(--primary)" : "var(--text-muted)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
                         }}
                       >
                         {pos.label}
@@ -280,101 +227,75 @@ export default function CaptionsStep({
                 </div>
 
                 {/* Color + Outline Color */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+                <div className="captions-color-grid">
                   <div>
-                    <label style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "0.25rem" }}>
+                    <label className="captions-label">
                       Text Color
                     </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap" }}>
+                    <div className="captions-swatch-group">
                       {COLOR_PRESETS.map((c) => (
                         <button
                           key={c}
                           type="button"
                           onClick={() => update({ caption_color: c }, () => setSubtitleColor(c))}
                           title={c}
+                          className="captions-swatch"
                           style={{
-                            width: "22px",
-                            height: "22px",
-                            borderRadius: "50%",
                             background: c,
                             border: subtitleColor === c ? "2px solid var(--primary)" : "1.5px solid var(--border)",
-                            cursor: "pointer",
                             boxShadow: subtitleColor === c ? "0 0 0 2px rgba(139,92,246,0.25)" : "none",
-                            transition: "all 0.15s ease",
                           }}
                         />
                       ))}
                       <label
                         title="Custom color"
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "50%",
-                          background: "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
-                          border: "1.5px solid var(--border)",
-                          cursor: "pointer",
-                          position: "relative",
-                          overflow: "hidden",
-                        }}
+                        className="captions-swatch-custom"
                       >
                         <input
                           type="color"
                           value={subtitleColor}
                           onChange={(e) => update({ caption_color: e.target.value }, () => setSubtitleColor(e.target.value))}
-                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
+                          className="captions-swatch-input"
                         />
                       </label>
                     </div>
-                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.2rem", display: "inline-block" }}>
+                    <span className="captions-color-value">
                       {subtitleColor}
                     </span>
                   </div>
 
                   <div>
-                    <label style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "0.25rem" }}>
+                    <label className="captions-label">
                       Outline Color
                     </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap" }}>
+                    <div className="captions-swatch-group">
                       {OUTLINE_PRESETS.map((c) => (
                         <button
                           key={c}
                           type="button"
                           onClick={() => update({ caption_outline_color: c }, () => setSubtitleOutlineColor(c))}
                           title={c}
+                          className="captions-swatch"
                           style={{
-                            width: "22px",
-                            height: "22px",
-                            borderRadius: "50%",
                             background: c,
                             border: subtitleOutlineColor === c ? "2px solid var(--primary)" : "1.5px solid var(--border)",
-                            cursor: "pointer",
                             boxShadow: subtitleOutlineColor === c ? "0 0 0 2px rgba(139,92,246,0.25)" : "none",
-                            transition: "all 0.15s ease",
                           }}
                         />
                       ))}
                       <label
                         title="Custom outline color"
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "50%",
-                          background: "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
-                          border: "1.5px solid var(--border)",
-                          cursor: "pointer",
-                          position: "relative",
-                          overflow: "hidden",
-                        }}
+                        className="captions-swatch-custom"
                       >
                         <input
                           type="color"
                           value={subtitleOutlineColor}
                           onChange={(e) => update({ caption_outline_color: e.target.value }, () => setSubtitleOutlineColor(e.target.value))}
-                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
+                          className="captions-swatch-input"
                         />
                       </label>
                     </div>
-                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.2rem", display: "inline-block" }}>
+                    <span className="captions-color-value">
                       {subtitleOutlineColor}
                     </span>
                   </div>
@@ -382,9 +303,9 @@ export default function CaptionsStep({
 
                 {/* Outline Thickness */}
                 <div>
-                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)", display: "flex", justifyContent: "space-between" }}>
+                  <label className="captions-outline-label">
                     <span>Outline Thickness</span>
-                    <span style={{ fontFamily: "monospace", color: "var(--text)" }}>{subtitleOutline.toFixed(1)}</span>
+                    <span className="captions-monospace-value">{subtitleOutline.toFixed(1)}</span>
                   </label>
                   <input
                     type="range"
@@ -393,9 +314,9 @@ export default function CaptionsStep({
                     step={0.5}
                     value={subtitleOutline}
                     onChange={(e) => update({ caption_outline: parseFloat(e.target.value) }, () => setSubtitleOutline(parseFloat(e.target.value)))}
-                    style={{ width: "100%", marginTop: "0.15rem", accentColor: "var(--primary)", cursor: "pointer" }}
+                    className="captions-range"
                   />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", color: "var(--text-muted)" }}>
+                  <div className="captions-range-marks">
                     <span>None</span>
                     <span>Thick</span>
                   </div>
@@ -403,20 +324,20 @@ export default function CaptionsStep({
 
                 {/* Font Size */}
                 <div>
-                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label className="captions-font-label">
                     <span>Font Size</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <span className="captions-font-value-row">
                       {subtitleFontSize === null ? (
-                        <span style={{ fontFamily: "monospace", color: "var(--text-muted)", fontSize: "0.68rem" }}>Auto</span>
+                        <span className="captions-monospace-muted">Auto</span>
                       ) : (
-                        <span style={{ fontFamily: "monospace", color: "var(--text)" }}>{subtitleFontSize}px</span>
+                        <span className="captions-monospace-value">{subtitleFontSize}px</span>
                       )}
                       {subtitleFontSize !== null && (
                         <button
                           type="button"
                           onClick={() => update({ caption_font_size: null }, () => setSubtitleFontSize(null))}
                           title="Reset to auto"
-                          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.68rem", padding: "0 2px", lineHeight: 1 }}
+                          className="captions-reset-btn"
                         >
                           ✕
                         </button>
@@ -430,9 +351,9 @@ export default function CaptionsStep({
                     step={2}
                     value={subtitleFontSize ?? 40}
                     onChange={(e) => update({ caption_font_size: parseInt(e.target.value, 10) }, () => setSubtitleFontSize(parseInt(e.target.value, 10)))}
-                    style={{ width: "100%", marginTop: "0.15rem", accentColor: "var(--primary)", cursor: "pointer" }}
+                    className="captions-range"
                   />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", color: "var(--text-muted)" }}>
+                  <div className="captions-range-marks">
                     <span>Small (16px)</span>
                     <span>Auto</span>
                     <span>Large (120px)</span>
@@ -446,12 +367,12 @@ export default function CaptionsStep({
 
       {/* Scene Narration Preview */}
       {hasNarration && enableSubtitles && (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.45rem", padding: "0.6rem 0.85rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <div className="card captions-preview-card">
+          <div className="captions-appearance-row">
             <Eye size={14} color="var(--text-muted)" />
-            <span style={{ fontWeight: 600, fontSize: "0.8rem" }}>Narration Preview</span>
+            <span className="captions-section-title">Narration Preview</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", maxHeight: "240px", overflowY: "auto" }}>
+          <div className="captions-preview-list">
             {scenes.map((scene) => {
               const narration = scene.narration || "";
               if (!narration) return null;
@@ -467,28 +388,16 @@ export default function CaptionsStep({
               return (
                 <div
                   key={scene.id}
-                  style={{
-                    padding: "0.4rem 0.5rem",
-                    borderRadius: "6px",
-                    background: "var(--bg)",
-                    border: "1px solid var(--border)",
-                  }}
+                  className="captions-narration-item"
                 >
-                  <div style={{ fontSize: "0.65rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "0.2rem" }}>
+                  <div className="captions-scene-label">
                     Scene {scene.order_index}
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem" }}>
+                  <div className="captions-chunks">
                     {chunks.map((chunk, ci) => (
                       <span
                         key={ci}
-                        style={{
-                          padding: "0.1rem 0.35rem",
-                          borderRadius: "3px",
-                          background: "rgba(255,255,255,0.08)",
-                          fontSize: "0.7rem",
-                          color: "var(--text)",
-                          lineHeight: 1.35,
-                        }}
+                        className="captions-chunk"
                       >
                         {chunk.join(" ")}
                       </span>

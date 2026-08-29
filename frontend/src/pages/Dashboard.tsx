@@ -5,6 +5,7 @@ import { api, mediaUrl } from "../api/client";
 import type { Project, SEOCategory } from "../types";
 import ToastNotification from "../components/studio/ToastNotification";
 import NewProjectDialog from "../components/editors/NewProjectDialog";
+import "./Dashboard.css";
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`badge badge-${status}`}>{status}</span>;
@@ -80,55 +81,24 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0.85rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-      {/* Simple Header Bar */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0.6rem 1.25rem",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius)",
-          marginBottom: "0.25rem"
-        }}
-      >
-        <Link to="/" style={{ display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none" }}>
-          <div style={{
-            background: "var(--primary)",
-            width: 30,
-            height: 30,
-            borderRadius: "6px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontWeight: 800,
-            fontSize: "1.1rem"
-          }}>
-            ▶
-          </div>
-          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text)" }}>YouTube Content Studio</span>
+    <div className="dashboard-page">
+      <header className="dashboard-header">
+        <Link to="/" className="dashboard-brand">
+          <div className="dashboard-logo">▶</div>
+          <span className="dashboard-brand-name">YouTube Content Studio</span>
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>Local MVP</span>
-          <Link
-            to="/admin/prompts"
-            style={{
-              color: "var(--text-muted)", fontSize: "0.75rem", textDecoration: "none",
-              padding: "0.3rem 0.6rem", border: "1px solid var(--border)", borderRadius: "var(--radius)",
-            }}
-          >
+        <div className="dashboard-header-right">
+          <span className="dashboard-muted-sm">Local MVP</span>
+          <Link to="/admin/prompts" className="dashboard-prompt-link">
             Prompt Manager
           </Link>
         </div>
       </header>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+      <div className="dashboard-title-row">
         <div>
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.15rem" }}>Projects</h2>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
+          <h2 className="dashboard-title">Projects</h2>
+          <p className="dashboard-subtitle">
             Manage your AI-powered video production pipeline
           </p>
         </div>
@@ -158,42 +128,35 @@ export default function Dashboard() {
         <div className="loading"><span className="spinner" /> Loading projects...</div>
       ) : projects.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
-          <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>No projects yet. Create your first one!</p>
+          <p className="dashboard-empty">No projects yet. Create your first one!</p>
           <button className="btn-primary" onClick={() => setShowDialog(true)}>+ New Project</button>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gridAutoRows: "1fr", gap: "1rem" }}>
+        <div className="dashboard-grid">
           {projects.map((project) => (
-            <div key={project.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-              <Link to={`/projects/${project.id}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column", flex: 1 }}>
-                <div className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden", padding: 0, cursor: "pointer", flex: 1 }}>
-                  <div
-                    style={{
-                      aspectRatio: "16 / 9",
-                      background: "linear-gradient(135deg, #1a1a24, #2a2a3a)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "var(--text-muted)", position: "relative", overflow: "hidden",
-                    }}
-                  >
+            <div key={project.id} className="dashboard-card-wrap">
+              <Link to={`/projects/${project.id}`} className="dashboard-card-link">
+                <div className="card dashboard-card">
+                  <div className="dashboard-thumb">
                     {project.thumbnail ? (
-                      <img src={mediaUrl(project.thumbnail)} alt={project.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      <img src={mediaUrl(project.thumbnail)} alt={project.name} className="dashboard-thumb-img" />
                     ) : (
-                      <Clapperboard size={40} style={{ opacity: 0.4 }} />
+                      <Clapperboard size={40} className="dashboard-thumb-icon" />
                     )}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.9rem", flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
-                      <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.25 }}>
+                  <div className="dashboard-card-body">
+                    <div className="dashboard-card-top">
+                      <span className="dashboard-card-name">
                         {project.name}
                       </span>
                       <StatusBadge status={project.status} />
                     </div>
                     {project.description && (
-                      <p style={{ color: "var(--text-muted)", fontSize: "0.78rem", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      <p className="dashboard-card-desc">
                         {project.description}
                       </p>
                     )}
-                    <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: "auto" }}>
+                    <p className="dashboard-card-meta">
                       {project.category || "Uncategorized"} · {project.language.toUpperCase()} · Updated {new Date(project.updated_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -202,7 +165,7 @@ export default function Dashboard() {
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
                 title="Delete project"
-                style={{ position: "absolute", top: "0.5rem", right: "0.5rem", background: "rgba(0,0,0,0.6)", border: "none", borderRadius: "6px", padding: "6px", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                className="dashboard-delete-btn"
               >
                 <Trash2 size={14} />
               </button>

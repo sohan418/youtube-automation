@@ -1,0 +1,97 @@
+.thumb-card-padding {
+  padding: 0.6rem 0.85rem;
+}
+
+.thumb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.thumb-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.thumb-generate-btn {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.65rem;
+}
+
+.thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.thumb-card {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary, transparent);
+}
+
+.thumb-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.12rem 0.35rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.thumb-copy-btn {
+  position: absolute;
+  top: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 0.6rem;
+  padding: 0.12rem 0.3rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  transition: color 0.15s;
+}
+
+.thumb-select-btn {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  font-size: 0.72rem;
+  padding: 0.28rem 0.4rem;
+}
+
+.thumb-drop-card {
+  border-style: dashed;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 110px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.thumb-drop-text {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
