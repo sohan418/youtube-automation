@@ -71,7 +71,7 @@ export default function AdminPrompts() {
           <Link to="/" style={{ color: "var(--text-muted)", textDecoration: "none" }}>
             <ArrowLeft size={18} />
           </Link>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0 }}>Prompt Manager</h1>
+          <h1 style={{ fontSize: "1.15rem", fontWeight: 700, margin: 0 }}>Prompt Manager</h1>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button className="btn-secondary" onClick={handleReset} style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
@@ -88,7 +88,7 @@ export default function AdminPrompts() {
         </div>
       </div>
 
-      <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginBottom: "1.25rem" }}>
+      <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: "1.25rem" }}>
         Edit prompts used by the "Generate with Free AI" feature. {" "}
         <strong>{"{language}"}</strong>, <strong>{"{topic}"}</strong>, <strong>{"{ratio}"}</strong>, <strong>{"{hook}"}</strong>, <strong>{"{body}"}</strong>, <strong>{"{ending}"}</strong>, <strong>{"{title}"}</strong>, <strong>{"{script_excerpt}"}</strong> are replaced at runtime.
       </p>

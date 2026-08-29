@@ -1,0 +1,164 @@
+.scenes-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 0;
+}
+
+.scenes-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+
+.scenes-sidebar-title {
+  font-size: 0.95rem;
+  margin: 0;
+  font-weight: 700;
+}
+
+.scenes-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-right: 0.15rem;
+  min-height: 0;
+}
+
+.scene-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.scene-item.is-active {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 184, 212, 0.4);
+  box-shadow: 0 0 10px rgba(0, 184, 212, 0.08);
+}
+
+.scene-item:not(.is-active):hover {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.scene-badge {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.scene-badge.pending {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  border: 2px solid transparent;
+}
+
+.scene-badge.done {
+  background: var(--success);
+  color: var(--success);
+  border: 2px solid transparent;
+}
+
+.scene-badge.active {
+  background: var(--accent);
+  color: #fff;
+  border: 2px solid rgba(0, 184, 212, 0.25);
+}
+
+.scene-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.scene-item-title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scene-item.is-active .scene-item-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.scene-item-duration {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.scene-wave {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+
+.wave-bar {
+  width: 2px;
+  background: var(--accent);
+  height: 100%;
+  animation: soundwave 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes soundwave {
+  from { height: 3px; }
+  to { height: 12px; }
+}
+
+.scene-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.scenes-legend {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 0.64rem;
+  color: var(--text-muted);
+}
+
+.scenes-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.scenes-legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}

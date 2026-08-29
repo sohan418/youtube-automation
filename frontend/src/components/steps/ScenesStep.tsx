@@ -290,7 +290,7 @@ export default function ScenesStep({
       ) : (
         <div className="scenes-main">
           {/* ── Left: Sidebar ── */}
-          <div className="scenes-sidebar">
+          <div className="scenes-side-panel">
             <div className="scenes-search-bar">
               <Search size={12} color="var(--text-muted)" />
               <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="scenes-search-input" />

@@ -1,0 +1,151 @@
+.studio-header {
+  height: var(--header-height);
+  min-height: var(--header-height);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  z-index: 10;
+}
+
+.studio-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.studio-header-brand-icon {
+  font-size: 0.9rem;
+  color: var(--primary);
+}
+
+.studio-header-brand-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.studio-header-divider {
+  color: var(--border);
+  font-size: 0.75rem;
+}
+
+.studio-header-project {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.studio-header-project-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.studio-header-lang-badge.badge {
+  background: rgba(124, 92, 255, 0.15);
+  color: var(--primary);
+  font-size: 0.6rem;
+}
+
+.studio-ratio-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.studio-ratio-btn {
+  padding: 0.2rem 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.studio-ratio-btn.is-active {
+  background: var(--primary);
+}
+
+.studio-ratio-btn:not(.is-active):hover {
+  background: var(--surface-hover);
+}
+
+.studio-ratio-box {
+  border-radius: 2px;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+
+.studio-ratio-box.is-active-box {
+  border-color: #fff;
+}
+
+.studio-progress {
+  margin-left: auto;
+}
+
+.studio-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.studio-header-action-btn {
+  font-size: 0.72rem;
+  padding: 0.28rem 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.studio-export-btn.btn-primary {
+  background: var(--border);
+  color: var(--text-muted);
+  border: none;
+  cursor: not-allowed;
+}
+
+.studio-export-btn.btn-primary.can-export {
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+}
+
+.studio-ghost-btn {
+  padding: 0.3rem 0.5rem;
+}
+
+.studio-header-gap {
+  color: var(--border);
+  font-size: 0.75rem;
+  margin: 0 0.2rem;
+}
+
+.studio-export-link {
+  padding: 0.3rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  text-decoration: none;
+}

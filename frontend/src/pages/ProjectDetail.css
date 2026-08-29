@@ -16,7 +16,7 @@
   opacity: 0.8;
 }
 
-.timeline-wrapper {
+.timeline-pane {
   min-height: 140px;
   border-top: 1px solid var(--border);
   background: var(--surface);

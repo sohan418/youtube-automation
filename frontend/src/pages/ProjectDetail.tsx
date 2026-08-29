@@ -255,7 +255,7 @@ export default function ProjectDetail() {
 
             {/* Workspace Bottom Row: Full-Width Timeline Tracks (starts after the step panel) */}
             <div
-              className="timeline-wrapper"
+              className="timeline-pane"
               style={{ height: `${timelineHeight}px` }}
             >
               {/* Resize Handle: Hoverable and draggable bar at the top */}

@@ -39,7 +39,7 @@
 }
 
 .dashboard-brand-name {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: var(--text);
 }
@@ -52,12 +52,12 @@
 
 .dashboard-muted-sm {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
 
 .dashboard-prompt-link {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-decoration: none;
   padding: 0.3rem 0.6rem;
   border: 1px solid var(--border);
@@ -72,13 +72,13 @@
 }
 
 .dashboard-title {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   margin-bottom: 0.15rem;
 }
 
 .dashboard-subtitle {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 .dashboard-empty {
@@ -153,7 +153,7 @@
 }
 
 .dashboard-card-name {
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--text);
   line-height: 1.25;
@@ -161,7 +161,7 @@
 
 .dashboard-card-desc {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   margin: 0;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -170,7 +170,7 @@
 
 .dashboard-card-meta {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   margin-top: auto;
 }
 
