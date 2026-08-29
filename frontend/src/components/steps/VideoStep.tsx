@@ -57,20 +57,17 @@ export default function VideoStep({
   subtitleOutlineColor,
   subtitleOutline,
   subtitleFontSize,
-  exportInfo,
+  exportInfo: _exportInfo,
   onExport,
   activeSceneIdx,
   setActiveSceneIdx,
 }: Props) {
   const stripRef = useRef<HTMLDivElement | null>(null);
   const building = actionLoading === "video" || videoStatus?.running;
-  const portrait = ratio === "9:16";
   const hasBuiltVideo = !!videoStatus?.output;
   const [forceRebuild, setForceRebuild] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
 
   const sceneStatuses = videoStatus?.scene_statuses || {};
-
   const safeIdx = scenes.length > 0 ? Math.min(Math.max(activeSceneIdx, 0), scenes.length - 1) : 0;
   const activeScene: Scene | null = scenes[safeIdx] ?? null;
 
@@ -79,31 +76,22 @@ export default function VideoStep({
   const totalDuration = scenes.reduce((acc, s) => acc + (s.duration_seconds ?? 0), 0);
 
   const scrollStrip = (dir: number) => {
-    stripRef.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+    stripRef.current?.scrollBy({ left: dir * 180, behavior: "smooth" });
   };
 
   const narrationText = activeScene?.narration ?? "";
   const narrationSnippet =
     narrationText.length > 200 ? `${narrationText.slice(0, 200)}…` : narrationText;
-  const subtitleSample =
-    narrationText.length > 70 ? `${narrationText.slice(0, 70)}…` : narrationText;
-
-  const subtitlePosStyle: React.CSSProperties =
-    subtitlePosition === "top"
-      ? { top: "5%", transform: "translateX(-50%)" }
-      : subtitlePosition === "center"
-      ? { top: "50%", transform: "translate(-50%, -50%)" }
-      : { bottom: "6%", transform: "translateX(-50%)" };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-      {/* Big Preview Player */}
-      <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-          <Video size={16} color="var(--primary)" />
-          <h3 style={{ margin: 0, fontSize: "0.95rem" }}>Editor</h3>
-          <span
-            style={{
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "100%" }}>
+      {/* Editor Control Card */}
+      <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.6rem", padding: "0.85rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <Video size={16} color="var(--primary)" />
+            <h3 style={{ margin: 0, fontSize: "0.95rem" }}>Editor</h3>
+            <span style={{
               fontSize: "0.65rem",
               fontWeight: 600,
               padding: "0.15rem 0.5rem",
@@ -111,569 +99,245 @@ export default function VideoStep({
               border: "1px solid var(--border)",
               color: "var(--text-muted)",
               background: "var(--bg)",
-            }}
-          >
-            {ratio}
-          </span>
+            }}>
+              {ratio}
+            </span>
+          </div>
           {hasBuiltVideo && (
-            <span style={{ ...badgeStyle(true), background: "var(--bg)" }}>
+            <span style={badgeStyle(true)}>
               <Check size={11} /> Built
             </span>
           )}
-          <div style={{ marginLeft: "auto", display: "flex", gap: "0.35rem", alignItems: "center" }}>
-            {building && videoStatus && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                  {videoStatus.message}
-                </span>
-                <div style={{ width: 80, height: 4, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${videoStatus.progress}%`, background: "var(--primary)", transition: "width 0.3s" }} />
-                </div>
-                <span style={{ fontSize: "0.68rem", fontWeight: 700 }}>{videoStatus.progress}%</span>
-              </div>
-            )}
-            <button
-              className="btn-primary"
-              disabled={!!actionLoading || scenes.length === 0}
-              onClick={() =>
-                onBuild({
-                  ratio,
-                  subtitles: enableSubtitles,
-                  subtitle_style: subtitleStyle,
-                  subtitle_position: subtitlePosition,
-                  subtitle_color: subtitleColor,
-                  subtitle_outline_color: subtitleOutlineColor,
-                  subtitle_outline: subtitleOutline,
-                  subtitle_font_size: subtitleFontSize,
-                  force_rebuild: forceRebuild,
-                })
-              }
-              style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
-            >
-              {building ? `Building...` : <><Clapperboard size={13} /> Build</>}
-            </button>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem", color: "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap" }}>
-              <input
-                type="checkbox"
-                checked={forceRebuild}
-                onChange={(e) => setForceRebuild(e.target.checked)}
-                disabled={building}
-              />
-              Rebuild
-            </label>
-            <button
-              className="btn-secondary"
-              disabled={!!actionLoading || scenes.length === 0}
-              onClick={onExport}
-              style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
-            >
-              {actionLoading === "export" ? "Exporting..." : <><Package size={13} /> Export</>}
-            </button>
-          </div>
         </div>
 
-        <div
-          style={{
-            position: "relative",
-            background: "#000",
-            borderRadius: "calc(var(--radius) - 2px)",
-            overflow: "hidden",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            aspectRatio: portrait ? "9 / 16" : "16 / 9",
-            maxHeight: portrait ? "520px" : "380px",
-            margin: "0 auto",
-            border: "1px solid var(--border)",
-            width: "100%",
-          }}
-        >
-          {hasBuiltVideo ? (
-            <video
-              src={mediaUrl(videoStatus!.output)}
-              controls
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            />
-          ) : activeScene?.image_path ? (
-            <>
-              <img
-                src={mediaUrl(activeScene.image_path)}
-                alt={`Scene ${safeIdx + 1}`}
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
-              {enableSubtitles && subtitleSample && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: "50%",
-                    ...subtitlePosStyle,
-                    maxWidth: "88%",
-                    textAlign: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "0.15em 0.5em",
-                      borderRadius: "4px",
-                      background: "rgba(0,0,0,0.55)",
-                      fontSize: subtitleFontSize
-                        ? `${Math.round(subtitleFontSize * (portrait ? 0.32 : 0.42))}px`
-                        : portrait
-                        ? "1rem"
-                        : "1.25rem",
-                      fontWeight: 700,
-                      lineHeight: 1.3,
-                      color: subtitleColor,
-                      fontFamily: subtitleStyle === "shorts" ? "Impact, sans-serif" : "Arial, sans-serif",
-                      letterSpacing: subtitleStyle === "shorts" ? "0.5px" : "normal",
-                      textTransform: subtitleStyle === "shorts" ? "uppercase" : "none",
-                      textShadow:
-                        subtitleOutline > 0
-                          ? `1px 1px ${subtitleOutline}px ${subtitleOutlineColor}, -1px -1px ${subtitleOutline}px ${subtitleOutlineColor}, 1px -1px ${subtitleOutline}px ${subtitleOutlineColor}, -1px 1px ${subtitleOutline}px ${subtitleOutlineColor}`
-                          : "none",
-                    }}
-                  >
-                    {subtitleSample}
-                  </span>
-                </div>
-              )}
-              {!enableSubtitles && (
-                <span
-                  style={{
-                    position: "absolute",
-                    bottom: "8px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    fontSize: "0.62rem",
-                    color: "rgba(255,255,255,0.55)",
-                    background: "rgba(0,0,0,0.45)",
-                    padding: "0.12rem 0.5rem",
-                    borderRadius: "999px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Scene {safeIdx + 1} preview — subtitles off
-                </span>
-              )}
-            </>
-          ) : (
-            <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "1rem" }}>
-              <Clapperboard size={28} style={{ opacity: 0.4 }} />
-              <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem" }}>
-                {scenes.length === 0
-                  ? "No scenes yet — generate scenes first"
-                  : `Scene ${safeIdx + 1} has no image yet`}
-              </p>
-            </div>
-          )}
-        </div>
+        <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
+          {hasBuiltVideo
+            ? "Final video has been rendered. Use the player on the right to preview."
+            : "Assemble images, narration audio, and transition effects into the compiled video."}
+        </p>
 
-        {showPreview && hasBuiltVideo ? (
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-              <Video size={16} color="var(--primary)" />
-              <h3 style={{ margin: 0, fontSize: "0.95rem" }}>Preview</h3>
-              <span
-                style={{
-                  fontSize: "0.65rem",
-                  fontWeight: 600,
-                  padding: "0.15rem 0.5rem",
-                  borderRadius: "999px",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-muted)",
-                  background: "var(--bg)",
-                }}
-              >
-                {ratio}
-              </span>
-              <span style={{ ...badgeStyle(true), background: "var(--bg)" }}>
-                <Check size={11} /> Built
-              </span>
-              <div style={{ marginLeft: "auto", display: "flex", gap: "0.35rem", alignItems: "center" }}>
-                <button
-                  className="btn-secondary"
-                  onClick={() => setShowPreview(false)}
-                  style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
-                >
-                  Hide Preview
-                </button>
-              </div>
+        {building && videoStatus && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", padding: "0.5rem", background: "var(--bg)", borderRadius: "6px", border: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>{videoStatus.message}</span>
+              <span style={{ fontSize: "0.68rem", fontWeight: 700 }}>{videoStatus.progress}%</span>
             </div>
-            <div
-              style={{
-                position: "relative",
-                background: "#000",
-                borderRadius: "calc(var(--radius) - 2px)",
-                overflow: "hidden",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                aspectRatio: portrait ? "9 / 16" : "16 / 9",
-                maxHeight: portrait ? "520px" : "380px",
-                margin: "0 auto",
-                border: "1px solid var(--border)",
-                width: "100%",
-              }}
-            >
-              <video
-                src={mediaUrl(videoStatus!.output)}
-                controls
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="card" style={{ padding: "0.55rem 0.7rem", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h3 style={{ margin: 0, fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Video size={16} color="var(--primary)" /> Editor
-                <span
-                  style={{
-                    fontSize: "0.65rem",
-                    fontWeight: 600,
-                    padding: "0.15rem 0.5rem",
-                    borderRadius: "999px",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-muted)",
-                    background: "var(--bg)",
-                  }}
-                >
-                  {ratio}
-                </span>
-                {hasBuiltVideo && (
-                  <span style={{ ...badgeStyle(true), background: "var(--bg)" }}>
-                    <Check size={11} /> Built
-                  </span>
-                )}
-              </h3>
-              <p style={{ margin: "0.25rem 0 0", fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                {hasBuiltVideo
-                  ? "Final video is ready. Click below to preview it."
-                  : "Build your video to see the preview here."}
-              </p>
-            </div>
-            {hasBuiltVideo && (
-              <button
-                className="btn-primary"
-                onClick={() => setShowPreview(true)}
-                style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
-              >
-                <Video size={13} /> Show Preview
-              </button>
-            )}
-            <div style={{ marginLeft: "auto", display: "flex", gap: "0.35rem", alignItems: "center" }}>
-              {building && videoStatus && (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                    {videoStatus.message}
-                  </span>
-                  <div style={{ width: 80, height: 4, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${videoStatus.progress}%`, background: "var(--primary)", transition: "width 0.3s" }} />
-                  </div>
-                  <span style={{ fontSize: "0.68rem", fontWeight: 700 }}>{videoStatus.progress}%</span>
-                </div>
-              )}
-              <button
-                className="btn-primary"
-                disabled={!!actionLoading || scenes.length === 0}
-                onClick={() =>
-                  onBuild({
-                    ratio,
-                    subtitles: enableSubtitles,
-                    subtitle_style: subtitleStyle,
-                    subtitle_position: subtitlePosition,
-                    subtitle_color: subtitleColor,
-                    subtitle_outline_color: subtitleOutlineColor,
-                    subtitle_outline: subtitleOutline,
-                    subtitle_font_size: subtitleFontSize,
-                  force_rebuild: forceRebuild,
-                })
-                }
-                style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
-              >
-                {building ? `Building...` : <><Clapperboard size={13} /> Build</>}
-              </button>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem", color: "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap" }}>
-                <input
-                  type="checkbox"
-                  checked={forceRebuild}
-                  onChange={(e) => setForceRebuild(e.target.checked)}
-                  disabled={building}
-                />
-                Rebuild
-              </label>
-              <button
-                className="btn-secondary"
-                disabled={!!actionLoading || scenes.length === 0}
-                onClick={onExport}
-                style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}
-              >
-                {actionLoading === "export" ? "Exporting..." : <><Package size={13} /> Export</>}
-              </button>
+            <div style={{ width: "100%", height: 5, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${videoStatus.progress}%`, background: "var(--primary)", transition: "width 0.3s" }} />
             </div>
           </div>
         )}
 
-      {/* Horizontal Scene Strip */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-        <button
-          className="btn-secondary"
-          onClick={() => scrollStrip(-1)}
-          aria-label="Scroll scenes left"
-          style={{ padding: "0.3rem 0.35rem", flexShrink: 0 }}
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <div
-          ref={stripRef}
-          style={{
-            display: "flex",
-            gap: "0.4rem",
-            overflowX: "auto",
-            flex: 1,
-            minWidth: 0,
-            padding: "2px",
-            scrollbarWidth: "thin",
-          }}
-        >
-          {scenes.map((scene, idx) => {
-            const isActive = idx === safeIdx;
-            return (
-              <button
-                key={scene.id}
-                onClick={() => setActiveSceneIdx(idx)}
-                title={`Scene ${idx + 1}`}
-                style={{
-                  position: "relative",
-                  flexShrink: 0,
-                  width: portrait ? "52px" : "86px",
-                  height: portrait ? "82px" : "52px",
-                  padding: 0,
-                  borderRadius: "var(--radius)",
-                  overflow: "hidden",
-                  cursor: "pointer",
-                  background: "var(--bg)",
-                  border: isActive ? "2px solid var(--primary)" : "1px solid var(--border)",
-                  opacity: isActive ? 1 : 0.75,
-                  transition: "border-color 0.15s ease, opacity 0.15s ease",
-                }}
-              >
-                {scene.image_path ? (
-                  <img
-                    src={mediaUrl(scene.image_path)}
-                    alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "100%",
-                      height: "100%",
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    {idx + 1}
-                  </span>
-                )}
-                {sceneStatuses[idx + 1] === "rendering" && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      border: "2px solid var(--primary)",
-                      borderRadius: "var(--radius)",
-                      background: "rgba(59,130,246,0.15)",
-                      animation: "pulse 1.5s infinite",
-                      pointerEvents: "none",
-                    }}
-                  />
-                )}
-                {sceneStatuses[idx + 1] === "done" && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      border: "2px solid var(--success)",
-                      borderRadius: "var(--radius)",
-                      background: "rgba(34,197,94,0.1)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                )}
-                {sceneStatuses[idx + 1] === "failed" && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      border: "2px solid #ef4444",
-                      borderRadius: "var(--radius)",
-                      background: "rgba(239,68,68,0.15)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                )}
-                <span
-                  style={{
-                    position: "absolute",
-                    bottom: "2px",
-                    left: "2px",
-                    fontSize: "0.55rem",
-                    fontWeight: 700,
-                    color: "#fff",
-                    background: isActive ? "var(--primary)" : "rgba(0,0,0,0.6)",
-                    borderRadius: "3px",
-                    padding: "0.05rem 0.3rem",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {idx + 1}
-                </span>
-                {scene.audio_path && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: "2px",
-                      right: "2px",
-                      display: "flex",
-                      color: "var(--success)",
-                      background: "rgba(0,0,0,0.55)",
-                      borderRadius: "3px",
-                      padding: "0.08rem",
-                    }}
-                  >
-                    <Mic size={9} />
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          {scenes.length === 0 && (
-            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", alignSelf: "center" }}>
-              No scenes available
-            </span>
-          )}
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", alignItems: "center" }}>
+          <button
+            className="btn-primary"
+            disabled={!!actionLoading || scenes.length === 0}
+            onClick={() =>
+              onBuild({
+                ratio,
+                subtitles: enableSubtitles,
+                subtitle_style: subtitleStyle,
+                subtitle_position: subtitlePosition,
+                subtitle_color: subtitleColor,
+                subtitle_outline_color: subtitleOutlineColor,
+                subtitle_outline: subtitleOutline,
+                subtitle_font_size: subtitleFontSize,
+                force_rebuild: forceRebuild,
+              })
+            }
+            style={{ flex: 1, padding: "0.45rem 0.8rem", fontSize: "0.8rem", fontWeight: 600 }}
+          >
+            {building ? `Building...` : <><Clapperboard size={13} style={{ marginRight: "0.25rem", verticalAlign: "-2px" }} /> Build Video</>}
+          </button>
+          
+          <button
+            className="btn-secondary"
+            disabled={!!actionLoading || scenes.length === 0}
+            onClick={onExport}
+            style={{ padding: "0.45rem 0.8rem", fontSize: "0.8rem", fontWeight: 600 }}
+          >
+            {actionLoading === "export" ? "Exporting..." : <><Package size={13} style={{ marginRight: "0.25rem", verticalAlign: "-2px" }} /> Export</>}
+          </button>
         </div>
-        <button
-          className="btn-secondary"
-          onClick={() => scrollStrip(1)}
-          aria-label="Scroll scenes right"
-          style={{ padding: "0.3rem 0.35rem", flexShrink: 0 }}
-        >
-          <ChevronRight size={14} />
-        </button>
+
+        <label style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.7rem", color: "var(--text-muted)", cursor: "pointer", marginTop: "0.25rem" }}>
+          <input
+            type="checkbox"
+            checked={forceRebuild}
+            onChange={(e) => setForceRebuild(e.target.checked)}
+            disabled={building}
+          />
+          Force rebuild all scene clips from scratch
+        </label>
       </div>
 
-      {/* Bottom: Active Scene Details */}
-      <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <h4 style={{ margin: 0, fontSize: "0.85rem" }}>
-              Scene {safeIdx + 1}
-              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> / {scenes.length}</span>
-            </h4>
-            <span
-              style={{
-                marginLeft: "auto",
-                fontSize: "0.68rem",
-                fontWeight: 600,
-                color: "var(--text-muted)",
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
-                borderRadius: "999px",
-                padding: "0.12rem 0.5rem",
-              }}
-            >
-              {activeScene?.duration_seconds != null
-                ? `${activeScene.duration_seconds.toFixed(1)}s`
-                : "—"}
-            </span>
-          </div>
-
-          <p
+      {/* Horizontal Scene Strip */}
+      <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.4rem", padding: "0.6rem 0.85rem" }}>
+        <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Quick Navigation</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+          <button
+            className="btn-secondary"
+            onClick={() => scrollStrip(-1)}
+            aria-label="Scroll scenes left"
+            style={{ padding: "0.3rem 0.35rem", flexShrink: 0 }}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div
+            ref={stripRef}
             style={{
-              margin: 0,
-              fontSize: "0.76rem",
-              lineHeight: 1.5,
-              color: "var(--text-muted)",
-              fontStyle: "italic",
-              minHeight: "2.2em",
+              display: "flex",
+              gap: "0.4rem",
+              overflowX: "auto",
+              flex: 1,
+              minWidth: 0,
+              padding: "2px",
+              scrollbarWidth: "thin",
             }}
           >
-            {narrationSnippet || "No narration for this scene."}
-          </p>
-
-          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-            {activeScene?.image_path || (activeScene?.images && activeScene.images.length > 0) ? (
-              <span style={badgeStyle(true)}>
-                <Check size={11} /> <Image size={11} /> Image ready
-              </span>
-            ) : (
-              <span style={badgeStyle(false)}>
-                <Image size={11} /> No image
-              </span>
-            )}
-            {activeScene?.audio_path ? (
-              <span style={badgeStyle(true)}>
-                <Check size={11} /> <Mic size={11} /> Audio ready
-              </span>
-            ) : (
-              <span style={badgeStyle(false)}>
-                <Mic size={11} /> No audio
-              </span>
-            )}
-            {totalDuration > 0 && (
-              <span style={badgeStyle(false)}>Total ≈ {totalDuration.toFixed(1)}s</span>
-            )}
+            {scenes.map((scene, idx) => {
+              const isActive = idx === safeIdx;
+              return (
+                <button
+                  key={scene.id}
+                  onClick={() => setActiveSceneIdx(idx)}
+                  title={`Scene ${idx + 1}`}
+                  style={{
+                    position: "relative",
+                    flexShrink: 0,
+                    width: "48px",
+                    height: "36px",
+                    padding: 0,
+                    borderRadius: "4px",
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    background: "var(--bg)",
+                    border: isActive ? "2px solid var(--primary)" : "1px solid var(--border)",
+                    opacity: isActive ? 1 : 0.75,
+                    transition: "border-color 0.15s ease, opacity 0.15s ease",
+                  }}
+                >
+                  {scene.image_path ? (
+                    <img
+                      src={mediaUrl(scene.image_path)}
+                      alt=""
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        height: "100%",
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      {idx + 1}
+                    </span>
+                  )}
+                  {sceneStatuses[idx + 1] === "rendering" && (
+                    <span style={{ position: "absolute", inset: 0, border: "2px solid var(--primary)", borderRadius: "4px", background: "rgba(59,130,246,0.15)", animation: "pulse 1.5s infinite" }} />
+                  )}
+                  {sceneStatuses[idx + 1] === "done" && (
+                    <span style={{ position: "absolute", inset: 0, border: "2px solid var(--success)", borderRadius: "4px", background: "rgba(34,197,94,0.1)" }} />
+                  )}
+                  {sceneStatuses[idx + 1] === "failed" && (
+                    <span style={{ position: "absolute", inset: 0, border: "2px solid #ef4444", borderRadius: "4px", background: "rgba(239,68,68,0.15)" }} />
+                  )}
+                </button>
+              );
+            })}
           </div>
-
-          {exportInfo && !building && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.3rem",
-                fontSize: "0.68rem",
-                color: "var(--success)",
-              }}
-            >
-              <Check size={11} /> {exportInfo.message} ({exportInfo.files.length} files)
-            </div>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.35rem" }}>
-            {[
-              { icon: <Video size={12} />, value: scenes.length, label: "Scenes" },
-              { icon: <Image size={12} />, value: imageCount, label: "Images" },
-              { icon: <Mic size={12} />, value: audioCount, label: "Audio" },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "0.1rem",
-                  padding: "0.4rem 0.25rem",
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius)",
-                }}
-              >
-                <span style={{ color: "var(--primary)", display: "flex" }}>{stat.icon}</span>
-                <strong style={{ fontSize: "0.85rem" }}>{stat.value}</strong>
-                <span style={{ fontSize: "0.6rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  {stat.label}
-                </span>
-              </div>
-            ))}
-          </div>
+          <button
+            className="btn-secondary"
+            onClick={() => scrollStrip(1)}
+            aria-label="Scroll scenes right"
+            style={{ padding: "0.3rem 0.35rem", flexShrink: 0 }}
+          >
+            <ChevronRight size={14} />
+          </button>
         </div>
       </div>
+
+      {/* Active Scene Details */}
+      <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.55rem", padding: "0.85rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", justifyContent: "space-between" }}>
+          <h4 style={{ margin: 0, fontSize: "0.85rem" }}>
+            Scene {safeIdx + 1} <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>/ {scenes.length}</span>
+          </h4>
+          <span style={{
+            fontSize: "0.68rem",
+            fontWeight: 600,
+            color: "var(--text-muted)",
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: "999px",
+            padding: "0.12rem 0.5rem",
+          }}>
+            {activeScene?.duration_seconds != null ? `${activeScene.duration_seconds.toFixed(1)}s` : "—"}
+          </span>
+        </div>
+
+        <p style={{ margin: 0, fontSize: "0.74rem", lineHeight: 1.4, color: "var(--text-muted)", fontStyle: "italic", background: "var(--bg)", padding: "0.45rem", borderRadius: "6px", border: "1px solid var(--border)" }}>
+          {narrationSnippet || "No narration for this scene."}
+        </p>
+
+        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+          {activeScene?.image_path || (activeScene?.images && activeScene.images.length > 0) ? (
+            <span style={badgeStyle(true)}>
+              <Check size={11} /> <Image size={11} /> Image ready
+            </span>
+          ) : (
+            <span style={badgeStyle(false)}>
+              <Image size={11} /> No image
+            </span>
+          )}
+          {activeScene?.audio_path ? (
+            <span style={badgeStyle(true)}>
+              <Check size={11} /> <Mic size={11} /> Audio ready
+            </span>
+          ) : (
+            <span style={badgeStyle(false)}>
+              <Mic size={11} /> No audio
+            </span>
+          )}
+          {totalDuration > 0 && (
+            <span style={badgeStyle(false)}>Total ≈ {totalDuration.toFixed(1)}s</span>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.35rem", marginTop: "0.2rem" }}>
+          {[
+            { icon: <Video size={12} />, value: scenes.length, label: "Scenes" },
+            { icon: <Image size={12} />, value: imageCount, label: "Images" },
+            { icon: <Mic size={12} />, value: audioCount, label: "Audio" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.1rem",
+                padding: "0.4rem 0.25rem",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+              }}
+            >
+              <span style={{ color: "var(--primary)", display: "flex" }}>{stat.icon}</span>
+              <strong style={{ fontSize: "0.85rem" }}>{stat.value}</strong>
+              <span style={{ fontSize: "0.58rem", color: "var(--text-muted)", textTransform: "uppercase" }}>
+                {stat.label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
+    </div>
   );
 }

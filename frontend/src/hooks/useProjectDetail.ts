@@ -167,7 +167,6 @@ export function useProjectDetail(projectId: number) {
           .catch(() => {});
         api.getYoutubeConfig().then(setYoutubeConfig).catch(() => {});
         api.getRecentVideos(10).then(setRecentVideos).catch(() => {});
-        api.getTimeline(projectId).then((t) => setTimeline((prev) => prev ?? t.data)).catch(() => {});
         setProject(proj);
         if (proj.ratio) setSelectedRatio(proj.ratio);
         setEnableSubtitles(proj.captions_enabled);
@@ -181,11 +180,16 @@ export function useProjectDetail(projectId: number) {
         const selectedIdea = ideaList.find((i) => i.is_selected);
         setScriptTopic((prev) => prev || selectedIdea?.title || proj.name);
         setScripts(scriptList);
-        setScenes(sceneList);
         setThumbnails(thumbList);
         setSeo(seoData);
         setCategories(categoryList);
         api.videoStatus(projectId).then(setVideoStatus).catch(() => {});
+        // Fetch timeline BEFORE setting scenes to prevent seedDefaults race condition
+        try {
+          const t = await api.getTimeline(projectId);
+          if (t.data) setTimeline(t.data);
+        } catch {}
+        setScenes(sceneList);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load project");
       } finally {
@@ -334,7 +338,7 @@ export function useProjectDetail(projectId: number) {
     });
   };
 
-  const importFreeIdeas = async (items: { title: string; description: string; category?: string }[]) => {
+  const importFreeIdeas = async (items: { title: string; description: string; category?: string; trending_score?: number }[]) => {
     await runAction("import-ideas", async () => {
       await api.importIdeas(projectId, items);
       setSuccess(`${items.length} ideas imported!`);
@@ -620,7 +624,7 @@ export function useProjectDetail(projectId: number) {
       setVideoStatus({ running: true, progress: 0, stage: "starting", message: "Starting video build...", output: null, error: null, updated_at: null, scene_statuses: {} });
       const result = await api.buildVideo(projectId, {
         ratio: options?.ratio ?? selectedRatio,
-        timeline: options?.timeline,
+        timeline: options?.timeline ?? timeline,
         subtitles: options?.subtitles ?? enableSubtitles,
         subtitle_style: options?.subtitle_style ?? subtitleStyle,
         subtitle_position: options?.subtitle_position ?? subtitlePosition,

@@ -71,7 +71,6 @@ const OUTLINE_PRESETS = ["#000000", "#FFFFFF", "#1A1A1A", "#333333", "#222222", 
 
 export default function CaptionsStep({
   scenes,
-  ratio,
   enableSubtitles,
   setEnableSubtitles,
   subtitleStyle,
@@ -170,16 +169,14 @@ export default function CaptionsStep({
         </button>
       </div>
 
-      {/* Style Presets (left) + Live Preview (right) */}
+      {/* Caption Customizations stacked vertically */}
       {enableSubtitles && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "0.6rem", alignItems: "start" }}>
-          {/* Left column: presets + appearance */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.6rem 0.85rem" }}>
-              <div style={{ fontWeight: 600, fontSize: "0.8rem" }}>Caption Style</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.6rem 0.85rem" }}>
+            <div style={{ fontWeight: 600, fontSize: "0.8rem" }}>Caption Style</div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
-                {STYLES.map((style) => {
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.4rem" }}>
+              {STYLES.map((style) => {
                   const Icon = style.icon;
                   const active = subtitleStyle === style.value;
                   return (
@@ -444,64 +441,6 @@ export default function CaptionsStep({
 
             </div>
 
-          </div>
-
-          {/* Right column: live preview */}
-          <div className="card" style={{ padding: "0.6rem 0.85rem", position: "sticky", top: "1rem" }}>
-            <label style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "0.25rem" }}>
-              Live Preview
-            </label>
-            <div
-              style={{
-                position: "relative",
-                width: "100%",
-                ...(ratio === "9:16"
-                  ? { aspectRatio: "9 / 16", maxHeight: "400px" }
-                  : { aspectRatio: "16 / 9", maxHeight: "260px" }),
-                borderRadius: "8px",
-                background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-                overflow: "hidden",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", fontSize: "0.58rem", color: "rgba(255,255,255,0.15)", letterSpacing: "0.1em" }}>
-                VIDEO AREA
-              </div>
-              <div
-                style={{
-                  position: "absolute",
-                  left: "50%",
-                  ...(subtitlePosition === "top"
-                    ? { top: "6px", transform: "translateX(-50%)" }
-                    : subtitlePosition === "center"
-                    ? { top: "50%", transform: "translate(-50%, -50%)" }
-                    : { bottom: "6px", transform: "translateX(-50%)" }),
-                  padding: "0.15rem 0.5rem",
-                  borderRadius: "3px",
-                  background: "rgba(0,0,0,0.5)",
-                  maxWidth: "90%",
-                  textAlign: "center",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: subtitleFontSize ? `${Math.round(subtitleFontSize * 0.36)}px` : "0.68rem",
-                    fontWeight: 700,
-                    color: subtitleColor,
-                    fontFamily: subtitleStyle === "shorts" ? "Impact, sans-serif" : "Arial, sans-serif",
-                    letterSpacing: subtitleStyle === "shorts" ? "0.5px" : "normal",
-                    textTransform: subtitleStyle === "shorts" ? "uppercase" : "none",
-                    textShadow: subtitleOutline > 0
-                      ? `1px 1px ${subtitleOutline}px ${subtitleOutlineColor}, -1px -1px ${subtitleOutline}px ${subtitleOutlineColor}, 1px -1px ${subtitleOutline}px ${subtitleOutlineColor}, -1px 1px ${subtitleOutline}px ${subtitleOutlineColor}`
-                      : "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Your caption text here
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

@@ -17,11 +17,10 @@ import {
   Copy,
   Trash2,
   MoreHorizontal,
-  Save,
   Clock,
 } from "lucide-react";
 import type { Scene, Script } from "../../types";
-import { mediaUrl } from "../../api/client";
+import { api, mediaUrl } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
 
 function parseImportedText(
@@ -64,6 +63,9 @@ function parseImportedText(
 }
 
 interface Props {
+  projectId: number;
+  projectLanguage?: string;
+  projectRatio?: string;
   scenes: Scene[];
   activeScript: Script | null;
   actionLoading: string;
@@ -88,15 +90,15 @@ interface Props {
   onRemove: (id: number) => void;
   onImportScenes?: (importedList: { narration: string; image_prompt?: string; video_prompt?: string }[], replace: boolean) => void;
   projectName?: string;
-  prompts?: { system: string; user: string };
 }
 
 export default function ScenesStep({
+  projectId, projectLanguage, projectRatio,
   scenes, activeScript, actionLoading, sceneCount, onSceneCountChange,
   onGenerate, onClearAll, addingScene, addSceneAt, newSceneNarration,
   onNewSceneNarration, onAddScene, onOpenAdd, onAddBlank, onCloseAdd, editingSceneId,
   sceneEditForm, onEditFormChange, onStartEdit, onCancelEdit, onSaveEdit,
-  onRemove, onImportScenes, projectName = "project", prompts,
+  onRemove, onImportScenes, projectName = "project",
 }: Props) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [copiedImageId, setCopiedImageId] = useState<number | null>(null);
@@ -111,6 +113,18 @@ export default function ScenesStep({
   const [activeIdx, setActiveIdx] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
+  const [dynamicPrompt, setDynamicPrompt] = useState<{ system: string; user: string } | null>(null);
+
+  useEffect(() => {
+    if (!showFreeAI) return;
+    api.buildScenesPrompt(projectId, {
+      script_body: activeScript?.body || undefined,
+      hook: activeScript?.hook || undefined,
+      ending: activeScript?.ending || undefined,
+      language: projectLanguage || "en",
+      ratio: projectRatio || "16:9",
+    }).then(setDynamicPrompt).catch(() => {});
+  }, [showFreeAI, projectId, projectLanguage, projectRatio, activeScript]);
 
   useEffect(() => {
     if (scenes.length === 0) setActiveIdx(0);
@@ -210,6 +224,12 @@ export default function ScenesStep({
           <button className="btn-secondary" disabled={!!actionLoading} onClick={() => onAddBlank?.()} title="Add a blank scene (fill in later)" style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}>
             <Plus size={12} /> Blank
           </button>
+          <button className="btn-secondary" onClick={() => setShowFreeAI(!showFreeAI)} style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}>
+            {showFreeAI ? "Hide Free AI" : "Free AI"}
+          </button>
+          <button className="btn-secondary" onClick={() => setShowImportModal(true)} style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "0.2rem" }}>
+            <Upload size={12} /> Import
+          </button>
 
           <div ref={menuRef} style={{ position: "relative" }}>
             <button className="btn-secondary" disabled={scenes.length === 0} onClick={() => setShowMenu(!showMenu)} style={{ padding: "0.3rem 0.5rem", fontSize: "0.75rem" }}>
@@ -217,9 +237,6 @@ export default function ScenesStep({
             </button>
             {showMenu && (
               <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", zIndex: 100, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "6px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)", width: 200, padding: "0.25rem", display: "grid", gap: "2px" }}>
-                <button onClick={() => { setShowFreeAI(!showFreeAI); setShowMenu(false); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
-                  <Sparkles size={12} /> Free AI
-                </button>
                 <button onClick={() => { navigator.clipboard.writeText(scenes.map((s, i) => `${i + 1}. ${s.image_prompt || s.narration}`).join("\n\n")); setCopiedAllType("prompts"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
                   <Copy size={12} /> {copiedAllType === "prompts" ? "Copied!" : "Copy All Prompts"}
                 </button>
@@ -236,9 +253,7 @@ export default function ScenesStep({
                 <button onClick={() => { const t = scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n"); downloadFile(t, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, "text/plain"); setShowMenu(false); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
                   <Download size={12} /> Export Text
                 </button>
-                <button onClick={() => { setShowImportModal(true); setShowMenu(false); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
-                  <Upload size={12} /> Import Scenes
-                </button>
+
                 <div style={{ height: 1, background: "var(--border)", margin: "2px 0" }} />
                 <button disabled={!!actionLoading} onClick={() => { onClearAll(); setShowMenu(false); }} style={{ textAlign: "left", background: "transparent", padding: "0.35rem 0.5rem", fontSize: "0.72rem", color: "var(--danger)", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "4px" }}>
                   <Trash2 size={12} /> Clear All
@@ -252,8 +267,8 @@ export default function ScenesStep({
       {showFreeAI && (
         <FreeAIGuide
           title="Generate Scenes with Free AI"
-          prompt={prompts ? undefined : `SYSTEM PROMPT:\nYou are a video director. Break scripts into scenes as JSON.\nEach scene has a "narration", an "image_prompt", and a "video_prompt".\n\nUSER PROMPT:\nBreak this script into scenes. Each scene needs narration, image prompt, and video prompt.\nReturn JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}`}
-          promptPair={prompts}
+          prompt={dynamicPrompt ? undefined : `SYSTEM PROMPT:\nYou are a video director. Break scripts into scenes as JSON.\nEach scene has a "narration", an "image_prompt", and a "video_prompt".\n\nUSER PROMPT:\nBreak this script into scenes. Each scene needs narration, image prompt, and video prompt.\nReturn JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}`}
+          promptPair={dynamicPrompt || undefined}
           responsePlaceholder='Paste AI response here...'
           onParseResponse={(text) => {
             if (!onImportScenes) return;
@@ -281,9 +296,9 @@ export default function ScenesStep({
           </button>
         </div>
       ) : (
-        <div style={{ flex: 1, display: "flex", gap: "0.5rem", minHeight: 0, overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem", minHeight: 0, overflow: "hidden" }}>
           {/* ── Left: Sidebar ── */}
-          <div style={{ width: 220, flexShrink: 0, border: "1px solid var(--border)", borderRadius: "6px", display: "flex", flexDirection: "column", background: "var(--surface)", overflow: "hidden" }}>
+          <div style={{ width: "100%", height: "180px", minHeight: "180px", flexShrink: 0, border: "1px solid var(--border)", borderRadius: "6px", display: "flex", flexDirection: "column", background: "var(--surface)", overflow: "hidden" }}>
             <div style={{ padding: "0.4rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
               <Search size={12} color="var(--text-muted)" />
               <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ border: "none", background: "transparent", outline: "none", fontSize: "0.72rem", color: "var(--text)", width: "100%", padding: 0 }} />
@@ -325,16 +340,63 @@ export default function ScenesStep({
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.4rem", minWidth: 0, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Scene {activeIdx + 1} / {scenes.length}</span>
-              <div style={{ display: "flex", gap: "0.15rem" }}>
-                <button className="btn-secondary" disabled={activeIdx <= 0} onClick={() => setActiveIdx(activeIdx - 1)} style={{ padding: "0.1rem 0.3rem" }}><ChevronLeft size={12} /></button>
-                <button className="btn-secondary" disabled={activeIdx >= scenes.length - 1} onClick={() => setActiveIdx(activeIdx + 1)} style={{ padding: "0.1rem 0.3rem" }}><ChevronRight size={12} /></button>
-              </div>
+              
+              {/* Toolbar Actions */}
+              {activeScene && (
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  {editingSceneId === activeScene.id ? (
+                    <>
+                      <button
+                        className="btn-primary"
+                        disabled={!!actionLoading || !sceneEditForm.narration.trim()}
+                        onClick={() => onSaveEdit(activeScene.id)}
+                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", display: "flex", alignItems: "center", gap: "0.2rem" }}
+                      >
+                        <Check size={11} /> Save
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        onClick={onCancelEdit}
+                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", display: "flex", alignItems: "center", gap: "0.2rem" }}
+                      >
+                        <X size={11} /> Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => onStartEdit(activeScene)}
+                        disabled={!!actionLoading}
+                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", display: "flex", alignItems: "center", gap: "0.2rem" }}
+                      >
+                        <Pencil size={11} /> Edit
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => { if (window.confirm(`Delete Scene #${activeIdx + 1}?`)) onRemove(activeScene.id); }}
+                        disabled={!!actionLoading}
+                        style={{ padding: "0.2rem 0.45rem", fontSize: "0.68rem", color: "var(--danger)", borderColor: "rgba(255,0,0,0.15)", display: "flex", alignItems: "center", gap: "0.2rem" }}
+                      >
+                        <Trash2 size={11} /> Delete
+                      </button>
+                    </>
+                  )}
+
+                  <span style={{ color: "var(--border)", fontSize: "0.75rem", margin: "0 0.15rem" }}>|</span>
+                  
+                  <div style={{ display: "flex", gap: "0.15rem" }}>
+                    <button className="btn-secondary" disabled={activeIdx <= 0} onClick={() => setActiveIdx(activeIdx - 1)} style={{ padding: "0.1rem 0.3rem" }}><ChevronLeft size={12} /></button>
+                    <button className="btn-secondary" disabled={activeIdx >= scenes.length - 1} onClick={() => setActiveIdx(activeIdx + 1)} style={{ padding: "0.1rem 0.3rem" }}><ChevronRight size={12} /></button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {sceneForm(null)}
 
             {activeScene && (
-              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "0.45rem", flex: 1, minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", flex: 1, minHeight: 0 }}>
                 {/* Left: Content */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
                   {/* Narration */}
@@ -344,9 +406,6 @@ export default function ScenesStep({
                       <div style={{ display: "flex", gap: "0.25rem" }}>
                         <button onClick={() => copy(activeScene.id, activeScene.narration, setCopiedId)} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: copiedId === activeScene.id ? "var(--success)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.15rem" }}>
                           <Copy size={10} /> {copiedId === activeScene.id ? "Copied" : "Copy"}
-                        </button>
-                        <button onClick={() => editingSceneId === activeScene.id ? onCancelEdit() : onStartEdit(activeScene)} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.15rem" }}>
-                          <Pencil size={10} /> {editingSceneId === activeScene.id ? "Cancel" : "Edit"}
                         </button>
                       </div>
                     </div>
@@ -438,55 +497,7 @@ export default function ScenesStep({
                     </label>
                   </div>
 
-                  {/* Motion selector */}
-                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.35rem" }}>
-                    <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "0.2rem" }}>Motion</span>
-                    {editingSceneId === activeScene.id ? (
-                      <div style={{ display: "flex", gap: "0.2rem", flexWrap: "wrap" }}>
-                        {[
-                          { value: "none", label: "Static" },
-                          { value: "zoom_in", label: "Zoom In" },
-                          { value: "zoom_out", label: "Zoom Out" },
-                          { value: "pan_right", label: "Pan R" },
-                          { value: "pan_left", label: "Pan L" },
-                          { value: "pan_up", label: "Pan U" },
-                          { value: "pan_down", label: "Pan D" },
-                        ].map((opt) => {
-                          const isActive = (sceneEditForm.motion_effect || "none") === opt.value;
-                          return (
-                            <button key={opt.value} type="button" onClick={() => onEditFormChange({ motion_effect: opt.value })} style={{
-                              padding: "0.2rem 0.4rem", fontSize: "0.65rem", fontWeight: 600, borderRadius: "3px",
-                              border: isActive ? "1px solid var(--accent)" : "1px solid var(--border)",
-                              background: isActive ? "rgba(62, 166, 255, 0.1)" : "transparent",
-                              color: isActive ? "var(--accent)" : "var(--text-muted)", cursor: "pointer",
-                            }}>{opt.label}</button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: "0.7rem", color: "var(--text)", textTransform: "capitalize" }}>
-                        {activeScene.motion_effect === "none" || !activeScene.motion_effect ? "Static" : activeScene.motion_effect.replace("_", " ")}
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Actions */}
-                  <div style={{ display: "flex", gap: "0.3rem", marginTop: "auto", paddingTop: "0.35rem" }}>
-                    <button onClick={() => { if (window.confirm(`Delete Scene #${activeIdx + 1}?`)) onRemove(activeScene.id); }} disabled={!!actionLoading} style={{
-                      flex: 1, padding: "0.35rem", fontSize: "0.72rem", color: "var(--danger)", background: "transparent",
-                      border: "1px solid rgba(255,0,0,0.2)", borderRadius: "4px", cursor: "pointer", fontWeight: 600,
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: "0.2rem",
-                    }}>
-                      <Trash2 size={11} /> Delete
-                    </button>
-                    <button className="btn-primary" disabled={!!actionLoading || (editingSceneId === activeScene.id && !sceneEditForm.narration.trim())} onClick={() => editingSceneId === activeScene.id ? onSaveEdit(activeScene.id) : onStartEdit(activeScene)} style={{
-                      flex: 1.5, padding: "0.35rem", fontSize: "0.72rem", fontWeight: 600,
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: "0.2rem",
-                    }}>
-                      <Save size={11} />
-                      {editingSceneId === activeScene.id ? (actionLoading === `edit-scene-${activeScene.id}` ? "Saving..." : "Save") : "Edit"}
-                    </button>
-                  </div>
                 </div>
               </div>
             )}

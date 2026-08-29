@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check, RotateCcw, Save, Timer } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import type { Scene, TimelineClip, TimelineData, VideoStatus } from "../../types";
 import TimelineEditor from "../editor/TimelineEditor";
@@ -139,11 +138,13 @@ export default function TimelineStep({
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const seededRef = useRef(false);
 
   const building = actionLoading === "video" || videoStatus?.running;
 
   const seedDefaults = (scenesArg: Scene[]) => {
     const base = buildDefaultTimeline(scenesArg);
+    base.music = timeline?.music ?? null;
     onTimelineChange(base);
     void applyOriginalMediaLengths(base.clips, mediaUrl).then((clips) => {
       if (clips === base.clips) return;
@@ -158,9 +159,11 @@ export default function TimelineStep({
   };
 
   useEffect(() => {
-    if (!timeline && scenes.length > 0) {
+    if (!timeline && scenes.length > 0 && !seededRef.current) {
+      seededRef.current = true;
       seedDefaults(scenes);
     }
+    if (timeline) seededRef.current = true;
   }, [timeline, scenes]);
 
   const handleChange = (tl: TimelineData) => {
@@ -196,13 +199,6 @@ export default function TimelineStep({
     seedDefaults(scenes);
   };
 
-  const durationLabel = useMemo(() => {
-    const d = timeline?.duration ?? 0;
-    const m = Math.floor(d / 60);
-    const s = d - m * 60;
-    return `${m}:${s.toFixed(1).padStart(4, "0")}`;
-  }, [timeline]);
-
   const voiceOverruns = useMemo(() => {
     if (!timeline) return [] as number[];
     const visual = new Map<number, number>();
@@ -221,99 +217,7 @@ export default function TimelineStep({
   }, [timeline]);
 
   return (
-    <div
-      className="card"
-      style={{ display: "grid", gap: "0.75rem", minWidth: 0, maxWidth: "100%" }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "0.5rem",
-        }}
-      >
-        <div>
-          <h3 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <Timer size={20} color="var(--primary)" /> Timeline Editor
-          </h3>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-            Reorder clips, trim narration, and fine-tune timing before
-            rendering. Total: <strong>{durationLabel}</strong>
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-          {voiceOverruns.length > 0 && (
-            <span
-              className="badge"
-              title={`Scenes ${voiceOverruns.join(", ")}: narration is longer than the visuals. The renderer will fade the voice out at the scene end — shorten the script or extend those scenes.`}
-              style={{
-                background: "var(--warning)",
-                color: "#000",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.25rem",
-              }}
-            >
-              <AlertTriangle size={12} />
-              Voice overruns visuals in {voiceOverruns.length} scene
-              {voiceOverruns.length > 1 ? "s" : ""}
-            </span>
-          )}
-          {dirty && (
-            <span
-              className="badge"
-              style={{ background: "var(--warning)", color: "#000" }}
-            >
-              Unsaved changes
-            </span>
-          )}
-          {saved && (
-            <span
-              className="badge"
-              style={{
-                background: "var(--success)",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.2rem",
-              }}
-            >
-              <Check size={12} /> Saved
-            </span>
-          )}
-          <button
-            className="btn-secondary"
-            disabled={scenes.length === 0}
-            onClick={handleReset}
-            style={{
-              fontSize: "0.8rem",
-              padding: "0.35rem 0.7rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.3rem",
-            }}
-          >
-            <RotateCcw size={13} /> Reset from scenes
-          </button>
-          <button
-            className="btn-secondary"
-            disabled={!timeline || saving}
-            onClick={handleSave}
-            style={{
-              fontSize: "0.8rem",
-              padding: "0.35rem 0.7rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.3rem",
-            }}
-          >
-            <Save size={13} /> {saving ? "Saving..." : "Save Timeline"}
-          </button>
-        </div>
-      </div>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", minWidth: 0, width: "100%" }}>
       {timeline && (
         <TimelineEditor
           timeline={timeline}
@@ -329,6 +233,12 @@ export default function TimelineStep({
           }}
           onChange={handleChange}
           onAddScene={onAddScene}
+          onSave={handleSave}
+          onReset={handleReset}
+          dirty={dirty}
+          saved={saved}
+          saving={saving}
+          voiceOverruns={voiceOverruns}
         />
       )}
 

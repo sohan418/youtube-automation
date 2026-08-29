@@ -300,6 +300,7 @@ class VideoBuildRequest(BaseModel):
     subtitle_outline: float = Field(default=2.0, ge=0.0, le=10.0)
     subtitle_font_size: int | None = Field(default=None, ge=8, le=200)
     force_rebuild: bool = False
+    timeline: TimelineData | None = None
 
 
 class MusicTrackResponse(BaseModel):

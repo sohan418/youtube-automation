@@ -198,6 +198,14 @@ export interface VideoClip {
   size_bytes: number;
 }
 
+export interface MusicTrack {
+  filename: string;
+  name: string;
+  file_path: string;
+  duration_seconds: number | null;
+  size_bytes: number;
+}
+
 export interface VideoStatus {
   running: boolean;
   progress: number;
@@ -238,6 +246,7 @@ export interface TimelineData {
   duration: number;
   clips: TimelineClip[];
   track_states?: Partial<Record<TimelineTrack, TimelineTrackState>>;
+  music?: { file_path: string; volume: number } | null;
 }
 
 export interface TimelineResponse {

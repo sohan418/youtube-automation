@@ -13,16 +13,16 @@ import type {
   YouTubeVideo,
 } from "../../types";
 import type { DragMedia, MediaTile } from "../steps/ImagesStep";
-import { STUDIO_STEPS } from "./studioSteps";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+
+
 
 import IdeasStep from "../steps/IdeasStep";
 import ScriptStep from "../steps/ScriptStep";
 import ScenesStep from "../steps/ScenesStep";
 import ImagesStep from "../steps/ImagesStep";
 import VoiceStep from "../steps/VoiceStep";
-import TimelineStep from "../steps/TimelineStep";
-import VideoStep from "../steps/VideoStep";
+import MusicStep from "../steps/MusicStep";
+
 import CaptionsStep from "../steps/CaptionsStep";
 import ThumbnailStep from "../steps/ThumbnailStep";
 import SeoStep from "../steps/SeoStep";
@@ -37,7 +37,7 @@ interface Props {
   activeTab: string;
   onTabChange: (tab: string) => void;
   projectId: number;
-  project: { name: string; language: string; category?: string | null } | null;
+  project: { name: string; language: string; category?: string | null; ratio?: string } | null;
   ideas: Idea[];
   scripts: Script[];
   activeScript: Script | null;
@@ -62,7 +62,7 @@ interface Props {
   setIdeaTopic: (v: string) => void;
   generateIdeas: () => Promise<void>;
   selectIdea: (id: number) => Promise<void>;
-  importFreeIdeas: (items: { title: string; description: string; category?: string }[]) => Promise<void>;
+  importFreeIdeas: (items: { title: string; description: string; category?: string; trending_score?: number }[]) => Promise<void>;
 
   scriptTopic: string;
   setScriptTopic: (v: string) => void;
@@ -185,6 +185,9 @@ export default function StudioStepContent(p: Props) {
     <div className="studio-main-content">
       {p.activeTab === "ideas" && (
         <IdeasStep
+          projectId={p.projectId}
+          projectLanguage={p.project?.language}
+          projectCategory={p.project?.category ?? undefined}
           ideas={p.ideas}
           actionLoading={p.actionLoading}
           ideaTopic={p.ideaTopic}
@@ -192,13 +195,14 @@ export default function StudioStepContent(p: Props) {
           onGenerate={p.generateIdeas}
           onSelect={p.selectIdea}
           onFreeAIResponse={p.importFreeIdeas}
-          prompts={p.prompts.ideas}
           recentVideos={p.recentVideos}
         />
       )}
 
       {p.activeTab === "script" && (
         <ScriptStep
+          projectId={p.projectId}
+          projectLanguage={p.project?.language}
           ideas={p.ideas}
           projectName={p.project?.name ?? ""}
           scripts={p.scripts}
@@ -214,7 +218,6 @@ export default function StudioStepContent(p: Props) {
           onSave={p.creatingScript ? p.createScript : p.saveScript}
           form={p.scriptForm}
           onFormChange={(patch) => p.setScriptForm((f) => ({ ...f, ...patch }))}
-          prompts={p.prompts.script}
           onImportScript={async (imported, replace) => {
             await p.runAction("import-script", async () => {
               await api.importScript(p.projectId, {
@@ -233,6 +236,9 @@ export default function StudioStepContent(p: Props) {
 
       {p.activeTab === "scenes" && (
         <ScenesStep
+          projectId={p.projectId}
+          projectLanguage={p.project?.language}
+          projectRatio={p.project?.ratio ?? undefined}
           scenes={p.scenes}
           activeScript={p.activeScript}
           actionLoading={p.actionLoading}
@@ -262,12 +268,12 @@ export default function StudioStepContent(p: Props) {
             });
           }}
           projectName={p.project?.name ?? ""}
-          prompts={p.prompts.scenes}
         />
       )}
 
       {p.activeTab === "images" && (
         <ImagesStep
+          projectRatio={p.project?.ratio ?? undefined}
           scenes={p.scenes}
           activeIdx={p.activeSceneIdx}
           setActiveIdx={p.setActiveSceneIdx}
@@ -301,7 +307,6 @@ export default function StudioStepContent(p: Props) {
           handleTileDrop={p.handleTileDrop}
           handleSceneDrop={p.handleSceneDrop}
           handleUploadTileDrop={p.handleUploadTileDrop}
-          imagePrompts={p.prompts.image}
           onUpdateSceneEffect={p.updateSceneEffect}
         />
       )}
@@ -345,6 +350,38 @@ export default function StudioStepContent(p: Props) {
         />
       )}
 
+      {p.activeTab === "music" && (
+        <MusicStep
+          onAddToTimeline={(track) => {
+            if (!p.timeline) return;
+            const newClip = {
+              id: `music-${Date.now()}`,
+              track: "music" as const,
+              source: mediaUrl(track.file_path),
+              start: 0,
+              duration: track.duration_seconds || 30,
+              in: 0,
+              out: track.duration_seconds || 30,
+              audio_path: track.file_path,
+              audio_in: 0,
+              audio_out: track.duration_seconds || 30,
+              volume: 0.15,
+              muted: false,
+              locked: false,
+              scene_id: 0,
+              image_path: null,
+              video_path: null,
+            };
+            const updated: TimelineData = {
+              ...p.timeline,
+              clips: [...p.timeline.clips, newClip],
+              music: { file_path: track.file_path, volume: 0.15 },
+            };
+            p.setTimeline(updated);
+            api.saveTimeline(p.projectId, updated).catch(() => {});
+          }}
+        />
+      )}
 
 
       {p.activeTab === "captions" && (
@@ -370,56 +407,23 @@ export default function StudioStepContent(p: Props) {
       )}
 
       {p.activeTab === "timeline" && (
-        <TimelineStep
-          projectId={p.projectId}
-          scenes={p.scenes}
-          actionLoading={p.actionLoading}
-          videoStatus={p.videoStatus}
-          ratio={p.selectedRatio}
-          mediaUrl={mediaUrl}
-          timeline={p.timeline}
-          onTimelineChange={p.setTimeline}
-          onAddScene={p.quickAddScene}
-        />
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <h3 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>🎞️ Timeline Guide</h3>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: 0, lineHeight: 1.4 }}>
+            Use the timeline editor at the bottom right to arrange clips, trim audio narrations, and adjust layout durations.
+          </p>
+          <div style={{ padding: "0.75rem", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <strong style={{ color: "var(--text)" }}>Keyboard & Editor Shortcuts:</strong>
+            <ul style={{ paddingLeft: "1.2rem", margin: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <li><strong>Spacebar:</strong> Play/pause final video preview.</li>
+              <li><strong>Shift + Drag:</strong> Hold shift and drag to slide clips horizontally.</li>
+              <li><strong>Resize Edges:</strong> Drag crop boundaries to adjust durations.</li>
+            </ul>
+          </div>
+        </div>
       )}
 
-      {p.activeTab === "video" && (
-        <VideoStep
-          projectId={p.projectId}
-          scenes={p.scenes}
-          actionLoading={p.actionLoading}
-          ratio={p.selectedRatio}
-          videoStatus={p.videoStatus}
-          onBuild={p.buildVideo}
-          mediaUrl={mediaUrl}
-          enableSubtitles={p.enableSubtitles}
-          subtitleStyle={p.subtitleStyle}
-          subtitlePosition={p.subtitlePosition}
-          subtitleColor={p.subtitleColor}
-          subtitleOutlineColor={p.subtitleOutlineColor}
-          subtitleOutline={p.subtitleOutline}
-          subtitleFontSize={p.subtitleFontSize}
-          exportInfo={p.exportInfo}
-          activeSceneIdx={p.activeSceneIdx}
-          setActiveSceneIdx={p.setActiveSceneIdx}
-          onExport={() =>
-            p.runAction("export", async () => {
-              const result = await api.exportProject(p.projectId);
-              p.setExportInfo(result);
-              p.setSuccess(`${result.message} (${result.files.length} files)`);
-              if (result.files.includes("video/final.mp4")) {
-                const downloadUrl = mediaUrl(`${result.export_path}/video/final.mp4`);
-                const link = document.createElement("a");
-                link.href = downloadUrl;
-                link.setAttribute("download", "final_video.mp4");
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-              }
-            })
-          }
-        />
-      )}
+
 
       {p.activeTab === "thumbnail" && (
         <ThumbnailStep
@@ -449,6 +453,8 @@ export default function StudioStepContent(p: Props) {
 
       {p.activeTab === "seo" && (
         <SeoStep
+          projectId={p.projectId}
+          projectLanguage={p.project?.language}
           seo={p.seo}
           scenes={p.scenes}
           activeScript={p.activeScript}
@@ -478,7 +484,6 @@ export default function StudioStepContent(p: Props) {
               p.setSuccess("SEO data imported!");
             })
           }
-          prompts={p.prompts.seo}
         />
       )}
 
@@ -494,43 +499,7 @@ export default function StudioStepContent(p: Props) {
         />
       )}
 
-      {/* Next Step Navigation */}
-      {(() => {
-        const idx = STUDIO_STEPS.findIndex((s) => s.key === p.activeTab);
-        if (idx === -1) return null;
-        const prev = idx > 0 ? STUDIO_STEPS[idx - 1] : null;
-        const next = idx < STUDIO_STEPS.length - 1 ? STUDIO_STEPS[idx + 1] : null;
-        if (!prev && !next) return null;
-        return (
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingTop: "0.75rem",
-            borderTop: "1px solid var(--border)",
-            marginTop: "0.75rem",
-          }}>
-            {prev ? (
-              <button
-                className="btn-secondary"
-                onClick={() => p.onTabChange(prev.key)}
-                style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
-              >
-                <ChevronLeft size={14} /> {prev.label}
-              </button>
-            ) : <div />}
-            {next ? (
-              <button
-                className="btn-primary"
-                onClick={() => p.onTabChange(next.key)}
-                style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
-              >
-                {next.label} <ChevronRight size={14} />
-              </button>
-            ) : <div />}
-          </div>
-        );
-      })()}
+
 
     </div>
   );

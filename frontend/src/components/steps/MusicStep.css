@@ -1,0 +1,157 @@
+.music-step {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.music-step h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.music-step-subtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0;
+}
+
+.music-upload-zone {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: all 0.15s ease;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.music-upload-zone.dragging {
+  border: 2px dashed var(--primary) !important;
+  background: rgba(124, 92, 255, 0.06) !important;
+}
+
+.music-upload-icon {
+  margin-bottom: 0.1rem;
+}
+
+.music-upload-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.music-upload-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.music-empty-icon {
+  opacity: 0.3;
+}
+
+.music-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.music-item {
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+}
+
+.music-item.playing {
+  border-color: var(--primary);
+}
+
+.music-play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.music-play-btn.playing {
+  background: var(--primary);
+  color: #fff;
+}
+
+.music-play-icon {
+  margin-left: 1px;
+}
+
+.music-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.music-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.music-progress {
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.music-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+.music-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.music-add-btn {
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.music-delete-btn {
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  color: var(--danger);
+}

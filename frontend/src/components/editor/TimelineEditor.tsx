@@ -1,4 +1,4 @@
-﻿import {
+import {
   AlignStartVertical,
   ChevronDown,
   ChevronUp,
@@ -24,6 +24,10 @@
   Waves,
   ZoomIn,
   ZoomOut,
+  AlertTriangle,
+  RotateCcw,
+  Save,
+  Check,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -48,7 +52,6 @@ import {
 } from "./timeline/constants";
 import { ContextMenu, type MenuItem } from "./timeline/ContextMenu";
 import { Inspector } from "./timeline/Inspector";
-import { PreviewPanel } from "./timeline/PreviewPanel";
 import { Ruler } from "./timeline/Ruler";
 import { fmtTime, freshId, round2 } from "./timeline/utils";
 import { useTimelineEngine } from "./timeline/useEngine";
@@ -75,16 +78,28 @@ interface Props {
   projectId?: number;
   onAddScene?: () => Promise<Scene | null>;
   onChange: (tl: TimelineData) => void;
+  onSave?: () => void;
+  onReset?: () => void;
+  dirty?: boolean;
+  saved?: boolean;
+  saving?: boolean;
+  voiceOverruns?: number[];
 }
 
 export default function TimelineEditor({
   timeline,
   scenes,
   mediaUrl,
-  previewRatio,
+  previewRatio: _previewRatio,
   projectId,
   onAddScene,
   onChange,
+  onSave,
+  onReset,
+  dirty,
+  saved,
+  saving,
+  voiceOverruns,
 }: Props) {
   const E = useTimelineEngine(timeline, scenes, mediaUrl, onChange);
   const [menu, setMenu] = useState<{
@@ -108,25 +123,7 @@ export default function TimelineEditor({
   const t = E.time;
   const px = E.px;
 
-  const activeVideo = E.clips.find(
-    (c) =>
-      c.track === "video" &&
-      !E.rowStateOf("video").muted &&
-      t >= c.start &&
-      t < c.start + c.duration,
-  ) ?? null;
-  const activeCaptionClip = E.clips.find(
-    (c) =>
-      c.track === "text" &&
-      !E.rowStateOf("text").muted &&
-      !!c.text?.trim() &&
-      t >= c.start &&
-      t < c.start + c.duration,
-  );
-  const activeScene =
-    activeVideo && activeVideo.scene_id >= 0
-      ? E.sceneById.get(activeVideo.scene_id) ?? null
-      : null;
+
 
   const sel = E.selected;
   const selDef = sel ? TRACK_BY_ID[sel.track] : null;
@@ -487,23 +484,13 @@ export default function TimelineEditor({
   return (
     <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
       <style>{CSS}</style>
-        <PreviewPanel
-                ratio={previewRatio}
-                activeVideo={activeVideo}
-                activeCaption={activeCaptionClip?.text ?? null}
-                scene={activeScene}
-                time={t}
-                totalDuration={E.totalDuration}
-                playing={E.playing}
-                onTogglePlay={E.togglePlay}
-                mediaUrl={mediaUrl}
-              />
+
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 5,
-          flexWrap: "wrap",
+          width: "100%",
         }}
       >
         {btn(
@@ -531,49 +518,97 @@ export default function TimelineEditor({
 
         {btn("Split at playhead (S)", <Scissors size={14} />, E.splitAtPlayhead)}
         {btn(
-          "Duplicate (Ctrl+D)",
-          <Copy size={14} />,
-          () => sel && E.duplicateClip(sel),
-          { disabled: !sel },
-        )}
-        {btn(
           "Delete (Del)",
           <Trash2 size={14} />,
           () => sel && E.deleteClipOp(sel, E.rippleOn),
           { disabled: !sel, danger: true },
         )}
-        {btn(
-          E.rippleOn ? "Ripple delete: ON" : "Ripple delete: OFF",
-          <span style={{ fontSize: 10, fontWeight: 800 }}>RIPPLE</span>,
-          () => E.setRippleOn(!E.rippleOn),
-          { active: E.rippleOn },
-        )}
 
         <span style={{ width: 1, height: 18, background: THEME.separator }} />
 
-        {btn("Undo (Ctrl+Z)", <Undo2 size={14} />, E.undo, {
-          disabled: !E.canUndo,
-        })}
-        {btn("Redo (Ctrl+Shift+Z)", <Redo2 size={14} />, E.redo, {
-          disabled: !E.canRedo,
-        })}
-
-        <span style={{ width: 1, height: 18, background: THEME.separator }} />
-
-        {btn("Add caption at playhead", <Type size={14} />, () =>
-          E.addTextClip(),
+        {voiceOverruns && voiceOverruns.length > 0 && (
+          <span
+            className="badge"
+            title={`Scenes ${voiceOverruns.join(", ")}: narration is longer than the visuals.`}
+            style={{
+              background: "rgba(239, 68, 68, 0.15)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              color: "#ff6b78",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.2rem",
+              fontSize: "11px",
+              padding: "3px 6px",
+              borderRadius: "4px"
+            }}
+          >
+            <AlertTriangle size={11} />
+            {voiceOverruns.length} Overruns
+          </span>
         )}
-        {btn("Marker at playhead (M)", <Plus size={14} />, () =>
-          E.toggleMarker(),
+        {dirty && (
+          <span
+            style={{
+              background: "rgba(245, 158, 11, 0.15)",
+              border: "1px solid rgba(245, 158, 11, 0.25)",
+              color: "#fbbf24",
+              fontSize: "11px",
+              padding: "3px 6px",
+              borderRadius: "4px",
+              fontWeight: 600
+            }}
+          >
+            Unsaved
+          </span>
         )}
-
-        <span style={{ width: 1, height: 18, background: THEME.separator }} />
-
-        {btn(
-          E.snapOn ? "Snapping ON" : "Snapping OFF",
-          <Magnet size={14} />,
-          () => E.setSnapOn(!E.snapOn),
-          { active: E.snapOn },
+        {saved && (
+          <span
+            style={{
+              background: "rgba(16, 185, 129, 0.15)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
+              color: "#34d399",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.15rem",
+              fontSize: "11px",
+              padding: "3px 6px",
+              borderRadius: "4px",
+              fontWeight: 600
+            }}
+          >
+            <Check size={11} /> Saved
+          </span>
+        )}
+        {onReset && (
+          <button
+            className="btn-secondary"
+            onClick={onReset}
+            style={{
+              fontSize: "11px",
+              padding: "4px 8px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.2rem",
+            }}
+          >
+            <RotateCcw size={11} /> Reset
+          </button>
+        )}
+        {onSave && (
+          <button
+            className="btn-primary"
+            disabled={saving}
+            onClick={onSave}
+            style={{
+              fontSize: "11px",
+              padding: "4px 8px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.2rem",
+            }}
+          >
+            <Save size={11} /> {saving ? "Saving..." : "Save"}
+          </button>
         )}
 
         <div style={{ flex: 1 }} />
@@ -587,67 +622,125 @@ export default function TimelineEditor({
             <Settings size={14} />,
             () => setSettingsOpen((v) => !v),
             { active: settingsOpen },
-          )}          {settingsOpen && (
+          )}
+          {settingsOpen && (
             <div
               style={{
                 position: "absolute",
                 top: "calc(100% + 6px)",
                 right: 0,
                 zIndex: 60,
-                width: 190,
+                width: 210,
                 background: "#26262d",
                 border: `1px solid ${THEME.separator}`,
                 borderRadius: 9,
-                padding: 10,
+                padding: 12,
                 boxShadow: "0 12px 32px rgba(0,0,0,0.55)",
                 display: "grid",
-                gap: 8,
+                gap: 10,
                 fontSize: 11.5,
                 color: "#c9c9d1",
               }}
             >
-              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                Frame rate
-                <select
-                  value={E.fps}
-                  onChange={(e) => E.setFps(Number(e.target.value))}
-                  style={{ width: 74, padding: "2px 6px", fontSize: 11 }}
+              {/* Settings Configuration */}
+              <div style={{ display: "grid", gap: 6, borderBottom: `1px solid ${THEME.separator}`, paddingBottom: 8 }}>
+                <strong style={{ color: "#fff", fontSize: "0.75rem", marginBottom: 2 }}>Settings</strong>
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  Frame rate
+                  <select
+                    value={E.fps}
+                    onChange={(e) => E.setFps(Number(e.target.value))}
+                    style={{ width: 74, padding: "2px 6px", fontSize: 11, background: "var(--bg)", border: "1px solid var(--border)", color: "#fff", borderRadius: 4 }}
+                  >
+                    {[24, 25, 30, 50, 60].map((f) => (
+                      <option key={f} value={f}>
+                        {f} fps
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                  Snapping
+                  <input
+                    type="checkbox"
+                    checked={E.snapOn}
+                    onChange={() => E.setSnapOn(!E.snapOn)}
+                    style={{ width: 14, accentColor: THEME.accent }}
+                  />
+                </label>
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                  Ripple delete
+                  <input
+                    type="checkbox"
+                    checked={E.rippleOn}
+                    onChange={() => E.setRippleOn(!E.rippleOn)}
+                    style={{ width: 14, accentColor: THEME.accent }}
+                  />
+                </label>
+              </div>
+
+              {/* Timeline Actions */}
+              <div style={{ display: "grid", gap: 4 }}>
+                <strong style={{ color: "#fff", fontSize: "0.75rem", marginBottom: 2 }}>Actions</strong>
+                <button
+                  className="btn-secondary"
+                  disabled={!E.canUndo}
+                  onClick={() => { E.undo(); setSettingsOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", color: E.canUndo ? "#fff" : "#6f6f7a", cursor: E.canUndo ? "pointer" : "default" }}
                 >
-                  {[24, 25, 30, 50, 60].map((f) => (
-                    <option key={f} value={f}>
-                      {f} fps
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
-                Snapping
-                <input
-                  type="checkbox"
-                  checked={E.snapOn}
-                  onChange={() => E.setSnapOn(!E.snapOn)}
-                  style={{ width: 14, accentColor: THEME.accent }}
-                />
-              </label>
-              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
-                Ripple delete
-                <input
-                  type="checkbox"
-                  checked={E.rippleOn}
-                  onChange={() => E.setRippleOn(!E.rippleOn)}
-                  style={{ width: 14, accentColor: THEME.accent }}
-                />
-              </label>
-              <button
-                className="btn-secondary"
-                style={{ fontSize: 11, padding: "4px 8px" }}
-                onClick={() => {
-                  E.clearMarkers();
-                  setSettingsOpen(false);
-                }}
-              >
-                Clear all markers ({E.markers.length})
-              </button>
+                  <Undo2 size={12} /> Undo
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={!E.canRedo}
+                  onClick={() => { E.redo(); setSettingsOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", color: E.canRedo ? "#fff" : "#6f6f7a", cursor: E.canRedo ? "pointer" : "default" }}
+                >
+                  <Redo2 size={12} /> Redo
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={!sel}
+                  onClick={() => { sel && E.duplicateClip(sel); setSettingsOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", color: sel ? "#fff" : "#6f6f7a", cursor: sel ? "pointer" : "default" }}
+                >
+                  <Copy size={12} /> Duplicate Selected
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => { E.addTextClip(); setSettingsOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}
+                >
+                  <Type size={12} /> Add Caption
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => { E.toggleMarker(); setSettingsOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}
+                >
+                  <Plus size={12} /> Add Marker
+                </button>
+                {onAddScene && (
+                  <button
+                    className="btn-secondary"
+                    disabled={addingScene}
+                    onClick={() => { void handleAddScene(); setSettingsOpen(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", color: addingScene ? "#6f6f7a" : "#fff", cursor: addingScene ? "default" : "pointer" }}
+                  >
+                    <Plus size={12} /> Add Scene
+                  </button>
+                )}
+                <button
+                  className="btn-secondary"
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", color: "var(--danger)", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}
+                  onClick={() => {
+                    E.clearMarkers();
+                    setSettingsOpen(false);
+                  }}
+                >
+                  <Trash2 size={12} /> Clear all markers ({E.markers.length})
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -667,15 +760,6 @@ export default function TimelineEditor({
             padding: 0,
           }}
         />
-        {onAddScene &&
-          btn(
-            "Create a new scene and append it at the end",
-            <>
-              <Plus size={14} /> Scene
-            </>,
-            () => void handleAddScene(),
-            { primary: true, disabled: addingScene },
-          )}
         {btn("Zoom in (+)", <ZoomIn size={14} />, () => E.zoomAt(1.3))}
         {btn("Fit timeline", <Maximize size={14} />, E.fitTimeline)}
         <span

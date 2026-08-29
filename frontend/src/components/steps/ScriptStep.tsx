@@ -1,10 +1,12 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Sparkles, Download, Upload, FileText, X, Pencil } from "lucide-react";
 import type { Idea, Script } from "../../types";
 import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
 
 interface Props {
+  projectId: number;
+  projectLanguage?: string;
   ideas: Idea[];
   projectName: string;
   scripts: Script[];
@@ -21,7 +23,6 @@ interface Props {
   form: { title: string; hook: string; body: string; ending: string };
   onFormChange: (patch: Partial<{ title: string; hook: string; body: string; ending: string }>) => void;
   onImportScript?: (imported: { title?: string; hook?: string; body: string; ending?: string; language?: string }, replace: boolean) => Promise<void>;
-  prompts?: { system: string; user: string };
 }
 
 interface ImportedScript {
@@ -68,6 +69,8 @@ function parseImportedScript(text: string): ImportedScript | null {
 }
 
 export default function ScriptStep({
+  projectId,
+  projectLanguage,
   ideas,
   projectName,
   scripts,
@@ -84,10 +87,19 @@ export default function ScriptStep({
   form,
   onFormChange,
   onImportScript,
-  prompts,
 }: Props) {
   const activeScript = scripts.find((s) => s.is_active) || null;
   const [showFreeAI, setShowFreeAI] = useState(false);
+  const [dynamicPrompt, setDynamicPrompt] = useState<{ system: string; user: string } | null>(null);
+
+  useEffect(() => {
+    if (!showFreeAI) return;
+    api.buildScriptPrompt(projectId, {
+      topic: scriptTopic || ideas.find((i) => i.is_selected)?.title || projectName || undefined,
+      language: projectLanguage || "en",
+      target_duration_minutes: 5,
+    }).then(setDynamicPrompt).catch(() => {});
+  }, [showFreeAI, projectId, projectLanguage, scriptTopic, ideas, projectName]);
   const [showExportMenu, setShowExportMenu] = useState(true);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState("");
@@ -164,30 +176,34 @@ export default function ScriptStep({
           style={{ width: "100%", marginBottom: "0.6rem" }}
           title="Change the topic before regenerating"
         />
-        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn-primary" disabled={!!actionLoading} onClick={onGenerate} style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center" }}>
+          <button className="btn-primary" disabled={!!actionLoading} onClick={onGenerate} style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}>
             {actionLoading === "script" ? (
               "Generating..."
             ) : (
               <>
-                <Sparkles size={14} /> {activeScript ? "Regenerate" : "Generate"}
+                <Sparkles size={12} /> {activeScript ? "Regenerate" : "Generate"}
               </>
             )}
           </button>
           {activeScript && !editing && (
-            <button className="btn-secondary" disabled={!!actionLoading} onClick={onStartEdit} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-              <Pencil size={13} /> Edit
+            <button className="btn-secondary" disabled={!!actionLoading} onClick={onStartEdit} style={{ display: "flex", alignItems: "center", gap: "0.2rem", padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}>
+              <Pencil size={11} /> Edit
             </button>
           )}
           {!activeScript && !creating && (
-            <button className="btn-secondary" disabled={!!actionLoading} onClick={onStartCreate}>
+            <button className="btn-secondary" disabled={!!actionLoading} onClick={onStartCreate} style={{ padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}>
               Paste Your Own
             </button>
           )}
           <button
             className="btn-secondary"
             onClick={() => setShowFreeAI(!showFreeAI)}
-            style={showFreeAI ? { background: "var(--primary)", color: "#fff", borderColor: "var(--primary)" } : undefined}
+            style={{
+              padding: "0.3rem 0.55rem",
+              fontSize: "0.74rem",
+              ...(showFreeAI ? { background: "var(--primary)", color: "#fff", borderColor: "var(--primary)" } : {})
+            }}
           >
             Free AI
           </button>
@@ -195,10 +211,10 @@ export default function ScriptStep({
             className="btn-secondary"
             disabled={!!actionLoading}
             onClick={() => setShowImportModal(true)}
-            style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
+            style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}
             title="Import script from JSON or Text file"
           >
-            <Upload size={13} /> Import
+            <Upload size={12} /> Import
           </button>
         </div>
       </div>
@@ -207,8 +223,8 @@ export default function ScriptStep({
       {showFreeAI && (
         <FreeAIGuide
           title="Generate Script with Free AI"
-          prompt={prompts ? undefined : `SYSTEM PROMPT:\nYou are an expert YouTube scriptwriter. Write engaging scripts as JSON.\n\nUSER PROMPT:\nWrite a 5-minute YouTube script about: ${scriptTopic || ideas.find((i) => i.is_selected)?.title || projectName || "General topic"}. Language: en. Include hook, body, and ending. Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}`}
-          promptPair={prompts}
+          prompt={dynamicPrompt ? undefined : `SYSTEM PROMPT:\nYou are an expert YouTube scriptwriter. Write engaging scripts as JSON.\n\nUSER PROMPT:\nWrite a 5-minute YouTube script about: ${scriptTopic || ideas.find((i) => i.is_selected)?.title || projectName || "General topic"}. Language: ${projectLanguage || "en"}. Include hook, body, and ending. Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}`}
+          promptPair={dynamicPrompt || undefined}
           responsePlaceholder='Paste AI response here...\n\nAccepts JSON or plain text script.'
           onParseResponse={(text) => {
             if (!onImportScript) return;
@@ -290,10 +306,10 @@ export default function ScriptStep({
         </div>
       )}
 
-      {/* Script view: two-column */}
+      {/* Script view: single column stacked, secondary actions side-by-side */}
       {activeScript && !editing && (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: "1rem", alignItems: "start" }}>
-          {/* Left: script sections */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", minWidth: 0 }}>
+          {/* Top: script sections (full-width) */}
           <div className="card" style={{ padding: "1rem" }}>
             <h3 style={{ margin: "0 0 0.25rem", fontSize: "1.05rem" }}>{activeScript.title}</h3>
             <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0 0 1rem" }}>
@@ -317,39 +333,38 @@ export default function ScriptStep({
             )}
           </div>
 
-          {/* Right: sidebar */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div className="card" style={{ padding: "1rem" }}>
-              <span style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-muted)" }}>AI ACTIONS</span>
-              <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.6rem" }}>
-                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center" }}>
+          {/* Bottom: AI Actions & Export Cards Side-by-Side */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div className="card" style={{ padding: "0.75rem", display: "flex", flexDirection: "column" }}>
+              <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-muted)" }}>AI ACTIONS</span>
+              <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.5rem", flex: 1 }}>
+                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
                   Improve
                 </button>
-                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center" }}>
+                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
                   Shorten
                 </button>
-                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center" }}>
+                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
                   Expand
                 </button>
               </div>
-              <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", margin: "0.6rem 0 0" }}>Quick AI refinements coming soon</p>
             </div>
 
-            <div className="card" style={{ padding: "1rem" }}>
+            <div className="card" style={{ padding: "0.75rem", display: "flex", flexDirection: "column" }}>
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.3rem", width: "100%" }}
+                style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.2rem", width: "100%" }}
               >
-                <span style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-muted)" }}>EXPORT</span>
+                <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-muted)" }}>EXPORT</span>
                 <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>{showExportMenu ? "▾" : "▸"}</span>
               </button>
               {showExportMenu && (
-                <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.6rem" }}>
-                  <button className="btn-secondary" onClick={handleExportJson} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                    <Download size={13} /> JSON (.json)
+                <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.5rem", flex: 1 }}>
+                  <button className="btn-secondary" onClick={handleExportJson} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
+                    <Download size={11} /> JSON
                   </button>
-                  <button className="btn-secondary" onClick={handleExportTxt} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                    <FileText size={13} /> Text (.txt)
+                  <button className="btn-secondary" onClick={handleExportTxt} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.25rem 0.5rem", fontSize: "0.74rem" }}>
+                    <FileText size={11} /> Text
                   </button>
                 </div>
               )}

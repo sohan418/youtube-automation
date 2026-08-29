@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +9,15 @@ from app.services.ai import ai_service
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/scenes", tags=["Scenes"])
+
+
+class ScenePromptRequest(BaseModel):
+    script_body: str | None = None
+    hook: str | None = None
+    ending: str | None = None
+    language: str | None = None
+    count: int | None = None
+    ratio: str | None = None
 
 
 def _delete_scene_files(db: Session, scene: Scene) -> None:
@@ -269,3 +279,26 @@ def import_scenes(
     project.status = ProjectStatus.SCENES
     db.commit()
     return list_scenes(project_id, db)
+
+
+@router.post("/project/{project_id}/prompt")
+def build_scene_prompt(project_id: int, payload: ScenePromptRequest, db: Session = Depends(get_db)):
+    """Return the exact prompt that would be sent to the LLM for scene generation."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    active_script = (
+        db.query(Script)
+        .filter(Script.project_id == project_id, Script.is_active.is_(True))
+        .first()
+    )
+
+    return ai_service.build_scenes_prompt(
+        script_body=payload.script_body or (active_script.body if active_script else ""),
+        hook=payload.hook or (active_script.hook if active_script else ""),
+        ending=payload.ending or (active_script.ending if active_script else ""),
+        language=payload.language or project.language,
+        count=payload.count,
+        ratio=payload.ratio or project.ratio or "16:9",
+    )

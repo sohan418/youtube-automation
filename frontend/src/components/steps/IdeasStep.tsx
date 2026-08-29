@@ -1,21 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, Download, Upload, X, ArrowRight, Lightbulb, Play, ChevronDown, ChevronUp } from "lucide-react";
 import type { Idea, YouTubeVideo } from "../../types";
+import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
 
 interface Props {
+  projectId: number;
+  projectLanguage?: string;
+  projectCategory?: string;
   ideas: Idea[];
   actionLoading: string;
   ideaTopic: string;
   onTopicChange: (v: string) => void;
   onGenerate: () => void;
   onSelect: (id: number) => void;
-  onFreeAIResponse?: (ideas: { title: string; description: string; category?: string }[]) => void;
-  prompts?: { system: string; user: string };
+  onFreeAIResponse?: (ideas: { title: string; description: string; category?: string; trending_score?: number }[]) => void;
   recentVideos?: YouTubeVideo[];
 }
 
-function parseFreeAIResponse(text: string): { title: string; description: string; category?: string }[] {
+function parseFreeAIResponse(text: string): { title: string; description: string; category?: string; trending_score?: number }[] {
   try {
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
@@ -25,6 +28,12 @@ function parseFreeAIResponse(text: string): { title: string; description: string
           title: item.title || item.name || "",
           description: item.description || item.summary || "",
           category: item.category || item.topic || undefined,
+          trending_score: (function() {
+            const sc = item.trending_score !== undefined ? item.trending_score : item.score;
+            if (sc === undefined) return undefined;
+            const parsedSc = parseInt(sc, 10);
+            return isNaN(parsedSc) ? undefined : parsedSc;
+          })(),
         })).filter((i: any) => i.title);
       }
     }
@@ -47,13 +56,25 @@ function parseFreeAIResponse(text: string): { title: string; description: string
 
 const CATEGORIES = ["Trending", "AI", "Education", "Comedy", "Facts", "Gaming", "Technology", "Science"];
 
-export default function IdeasStep({ ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onFreeAIResponse, prompts, recentVideos }: Props) {
+export default function IdeasStep({ projectId, projectLanguage, projectCategory, ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onFreeAIResponse, recentVideos }: Props) {
   const [showFreeAI, setShowFreeAI] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [previewIdea, setPreviewIdea] = useState<Idea | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showRecentVideos, setShowRecentVideos] = useState(false);
+  const [dynamicPrompt, setDynamicPrompt] = useState<{ system: string; user: string } | null>(null);
+
+  useEffect(() => {
+    if (!showFreeAI) return;
+    api.buildIdeaPrompt(projectId, {
+      count: 5,
+      language: projectLanguage || "en",
+      category: projectCategory || undefined,
+      topic: ideaTopic.trim() || undefined,
+      recentVideos: recentVideos?.map((v) => ({ title: v.title, description: v.description })),
+    }).then(setDynamicPrompt).catch(() => {});
+  }, [showFreeAI, projectId, projectLanguage, projectCategory, ideaTopic, recentVideos]);
 
   const freeAIPrompt = `SYSTEM PROMPT:\nYou are a YouTube trend analyst. Generate video ideas as JSON.\n\nUSER PROMPT:\nGenerate 5 trending YouTube video ideas${ideaTopic.trim() ? ` about: ${ideaTopic}` : ""}. Language: en. Return JSON: {"ideas": [{"title": "...", "description": "...", "category": "...", "trending_score": 0-100}]}`;
 
@@ -135,8 +156,8 @@ export default function IdeasStep({ ideas, actionLoading, ideaTopic, onTopicChan
       {showFreeAI && (
         <FreeAIGuide
           title="Generate Ideas with Free AI"
-          prompt={prompts ? undefined : freeAIPrompt}
-          promptPair={prompts}
+          prompt={dynamicPrompt ? undefined : freeAIPrompt}
+          promptPair={dynamicPrompt || undefined}
           responsePlaceholder="Paste AI response here..."
           onParseResponse={handleFreeAIResponse}
         />

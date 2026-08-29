@@ -185,10 +185,11 @@ class AIService:
             return self._mock_image_prompt(user)
         return "Mock AI response — set OPENAI_API_KEY for real generation."
 
-    def generate_ideas(
+    def build_ideas_prompt(
         self, category: str | None, count: int, language: str, topic: str | None = None,
         recent_videos: list[dict[str, Any]] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, str]:
+        """Build the exact prompt that generate_ideas would send to the LLM."""
         category_text = f" in the '{category}' category" if category else ""
         topic_text = f" about: {topic}" if topic else ""
         system = "You are a YouTube trend analyst. Generate video ideas as JSON."
@@ -205,7 +206,14 @@ class AIService:
             'Return JSON: {"ideas": [{"title": "...", "description": "...", '
             '"category": "...", "trending_score": 0-100}]}'
         )
-        data = self._generate_json(system, user, label="Idea generation")
+        return {"system": system, "user": user}
+
+    def generate_ideas(
+        self, category: str | None, count: int, language: str, topic: str | None = None,
+        recent_videos: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        prompts = self.build_ideas_prompt(category, count, language, topic, recent_videos)
+        data = self._generate_json(prompts["system"], prompts["user"], label="Idea generation")
         return data.get("ideas", [])
 
     def _mock_ideas(self, user: str) -> str:
@@ -311,31 +319,32 @@ class AIService:
         language: str,
         target_duration_minutes: int,
     ) -> dict[str, str]:
+        prompts = self.build_script_prompt(topic, language, target_duration_minutes)
+        try:
+            raw = self._chat(prompts["system"], prompts["user"], json_mode=True)
+            data = TextProvider.extract_json(raw)
+            if not data or "body" not in data:
+                return json.loads(self._mock_script(prompts["user"]))
+            return data
+        except Exception:
+            logger.warning("Script generation failed, falling back to mock script")
+            return json.loads(self._mock_script(prompts["user"]))
+
+    def build_script_prompt(
+        self, topic: str, language: str, target_duration_minutes: int,
+    ) -> dict[str, str]:
         system = "You are an expert YouTube scriptwriter. Write engaging scripts as JSON."
         user = (
             f"Write a {target_duration_minutes}-minute YouTube script about: {topic}. "
             f"Language: {language}. Include hook, body, and ending. "
             'Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}'
         )
-        try:
-            raw = self._chat(system, user, json_mode=True)
-            data = TextProvider.extract_json(raw)
-            if not data or "body" not in data:
-                return json.loads(self._mock_script(user))
-            return data
-        except Exception:
-            logger.warning("Script generation failed, falling back to mock script")
-            return json.loads(self._mock_script(user))
+        return {"system": system, "user": user}
 
-    def generate_scenes(
-        self,
-        script_body: str,
-        hook: str,
-        ending: str,
-        language: str = "en",
-        count: int | None = None,
-        ratio: str = "16:9",
-    ) -> list[dict[str, str]]:
+    def build_scenes_prompt(
+        self, script_body: str, hook: str, ending: str, language: str = "en",
+        count: int | None = None, ratio: str = "16:9",
+    ) -> dict[str, str]:
         system = (
             "You are a video director. Break scripts into scenes as JSON. "
             "Each scene has a 'narration', an 'image_prompt', and a 'video_prompt'. "
@@ -362,7 +371,19 @@ class AIService:
             f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
             'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
         )
-        data = self._generate_json(system, user, label="Scene generation")
+        return {"system": system, "user": user}
+
+    def generate_scenes(
+        self,
+        script_body: str,
+        hook: str,
+        ending: str,
+        language: str = "en",
+        count: int | None = None,
+        ratio: str = "16:9",
+    ) -> list[dict[str, str]]:
+        prompts = self.build_scenes_prompt(script_body, hook, ending, language, count, ratio)
+        data = self._generate_json(prompts["system"], prompts["user"], label="Scene generation")
         scenes: list[dict[str, str]] = []
         for raw_scene in data.get("scenes", []):
             narration = self._clean_narration(raw_scene.get("narration") or "")
@@ -398,12 +419,9 @@ class AIService:
         )
         return re.sub(r"\s+", " ", cleaned).strip()
 
-    def generate_image_prompt(
-        self,
-        scene_narration: str,
-        style: str | None = None,
-        ratio: str = "16:9",
-    ) -> str:
+    def build_image_prompt(
+        self, scene_narration: str, style: str | None = None, ratio: str = "16:9",
+    ) -> dict[str, str]:
         style_text = f" Style: {style}." if style else ""
         system = (
             "You are an expert image prompt engineer for AI art generation. "
@@ -418,7 +436,16 @@ class AIService:
             f"Create a detailed cinematic image prompt that visualizes this scene. "
             f"Always include the {ratio} aspect ratio.{style_text}"
         )
-        return self._chat(system, user)
+        return {"system": system, "user": user}
+
+    def generate_image_prompt(
+        self,
+        scene_narration: str,
+        style: str | None = None,
+        ratio: str = "16:9",
+    ) -> str:
+        prompts = self.build_image_prompt(scene_narration, style, ratio)
+        return self._chat(prompts["system"], prompts["user"])
 
     @staticmethod
     def _mock_image_prompt(user: str) -> str:
@@ -476,8 +503,8 @@ class AIService:
             if w.lower() not in stop_words and len(w) > 2
         ]
 
-    def generate_seo(
-        self, script_title: str, script_body: str, language: str
+    def build_seo_prompt(
+        self, script_title: str, script_body: str, language: str,
     ) -> dict[str, str]:
         system = "You are a YouTube SEO expert. Generate metadata as JSON."
         user = (
@@ -485,7 +512,13 @@ class AIService:
             f"Script excerpt: {script_body[:500]}\nLanguage: {language}\n"
             'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}'
         )
-        return self._generate_json(system, user, label="SEO generation")
+        return {"system": system, "user": user}
+
+    def generate_seo(
+        self, script_title: str, script_body: str, language: str
+    ) -> dict[str, str]:
+        prompts = self.build_seo_prompt(script_title, script_body, language)
+        return self._generate_json(prompts["system"], prompts["user"], label="SEO generation")
 
     def generate_thumbnail_prompt(self, title: str, style: str | None = None) -> str:
         style_text = f" Style: {style}." if style else ""

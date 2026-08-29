@@ -68,6 +68,8 @@ function combineDescription(body: string, timestamps: string, disclaimer: string
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
+  projectId: number;
+  projectLanguage?: string;
   seo: SEOMetadata | null;
   scenes: Scene[];
   activeScript: Script | null;
@@ -76,7 +78,6 @@ interface Props {
   onGenerate: () => void;
   onSave: (data: { title?: string; description?: string; tags?: string; hashtags?: string }) => Promise<void>;
   onFreeAIResponse?: (data: Partial<SEOMetadata>) => void;
-  prompts?: { system: string; user: string };
 }
 
 // ─── Editable field (compact) ────────────────────────────────────────────────
@@ -176,13 +177,23 @@ const compactBtnStyle: React.CSSProperties = {
 };
 
 export default function SeoStep({
-  seo, scenes, activeScript, actionLoading, projectCategory,
-  onGenerate, onSave, onFreeAIResponse, prompts,
+  projectId, projectLanguage, seo, scenes, activeScript, actionLoading, projectCategory,
+  onGenerate, onSave, onFreeAIResponse,
 }: Props) {
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [constants, setConstants] = useState<SEOConstants | null>(null);
   const [showFreeAI, setShowFreeAI] = useState(false);
+  const [dynamicPrompt, setDynamicPrompt] = useState<{ system: string; user: string } | null>(null);
+
+  useEffect(() => {
+    if (!showFreeAI) return;
+    api.buildSEOPrompt(projectId, {
+      script_title: activeScript?.title || undefined,
+      script_body: activeScript?.body || undefined,
+      language: projectLanguage || "en",
+    }).then(setDynamicPrompt).catch(() => {});
+  }, [showFreeAI, projectId, projectLanguage, activeScript]);
 
   // Fetch marker constants once from the backend — single source of truth
   useEffect(() => {
@@ -195,7 +206,7 @@ export default function SeoStep({
     : { body: seo?.description ?? "", timestamps: "", disclaimer: "" };
   const { body, timestamps, disclaimer } = parsed;
 
-  const freeAIPrompt = `SYSTEM PROMPT:\nYou are a YouTube SEO expert. Generate metadata as JSON.\n\nUSER PROMPT:\nGenerate SEO metadata for a YouTube video.\nTitle: ${activeScript?.title || "Your Video Title"}\nScript excerpt: ${(activeScript?.body || "").substring(0, 500)}\nLanguage: en\nReturn JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}`;
+  const freeAIPrompt = `SYSTEM PROMPT:\nYou are a YouTube SEO expert. Generate metadata as JSON.\n\nUSER PROMPT:\nGenerate SEO metadata for a YouTube video.\nTitle: ${activeScript?.title || "Your Video Title"}\nScript excerpt: ${(activeScript?.body || "").substring(0, 500)}\nLanguage: ${projectLanguage || "en"}\nReturn JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}`;
 
   const handleFreeAIResponse = (text: string) => {
     if (!onFreeAIResponse) return;
@@ -295,8 +306,8 @@ export default function SeoStep({
       {showFreeAI && (
         <FreeAIGuide
           title="Generate SEO with Free AI"
-          prompt={prompts ? undefined : freeAIPrompt}
-          promptPair={prompts}
+          prompt={dynamicPrompt ? undefined : freeAIPrompt}
+          promptPair={dynamicPrompt || undefined}
           responsePlaceholder={'Paste AI response here...\n\nAccepts JSON or "Title: ..." format.'}
           onParseResponse={handleFreeAIResponse}
         />

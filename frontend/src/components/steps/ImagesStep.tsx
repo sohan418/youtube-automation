@@ -18,8 +18,9 @@ import {
   Film,
 } from "lucide-react";
 import type { Scene } from "../../types";
+import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
-import Select from "../ui/Select";
+
 
 export interface DragMedia {
   kind: "image" | "video";
@@ -56,18 +57,10 @@ export function buildMediaStrip(scene: Scene): MediaTile[] {
   return [...images, ...videos].sort((a, b) => a.position - b.position);
 }
 
-// Motion FX options — used by dropdown (#1)
-const MOTION_OPTIONS = [
-  { value: "none",       label: "Static 📷" },
-  { value: "zoom_in",    label: "Zoom In 🎬" },
-  { value: "zoom_out",   label: "Zoom Out 🎬" },
-  { value: "pan_right",  label: "Pan Right →" },
-  { value: "pan_left",   label: "Pan Left ←" },
-  { value: "pan_up",     label: "Pan Up ↑" },
-  { value: "pan_down",   label: "Pan Down ↓" },
-];
+
 
 interface Props {
+  projectRatio?: string;
   scenes: Scene[];
   activeIdx: number;
   setActiveIdx: React.Dispatch<React.SetStateAction<number>>;
@@ -96,11 +89,11 @@ interface Props {
   handleTileDrop: (e: React.DragEvent, scene: Scene, target: MediaTile) => void;
   handleSceneDrop: (e: React.DragEvent, sceneId: number) => void;
   handleUploadTileDrop: (e: React.DragEvent, sceneId: number) => void;
-  imagePrompts?: { system: string; user: string };
   onUpdateSceneEffect?: (sceneId: number, effect: string) => void;
 }
 
 export default function ImagesStep({
+  projectRatio,
   scenes,
   activeIdx,
   setActiveIdx,
@@ -129,13 +122,20 @@ export default function ImagesStep({
   handleTileDrop,
   handleSceneDrop,
   handleUploadTileDrop,
-  imagePrompts,
-  onUpdateSceneEffect,
 }: Props) {
   // Task #6: active prompt tab per scene
   const [promptTab, setPromptTab] = useState<"image" | "video">("image");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [copiedBoth, setCopiedBoth] = useState(false);
   const [videoDurations, setVideoDurations] = useState<Record<number, number>>({});
+  const [dynamicImagePrompt, setDynamicImagePrompt] = useState<{ system: string; user: string } | null>(null);
+
+  useEffect(() => {
+    api.buildImagePrompt({
+      scene_narration: "Scene narration: [paste your scene narration here]",
+      ratio: projectRatio || "16:9",
+    }).then(setDynamicImagePrompt).catch(() => {});
+  }, [projectRatio]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -159,6 +159,15 @@ export default function ImagesStep({
     navigator.clipboard.writeText(text);
     setCopiedPrompt(true);
     setTimeout(() => setCopiedPrompt(false), 2000);
+  };
+
+  const handleCopyBothPrompts = (scene: Scene) => {
+    const imgPrompt = scene.image_prompt || scene.narration || "";
+    const vidPrompt = scene.video_prompt || scene.narration || "";
+    const text = `Image Prompt:\n${imgPrompt}\n\nVideo Prompt:\n${vidPrompt}`;
+    navigator.clipboard.writeText(text);
+    setCopiedBoth(true);
+    setTimeout(() => setCopiedBoth(false), 2000);
   };
 
   // Tile action button style helpers (#8)
@@ -192,27 +201,47 @@ export default function ImagesStep({
         .tile-action-btn-copy:hover { background: rgba(0,184,212,0.1) !important; color: var(--accent) !important; }
       `}</style>
 
-      {/* ── Header card ─────────────────────────────────────────────────── */}
-      <div className="card" style={{ padding: "0.6rem 0.85rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
-          <div>
-            <h3 style={{ fontSize: "1.05rem", margin: 0 }}>Scene Media Strip</h3>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", margin: 0 }}>
-              Generate AI images or upload custom clips per scene
-            </p>
-          </div>
-          <button
-            className="btn-secondary"
-            disabled={!!actionLoading || scenes.length === 0}
-            onClick={onGenerateAll}
-            style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
-          >
-            {actionLoading === "images" ? "..." : (
-              <><Sparkles size={12} style={{ verticalAlign: "-1px" }} /> Generate All Images</>
-            )}
-          </button>
+      {/* ── Compact Header Toolbar ─────────────────────────────────────── */}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "0.5rem",
+        paddingBottom: "0.35rem",
+        borderBottom: "1px solid var(--border)",
+        marginBottom: "0.45rem"
+      }}>
+        {/* Left Side: Title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <Film size={14} color="var(--primary)" style={{ verticalAlign: "-2px" }} />
+          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text)" }}>Scene Media Strip</span>
         </div>
 
+        {/* Right Side: Generate All Button */}
+        <button
+          className="btn-secondary"
+          disabled={!!actionLoading || scenes.length === 0}
+          onClick={onGenerateAll}
+          style={{
+            fontSize: "0.72rem",
+            padding: "0.25rem 0.5rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.2rem",
+          }}
+        >
+          {actionLoading === "images" ? (
+            "Generating..."
+          ) : (
+            <>
+              <Sparkles size={11} /> Generate All
+            </>
+          )}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {scenes.length === 0 ? (
           <div style={{ marginTop: "0.5rem" }}>
             <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
@@ -220,8 +249,8 @@ export default function ImagesStep({
             </p>
             <FreeAIGuide
               title="Generate Image Prompts with Free AI"
-              prompt={imagePrompts ? undefined : `SYSTEM PROMPT:\nYou are an expert image prompt engineer for AI art generation. Create ONE detailed image prompt in English that visually shows what the scene's narration is describing. Describe concrete visual imagery: setting, subject, objects, mood, and lighting. Output only the prompt itself. No text, no words, no watermarks, no labels. Cinematic, ultra detailed, 16:9 aspect ratio.\n\nUSER PROMPT:\nScene narration: [paste your scene narration here]\nCreate a detailed cinematic image prompt that visualizes this scene. Always include the 16:9 aspect ratio.`}
-              promptPair={imagePrompts}
+              prompt={dynamicImagePrompt ? undefined : `SYSTEM PROMPT:\nYou are an expert image prompt engineer for AI art generation. Create ONE detailed image prompt in English that visually shows what the scene's narration is describing. Describe concrete visual imagery: setting, subject, objects, mood, and lighting. Output only the prompt itself. No text, no words, no watermarks, no labels. Cinematic, ultra detailed, ${projectRatio || "16:9"} aspect ratio.\n\nUSER PROMPT:\nScene narration: [paste your scene narration here]\nCreate a detailed cinematic image prompt that visualizes this scene. Always include the ${projectRatio || "16:9"} aspect ratio.`}
+              promptPair={dynamicImagePrompt || undefined}
               responsePlaceholder="Paste AI-generated image prompt here..."
               onParseResponse={(text) => { navigator.clipboard.writeText(text.trim()); }}
             />
@@ -378,65 +407,75 @@ export default function ImagesStep({
                         <p style={{ fontSize: "0.77rem", color: "var(--text-muted)", margin: 0, fontStyle: "italic", lineHeight: 1.45, flex: 1 }}>
                           {activePromptText}
                         </p>
-                        <button
-                          className="btn-secondary"
-                          onClick={() => handleCopyPrompt(scene)}
-                          style={{
-                            fontSize: "0.65rem",
-                            padding: "0.15rem 0.4rem",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.2rem",
-                            color: copiedPrompt ? "var(--success)" : "var(--text)",
-                            borderColor: copiedPrompt ? "var(--success)" : "var(--border)",
-                            background: "transparent",
-                            borderRadius: "4px",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {copiedPrompt ? <Check size={10} /> : <Copy size={10} />}
-                          {copiedPrompt ? "Copied" : "Copy"}
-                        </button>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                          <button
+                            className="btn-secondary"
+                            onClick={() => handleCopyPrompt(scene)}
+                            style={{
+                              fontSize: "0.65rem",
+                              padding: "0.15rem 0.4rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.2rem",
+                              color: copiedPrompt ? "var(--success)" : "var(--text)",
+                              borderColor: copiedPrompt ? "var(--success)" : "var(--border)",
+                              background: "transparent",
+                              borderRadius: "4px",
+                              flexShrink: 0,
+                              width: "100%",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {copiedPrompt ? <Check size={10} /> : <Copy size={10} />}
+                            {copiedPrompt ? "Copied" : "Copy"}
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            onClick={() => handleCopyBothPrompts(scene)}
+                            style={{
+                              fontSize: "0.65rem",
+                              padding: "0.15rem 0.4rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.2rem",
+                              color: copiedBoth ? "var(--success)" : "var(--text)",
+                              borderColor: copiedBoth ? "var(--success)" : "var(--border)",
+                              background: "transparent",
+                              borderRadius: "4px",
+                              flexShrink: 0,
+                              width: "100%",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {copiedBoth ? <Check size={10} /> : <Copy size={10} />}
+                            {copiedBoth ? "Copied Both" : "Copy Both"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* ── Task #1: Motion FX dropdown ──────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                      Motion FX:
-                    </span>
-                    <Select
-                      value={scene.motion_effect || "none"}
-                      disabled={!!actionLoading}
-                      onChange={(v) => onUpdateSceneEffect && onUpdateSceneEffect(scene.id, String(v))}
-                      options={MOTION_OPTIONS.map((opt) => ({ label: opt.label, value: opt.value }))}
-                      size="sm"
-                      style={{ flex: 1, maxWidth: "200px" }}
-                    />
-
-                    {/* Action buttons row */}
-                    <div style={{ display: "flex", gap: "0.35rem", marginLeft: "auto", alignItems: "center" }}>
-                      <button
-                        className="btn-accent"
-                        disabled={!!actionLoading || generatingSceneId !== null}
-                        onClick={() => onGenerateScene(scene.id)}
-                        style={{ fontSize: "0.74rem", padding: "0.28rem 0.55rem" }}
-                      >
-                        {generatingSceneId === scene.id ? "Generating..." : (
-                          <><Sparkles size={12} style={{ verticalAlign: "middle" }} /> Generate</>
-                        )}
-                      </button>
-                      <button
-                        className="btn-secondary"
-                        disabled={!!actionLoading || clipboardImageId == null}
-                        onClick={() => onPaste(scene.id)}
-                        style={{ fontSize: "0.74rem", padding: "0.28rem 0.55rem" }}
-                        title="Paste the copied image into this scene"
-                      >
-                        Paste
-                      </button>
-                    </div>
+                  {/* Action buttons row */}
+                  <div style={{ display: "flex", gap: "0.35rem", justifyContent: "flex-end", alignItems: "center" }}>
+                    <button
+                      className="btn-accent"
+                      disabled={!!actionLoading || generatingSceneId !== null}
+                      onClick={() => onGenerateScene(scene.id)}
+                      style={{ fontSize: "0.74rem", padding: "0.28rem 0.55rem" }}
+                    >
+                      {generatingSceneId === scene.id ? "Generating..." : (
+                        <><Sparkles size={12} style={{ verticalAlign: "middle" }} /> Generate</>
+                      )}
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      disabled={!!actionLoading || clipboardImageId == null}
+                      onClick={() => onPaste(scene.id)}
+                      style={{ fontSize: "0.74rem", padding: "0.28rem 0.55rem" }}
+                      title="Paste the copied image into this scene"
+                    >
+                      Paste
+                    </button>
                   </div>
 
                   {/* ── Strip stats + warnings ───────────────────────────── */}

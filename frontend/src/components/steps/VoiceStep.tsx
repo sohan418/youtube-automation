@@ -255,14 +255,14 @@ export default function VoiceStep({
   const sourceCardBase: React.CSSProperties = {
     background: "var(--surface)",
     border: "1px solid var(--border)",
-    borderRadius: "10px",
-    padding: "0.9rem 1.1rem",
-    minHeight: "78px",
+    borderRadius: "8px",
+    padding: "0.55rem 0.85rem",
+    minHeight: "64px",
     cursor: "pointer",
     transition: "all 0.15s ease",
     display: "flex",
     alignItems: "center",
-    gap: "0.85rem",
+    gap: "0.75rem",
   };
 
   const sourceChip = (color: string): React.CSSProperties => ({
@@ -562,7 +562,7 @@ export default function VoiceStep({
                 </button>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.4rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.45rem" }}>
                 <div
                   onClick={() => onStartRecording(activeScene.id)}
                   style={sourceCardBase}

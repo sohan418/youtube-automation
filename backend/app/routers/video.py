@@ -166,7 +166,7 @@ def _load_timeline_payload(db: Session, project_id: int) -> dict | None:
         parsed = json.loads(tl.data)
     except (ValueError, TypeError):
         return None
-    if not isinstance(parsed, dict) or not parsed.get("clips"):
+    if not isinstance(parsed, dict):
         return None
     return parsed
 
@@ -178,6 +178,8 @@ def _run_build(
     payload: VideoBuildRequest,
     timeline_clips: list[dict] | None = None,
     track_states: dict | None = None,
+    background_music: str | None = None,
+    music_volume: float = 0.12,
 ) -> None:
     from app.services.video import video_service
 
@@ -263,17 +265,22 @@ def build_video(
     timeline_payload = _load_timeline_payload(db, project_id)
     background_music = payload.background_music
     music_volume = payload.music_volume
-    if (
-        not background_music
-        and timeline_payload
-        and isinstance(timeline_payload.get("music"), dict)
-        and timeline_payload["music"].get("file_path")
-    ):
-        background_music = timeline_payload["music"]["file_path"]
-        music_volume = float(timeline_payload["music"].get("volume", music_volume))
-    timeline_clips = timeline_payload["clips"] if timeline_payload else None
+    # Try from request timeline first, then from DB timeline
+    req_timeline = payload.timeline.model_dump() if payload.timeline else None
+    for source in (req_timeline, timeline_payload):
+        if (
+            not background_music
+            and source
+            and isinstance(source.get("music"), dict)
+            and source["music"].get("file_path")
+        ):
+            background_music = source["music"]["file_path"]
+            music_volume = float(source["music"].get("volume", music_volume))
+            break
+    timeline_clips = timeline_payload["clips"] if timeline_payload else (req_timeline["clips"] if req_timeline else None)
     track_states = (
-        timeline_payload.get("track_states") if timeline_payload else None
+        timeline_payload.get("track_states") if timeline_payload
+        else (req_timeline.get("track_states") if req_timeline else None)
     )
 
     video_service.set_progress(
@@ -281,7 +288,7 @@ def build_video(
     )
     thread = threading.Thread(
         target=_run_build,
-        args=(project_id, project.slug, scene_data, payload, timeline_clips, track_states),
+        args=(project_id, project.slug, scene_data, payload, timeline_clips, track_states, background_music, music_volume),
         daemon=True,
     )
     thread.start()

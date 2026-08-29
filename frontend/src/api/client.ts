@@ -70,11 +70,19 @@ export const api = {
     }),
   importIdeas: (
     projectId: number,
-    ideas: { title: string; description?: string; category?: string }[],
+    ideas: { title: string; description?: string; category?: string; trending_score?: number }[],
   ) =>
     request<import("../types").Idea[]>(`/ideas/project/${projectId}/import`, {
       method: "POST",
       body: JSON.stringify({ ideas }),
+    }),
+  buildIdeaPrompt: (
+    projectId: number,
+    data: { category?: string; count?: number; language?: string; topic?: string; recentVideos?: { title: string; description?: string }[] },
+  ) =>
+    request<{ system: string; user: string }>(`/ideas/project/${projectId}/prompt`, {
+      method: "POST",
+      body: JSON.stringify({ ...data, recent_videos: data.recentVideos }),
     }),
 
   listScripts: (projectId: number) =>
@@ -117,6 +125,14 @@ export const api = {
       `/scripts/project/${projectId}/generate`,
       { method: "POST", body: JSON.stringify(data) },
     ),
+  buildScriptPrompt: (
+    projectId: number,
+    data: { topic?: string; language?: string; target_duration_minutes?: number },
+  ) =>
+    request<{ system: string; user: string }>(`/scripts/project/${projectId}/prompt`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   createScript: (
     projectId: number,
     data: {
@@ -193,6 +209,14 @@ export const api = {
       `/scenes/project/${projectId}/generate`,
       { method: "POST", body: JSON.stringify({ script_id: scriptId, count }) },
     ),
+  buildScenesPrompt: (
+    projectId: number,
+    data: { script_body?: string; hook?: string; ending?: string; language?: string; count?: number; ratio?: string },
+  ) =>
+    request<{ system: string; user: string }>(`/scenes/project/${projectId}/prompt`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   updateScene: (sceneId: number, data: Partial<import("../types").Scene>) =>
     request<import("../types").Scene>(`/scenes/${sceneId}`, {
       method: "PATCH",
@@ -218,6 +242,11 @@ export const api = {
     request<import("../types").Scene>("/images/generate", {
       method: "POST",
       body: JSON.stringify({ scene_id: sceneId, style }),
+    }),
+  buildImagePrompt: (data: { scene_narration: string; style?: string; ratio?: string }) =>
+    request<{ system: string; user: string }>("/images/prompt", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
   generateAllImages: (projectId: number, style?: string) =>
     request<import("../types").Scene[]>(
@@ -388,6 +417,21 @@ export const api = {
       `/video/clips/${encodeURIComponent(filename)}`,
       { method: "DELETE" },
     ),
+  listGlobalMusic: () =>
+    request<import("../types").MusicTrack[]>("/video/music/library"),
+  uploadGlobalMusic: (file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request<import("../types").MusicTrack>("/video/music/upload", {
+      method: "POST",
+      body: form,
+    });
+  },
+  deleteGlobalMusic: (filename: string) =>
+    request<{ message: string }>(
+      `/video/music/${encodeURIComponent(filename)}`,
+      { method: "DELETE" },
+    ),
   buildVideo: (
     projectId: number,
     data?: {
@@ -442,6 +486,14 @@ export const api = {
       `/seo/project/${projectId}/generate`,
       { method: "POST", body: JSON.stringify({ language: language || "en" }) },
     ),
+  buildSEOPrompt: (
+    projectId: number,
+    data: { script_title?: string; script_body?: string; language?: string },
+  ) =>
+    request<{ system: string; user: string }>(`/seo/project/${projectId}/prompt`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   listSEOCategories: () =>
     request<import("../types").SEOCategory[]>("/seo/categories"),
   updateSEOCategory: (projectId: number, categoryId: number) =>

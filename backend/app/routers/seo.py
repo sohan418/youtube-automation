@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +9,12 @@ from app.services.ai import ai_service
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/seo", tags=["SEO"])
+
+
+class SEOPromptRequest(BaseModel):
+    script_title: str | None = None
+    script_body: str | None = None
+    language: str | None = None
 
 # ---------------------------------------------------------------------------
 # Marker constants — served to the frontend via GET /seo/constants so the
@@ -250,3 +257,23 @@ def generate_seo(
     db.commit()
     db.refresh(seo)
     return seo
+
+
+@router.post("/project/{project_id}/prompt")
+def build_seo_prompt(project_id: int, payload: SEOPromptRequest, db: Session = Depends(get_db)):
+    """Return the exact prompt that would be sent to the LLM for SEO generation."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    active_script = (
+        db.query(Script)
+        .filter(Script.project_id == project_id, Script.is_active.is_(True))
+        .first()
+    )
+
+    return ai_service.build_seo_prompt(
+        script_title=payload.script_title or (active_script.title if active_script else project.name),
+        script_body=payload.script_body or (active_script.body if active_script else ""),
+        language=payload.language or project.language,
+    )

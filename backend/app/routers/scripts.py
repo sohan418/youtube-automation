@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -11,6 +12,12 @@ from app.services.ai import ai_service
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/scripts", tags=["Scripts"])
+
+
+class ScriptPromptRequest(BaseModel):
+    topic: str | None = None
+    language: str | None = None
+    target_duration_minutes: int = 5
 
 
 @router.get("/project/{project_id}", response_model=list[ScriptResponse])
@@ -229,3 +236,18 @@ def update_script(script_id: int, payload: ScriptUpdate, db: Session = Depends(g
     db.commit()
     db.refresh(script)
     return script
+
+
+@router.post("/project/{project_id}/prompt")
+def build_script_prompt(project_id: int, payload: ScriptPromptRequest, db: Session = Depends(get_db)):
+    """Return the exact prompt that would be sent to the LLM for script generation."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    topic = payload.topic or project.name
+    return ai_service.build_script_prompt(
+        topic=topic,
+        language=payload.language or project.language,
+        target_duration_minutes=payload.target_duration_minutes,
+    )

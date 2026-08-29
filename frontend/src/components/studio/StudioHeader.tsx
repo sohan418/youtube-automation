@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { Home, HelpCircle, Settings } from "lucide-react";
-import { getProgressPercent, getCompletedCount, type StepStatusData } from "./studioSteps";
-import type { Project } from "../../types";
+import { Home, HelpCircle, Settings, Clapperboard, Download } from "lucide-react";
+import { getProgressPercent, getCompletedCount, type StepStatusData, STUDIO_STEPS } from "./studioSteps";
+import type { Project, VideoStatus } from "../../types";
 
 const RATIOS = [
   { value: "16:9", label: "16:9", sub: "Landscape" },
@@ -14,12 +14,28 @@ interface Props {
   openSettings: () => void;
   selectedRatio: string;
   onRatioChange: (ratio: string) => void;
+  actionLoading: string;
+  videoStatus: VideoStatus | null;
+  onBuildVideo: () => void;
+  onExportVideo: () => void;
 }
 
-export default function StudioHeader({ project, statusData, openSettings, selectedRatio, onRatioChange }: Props) {
+export default function StudioHeader({
+  project,
+  statusData,
+  openSettings,
+  selectedRatio,
+  onRatioChange,
+  actionLoading,
+  videoStatus,
+  onBuildVideo,
+  onExportVideo,
+}: Props) {
   const pct = getProgressPercent(statusData);
   const completed = getCompletedCount(statusData);
-  const total = 9;
+  const total = STUDIO_STEPS.length;
+  const building = actionLoading === "video" || videoStatus?.running;
+  const hasBuiltVideo = !!videoStatus?.output;
 
   return (
     <header className="studio-header">
@@ -136,7 +152,62 @@ export default function StudioHeader({ project, statusData, openSettings, select
       </div>
 
       {/* Right: Actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        
+        {/* Build Video Button */}
+        {building ? (
+          <button
+            className="btn-primary"
+            disabled
+            style={{
+              fontSize: "0.72rem",
+              padding: "0.28rem 0.65rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.3rem",
+            }}
+          >
+            Building ({videoStatus?.progress ?? 0}%)
+          </button>
+        ) : (
+          <button
+            className="btn-secondary"
+            onClick={onBuildVideo}
+            disabled={!!actionLoading}
+            style={{
+              fontSize: "0.72rem",
+              padding: "0.28rem 0.65rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.3rem",
+            }}
+          >
+            <Clapperboard size={12} /> Build
+          </button>
+        )}
+
+        {/* Export Video Button */}
+        <button
+          className="btn-primary"
+          onClick={onExportVideo}
+          disabled={!hasBuiltVideo || !!actionLoading}
+          style={{
+            fontSize: "0.72rem",
+            padding: "0.28rem 0.65rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.3rem",
+            background: hasBuiltVideo ? "var(--primary)" : "var(--border)",
+            color: hasBuiltVideo ? "#fff" : "var(--text-muted)",
+            border: "none",
+            cursor: hasBuiltVideo ? "pointer" : "not-allowed"
+          }}
+        >
+          <Download size={12} /> Export
+        </button>
+
+        <span style={{ color: "var(--border)", fontSize: "0.75rem", margin: "0 0.2rem" }}>|</span>
+
         <Link to="/" className="btn-ghost" style={{ padding: "0.3rem 0.5rem", display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", textDecoration: "none" }}>
           <Home size={14} />
         </Link>

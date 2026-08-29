@@ -4,17 +4,26 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Project, ProjectStatus, Scene, SceneImage, SceneVideo
 from app.schemas import ImageCopyRequest, ImageGenerateRequest, ImageLinkRequest, ImageReorderRequest, SceneResponse
+from app.services.ai import ai_service
 from app.services.image import image_service
 from app.services.storage import storage_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/images", tags=["Images"])
+
+
+class ImagePromptRequest(BaseModel):
+    scene_narration: str
+    style: str | None = None
+    ratio: str | None = None
+
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "bmp"}
 
@@ -367,3 +376,13 @@ def copy_scene_image(
     db.commit()
     db.refresh(target)
     return target
+
+
+@router.post("/prompt")
+def build_image_prompt(payload: ImagePromptRequest, db: Session = Depends(get_db)):
+    """Return the exact prompt that would be sent to the LLM for image prompt generation."""
+    return ai_service.build_image_prompt(
+        scene_narration=payload.scene_narration,
+        style=payload.style,
+        ratio=payload.ratio or "16:9",
+    )
