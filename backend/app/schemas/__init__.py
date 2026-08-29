@@ -31,6 +31,7 @@ class ProjectUpdate(BaseModel):
     caption_outline_color: str | None = None
     caption_outline: float | None = None
     caption_font_size: int | None = None
+    logo_overlay: bool | None = None
 
 
 class ProjectResponse(ProjectBase):
@@ -49,6 +50,7 @@ class ProjectResponse(ProjectBase):
     caption_outline_color: str = "#000000"
     caption_outline: float = 2.0
     caption_font_size: int | None = None
+    logo_overlay: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -300,6 +302,7 @@ class VideoBuildRequest(BaseModel):
     subtitle_outline: float = Field(default=2.0, ge=0.0, le=10.0)
     subtitle_font_size: int | None = Field(default=None, ge=8, le=200)
     force_rebuild: bool = False
+    logo_overlay: bool = False
     timeline: TimelineData | None = None
 
 

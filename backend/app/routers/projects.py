@@ -52,6 +52,7 @@ def _serialize_project(db: Session, project: Project) -> ProjectResponse:
         caption_outline_color=project.caption_outline_color,
         caption_outline=project.caption_outline,
         caption_font_size=project.caption_font_size,
+        logo_overlay=project.logo_overlay,
         created_at=project.created_at,
         updated_at=project.updated_at,
     )

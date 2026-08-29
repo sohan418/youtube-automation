@@ -29,6 +29,7 @@ export interface Project {
   caption_outline_color: string;
   caption_outline: number;
   caption_font_size: number | null;
+  logo_overlay: boolean;
   created_at: string;
   updated_at: string;
 }

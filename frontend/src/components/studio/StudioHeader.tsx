@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Home, HelpCircle, Settings, Clapperboard, Download } from "lucide-react";
+import { Home, HelpCircle, Settings, Clapperboard, Download, BadgeCheck } from "lucide-react";
 import { getProgressPercent, getCompletedCount, type StepStatusData, STUDIO_STEPS } from "./studioSteps";
 import type { Project, VideoStatus } from "../../types";
 import "./StudioHeader.css";
@@ -19,6 +19,8 @@ interface Props {
   videoStatus: VideoStatus | null;
   onBuildVideo: () => void;
   onExportVideo: () => void;
+  logoOverlay: boolean;
+  onLogoOverlayChange: (value: boolean) => void;
 }
 
 export default function StudioHeader({
@@ -31,6 +33,8 @@ export default function StudioHeader({
   videoStatus,
   onBuildVideo,
   onExportVideo,
+  logoOverlay,
+  onLogoOverlayChange,
 }: Props) {
   const pct = getProgressPercent(statusData);
   const completed = getCompletedCount(statusData);
@@ -88,6 +92,15 @@ export default function StudioHeader({
       </div>
 
       <div className="studio-header-actions">
+        <button
+          className={`studio-logo-toggle${logoOverlay ? " is-active" : ""}`}
+          onClick={() => onLogoOverlayChange(!logoOverlay)}
+          title="Overlay the connected channel logo in the top-right corner of the built video"
+          disabled={!!actionLoading}
+        >
+          <BadgeCheck size={14} />
+          <span>Logo</span>
+        </button>
         {building ? (
           <button className="btn-primary studio-header-action-btn" disabled>
             Building ({videoStatus?.progress ?? 0}%)

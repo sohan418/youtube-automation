@@ -201,6 +201,7 @@ def _run_build(
             force_rebuild=payload.force_rebuild,
             timeline_clips=timeline_clips,
             track_states=track_states,
+            logo_overlay=payload.logo_overlay,
         )
         db = SessionLocal()
         try:

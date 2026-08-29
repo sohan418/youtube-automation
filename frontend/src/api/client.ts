@@ -104,6 +104,8 @@ export const api = {
     request<{ url: string }>("/youtube/auth/url"),
   getYoutubeChannel: () =>
     request<{ connected: boolean; channel_id?: string; title?: string; description?: string; avatar?: string; subscribers?: string; videos?: string }>("/youtube/channel"),
+  verifyYoutubeConnection: () =>
+    request<{ connected: boolean; needs_reconnect: boolean; reason: string }>("/youtube/verify"),
   uploadToYouTube: (projectId: number, privacyStatus: string) =>
     request<{ message: string; slug: string }>(`/youtube/upload/${projectId}`, {
       method: "POST",
@@ -446,6 +448,7 @@ export const api = {
       subtitle_outline?: number;
       subtitle_font_size?: number | null;
       force_rebuild?: boolean;
+      logo_overlay?: boolean;
     },
   ) =>
     request<{ message: string; detail: string }>(

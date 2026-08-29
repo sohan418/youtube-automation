@@ -17,6 +17,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 from app.config import BACKEND_DIR, settings
+from app.services.storage import storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,55 @@ class YouTubeService:
             }
         except Exception:
             logger.exception("Failed to get YouTube channel info")
+            return None
+
+    def _ensure_circular_logo(self, logo_path: Path) -> None:
+        """Ensure the cached logo image is circular with transparency and smooth anti-aliased edges."""
+        try:
+            from PIL import Image, ImageDraw
+            img = Image.open(logo_path).convert("RGBA")
+            
+            # Create a 4x supersampled mask for smooth anti-aliasing
+            scale_factor = 4
+            mask_size = (img.size[0] * scale_factor, img.size[1] * scale_factor)
+            mask = Image.new("L", mask_size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0, mask_size[0] - 1, mask_size[1] - 1), fill=255)
+            
+            # Downscale mask to original size using high-quality LANCZOS resampler
+            mask = mask.resize(img.size, resample=Image.Resampling.LANCZOS)
+            
+            circular_img = Image.new("RGBA", img.size, (0, 0, 0, 0))
+            circular_img.paste(img, (0, 0), mask=mask)
+            circular_img.save(logo_path, "PNG")
+        except Exception as e:
+            logger.error(f"Failed to make logo circular: {e}")
+
+    def get_channel_logo_path(self, project_slug: str) -> Path | None:
+        """Download & cache the connected channel's logo into the project folder."""
+        branding_dir = storage_service.get_project_path(project_slug) / "branding"
+        logo = branding_dir / "logo.png"
+        if logo.exists() and logo.stat().st_size > 0:
+            self._ensure_circular_logo(logo)
+            return logo
+        try:
+            info = self.get_channel_info()
+            avatar = (info or {}).get("avatar", "")
+            if not avatar:
+                logger.warning("No channel avatar available for logo overlay")
+                return None
+            resp = httpx.Client(timeout=15).get(avatar)
+            resp.raise_for_status()
+            if len(resp.content) == 0:
+                return None
+            branding_dir.mkdir(parents=True, exist_ok=True)
+            logo.write_bytes(resp.content)
+            if logo.exists():
+                self._ensure_circular_logo(logo)
+                return logo
+            return None
+        except Exception:
+            logger.exception("Failed to download channel logo")
             return None
 
     def get_auth_url(self) -> str:

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, Upload, Check, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import type { YouTubeUploadStatus, VideoStatus, SEOMetadata } from "../../types";
 import "./UploadStep.css";
@@ -13,6 +13,8 @@ interface Props {
   onUploadYouTube: (privacy: string) => void;
 }
 
+type YoutubeVerify = { connected: boolean; needs_reconnect: boolean; reason: string };
+
 export default function UploadStep({
   projectId: _projectId,
   actionLoading,
@@ -23,6 +25,33 @@ export default function UploadStep({
   onUploadYouTube,
 }: Props) {
   const [privacy, setPrivacy] = useState("private");
+  const [youtubeVerify, setYoutubeVerify] = useState<YoutubeVerify | null>(null);
+
+  useEffect(() => {
+    if (youtubeConfig?.youtube_connected) {
+      (async () => {
+        try {
+          const res = await fetch("/api/youtube/verify");
+          setYoutubeVerify(await res.json());
+        } catch {
+          setYoutubeVerify(null);
+        }
+      })();
+    } else {
+      setYoutubeVerify(null);
+    }
+  }, [youtubeConfig]);
+
+  const startYoutubeAuth = async () => {
+    try {
+      const res = await fetch("/api/youtube/auth/url");
+      const data = await res.json();
+      if (data.url) window.open(data.url, "_blank");
+    } catch {}
+  };
+
+  const connectionOk = youtubeVerify ? youtubeVerify.connected : youtubeConfig?.youtube_connected;
+  const needsReconnect = !!youtubeVerify && !youtubeVerify.connected && youtubeVerify.needs_reconnect;
   const hasVideo = !!videoStatus?.output;
   const isUploading = youtubeUploadStatus?.running;
   const isDone = youtubeUploadStatus?.stage === "done" && youtubeUploadStatus.video_url;
@@ -41,20 +70,27 @@ export default function UploadStep({
         <div className="upload-status-row">
           <div
             className="upload-status-icon"
-            style={{ background: youtubeConfig?.youtube_connected ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }}
+            style={{ background: connectionOk ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }}
           >
-            {youtubeConfig?.youtube_connected ? <Check size={18} color="var(--success)" /> : <AlertCircle size={18} color="var(--danger)" />}
+            {connectionOk ? <Check size={18} color="var(--success)" /> : <AlertCircle size={18} color="var(--danger)" />}
           </div>
           <div>
             <div className="upload-status-title">
-              {youtubeConfig?.youtube_connected ? "YouTube Connected" : "YouTube Not Connected"}
+              {needsReconnect ? "YouTube Connection Expired" : connectionOk ? "YouTube Connected" : "YouTube Not Connected"}
             </div>
             <div className="upload-status-desc">
-              {youtubeConfig?.youtube_connected
+              {needsReconnect
+                ? "Your access token expired or was revoked — reconnect to resume uploads"
+                : connectionOk
                 ? "Your YouTube account is ready for uploads"
                 : "Configure YouTube OAuth in Project Settings to enable uploads"}
             </div>
           </div>
+          {needsReconnect && (
+            <button className="btn-primary" onClick={startYoutubeAuth} style={{ marginLeft: "auto", background: "#ff0000", border: "none", fontSize: "0.78rem" }}>
+              <Play size={14} /> Reconnect
+            </button>
+          )}
         </div>
       </div>
 
@@ -163,7 +199,7 @@ export default function UploadStep({
             </div>
             <button
               className="btn-primary upload-primary-btn"
-              disabled={!hasVideo || !youtubeConfig?.youtube_connected || !!actionLoading}
+              disabled={!hasVideo || !connectionOk || !!actionLoading}
               onClick={() => onUploadYouTube(privacy)}
             >
               <Upload size={16} /> Upload to YouTube

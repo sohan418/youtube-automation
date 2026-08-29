@@ -104,6 +104,7 @@ export default function ProjectDetail() {
       subtitle_font_size: h.subtitleFontSize,
       timeline: h.timeline,
       force_rebuild: false,
+      logo_overlay: h.logoOverlay,
     });
   };
 
@@ -147,6 +148,8 @@ export default function ProjectDetail() {
         videoStatus={h.videoStatus}
         onBuildVideo={handleBuildVideo}
         onExportVideo={handleExportVideo}
+        logoOverlay={h.logoOverlay}
+        onLogoOverlayChange={(value) => void h.saveLogoOverlay(value)}
       />
 
       {/* Dialogs */}

@@ -52,6 +52,7 @@ class Project(Base):
     caption_outline_color: Mapped[str] = mapped_column(String(20), default="#000000")
     caption_outline: Mapped[float] = mapped_column(Float, default=2.0)
     caption_font_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    logo_overlay: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

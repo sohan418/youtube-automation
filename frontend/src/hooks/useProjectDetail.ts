@@ -117,6 +117,7 @@ export function useProjectDetail(projectId: number) {
   const [subtitleOutlineColor, setSubtitleOutlineColor] = useState("#000000");
   const [subtitleOutline, setSubtitleOutline] = useState(2.0);
   const [subtitleFontSize, setSubtitleFontSize] = useState<number | null>(null);
+  const [logoOverlay, setLogoOverlay] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("studio_sidebar_collapsed") === "true";
@@ -173,6 +174,7 @@ export function useProjectDetail(projectId: number) {
         setSubtitleOutlineColor(proj.caption_outline_color);
         setSubtitleOutline(proj.caption_outline);
         setSubtitleFontSize(proj.caption_font_size);
+        setLogoOverlay(proj.logo_overlay);
         setIdeas(ideaList);
         const selectedIdea = ideaList.find((i) => i.is_selected);
         setScriptTopic((prev) => prev || selectedIdea?.title || proj.name);
@@ -323,6 +325,14 @@ export function useProjectDetail(projectId: number) {
   }) => {
     try {
       const updated = await api.updateProject(projectId, patch);
+      setProject(updated);
+    } catch {}
+  };
+
+  const saveLogoOverlay = async (value: boolean) => {
+    setLogoOverlay(value);
+    try {
+      const updated = await api.updateProject(projectId, { logo_overlay: value });
       setProject(updated);
     } catch {}
   };
@@ -562,7 +572,7 @@ export function useProjectDetail(projectId: number) {
     [projectId],
   );
 
-  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number; subtitle_font_size?: number | null; force_rebuild?: boolean }) => {
+  const buildVideo = async (options?: { timeline?: TimelineData | null; ratio?: string; subtitles?: boolean; subtitle_style?: string; subtitle_position?: string; subtitle_color?: string; subtitle_outline_color?: string; subtitle_outline?: number; subtitle_font_size?: number | null; force_rebuild?: boolean; logo_overlay?: boolean }) => {
     await runAction("video", async () => {
       setVideoStatus({ running: true, progress: 0, stage: "starting", message: "Starting video build...", output: null, error: null, updated_at: null, scene_statuses: {} });
       const result = await api.buildVideo(projectId, {
@@ -576,6 +586,7 @@ export function useProjectDetail(projectId: number) {
         subtitle_outline: options?.subtitle_outline ?? subtitleOutline,
         subtitle_font_size: options?.subtitle_font_size !== undefined ? options.subtitle_font_size : subtitleFontSize,
         force_rebuild: options?.force_rebuild ?? false,
+        logo_overlay: options?.logo_overlay ?? logoOverlay,
       });
       setSuccess(result.message);
       const finalStatus = await pollVideoStatus();
@@ -978,7 +989,7 @@ export function useProjectDetail(projectId: number) {
     enableSubtitles, setEnableSubtitles, subtitleStyle, setSubtitleStyle,
     subtitlePosition, setSubtitlePosition, subtitleColor, setSubtitleColor,
     subtitleOutlineColor, setSubtitleOutlineColor, subtitleOutline, setSubtitleOutline,
-    subtitleFontSize, setSubtitleFontSize,
+    subtitleFontSize, setSubtitleFontSize, logoOverlay, setLogoOverlay, saveLogoOverlay,
     setActiveTab, setActiveSceneIdx, setError, setSuccess, setEditingSettings,
     setScriptTopic, setScriptForm, setCreatingScript, setEditingScript, setIdeaTopic, setSceneCount,
     setNewSceneNarration, setImageUrlInputs, setDragMedia, setDraggingOverScene,

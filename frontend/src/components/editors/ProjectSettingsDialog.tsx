@@ -64,6 +64,32 @@ export default function ProjectSettingsDialog({
     youtube_client_secret: "",
   });
 
+  const [youtubeVerify, setYoutubeVerify] = useState<{ connected: boolean; needs_reconnect: boolean; reason: string } | null>(null);
+
+  const startYoutubeAuth = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    try {
+      const res = await fetch("/api/youtube/auth/url");
+      const data = await res.json();
+      if (data.url) window.open(data.url, "_blank");
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (isOpen && youtubeConfig?.youtube_connected) {
+      (async () => {
+        try {
+          const res = await fetch("/api/youtube/verify");
+          setYoutubeVerify(await res.json());
+        } catch {
+          setYoutubeVerify(null);
+        }
+      })();
+    } else {
+      setYoutubeVerify(null);
+    }
+  }, [isOpen, youtubeConfig]);
+
   useEffect(() => {
     if (isOpen) {
       setSettingsForm({
@@ -590,21 +616,43 @@ export default function ProjectSettingsDialog({
             </label>
 
             {youtubeConfig?.youtube_connected ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 0.65rem", borderRadius: "6px", background: "rgba(34,197,94,0.1)", border: "1px solid var(--success)" }}>
-                <span style={{ color: "var(--success)", fontWeight: 600, fontSize: "0.78rem" }}>✓ YouTube Connected</span>
-                <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>— Ready to upload</span>
-              </div>
+              youtubeVerify && !youtubeVerify.connected && youtubeVerify.needs_reconnect ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.55rem 0.65rem", borderRadius: "6px", background: "rgba(239,68,68,0.12)", border: "1px solid var(--danger)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span style={{ color: "var(--danger)", fontWeight: 600, fontSize: "0.78rem" }}>YouTube connection expired</span>
+                  </div>
+                  <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
+                    Your access token expired or was revoked. Reconnect to resume uploads.
+                  </span>
+                  <a
+                    href="#"
+                    onClick={startYoutubeAuth}
+                    className="btn-primary"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", padding: "0.45rem", fontSize: "0.78rem", textDecoration: "none", background: "#ff0000", border: "none" }}
+                  >
+                    <Play size={14} /> Reconnect YouTube Account
+                  </a>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", padding: "0.5rem 0.65rem", borderRadius: "6px", background: "rgba(34,197,94,0.1)", border: "1px solid var(--success)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span style={{ color: "var(--success)", fontWeight: 600, fontSize: "0.78rem" }}>✓ YouTube Connected</span>
+                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>— Ready to upload</span>
+                  </div>
+                  <a
+                    href="#"
+                    onClick={startYoutubeAuth}
+                    style={{ fontSize: "0.7rem", color: "var(--text-muted)", textDecoration: "underline" }}
+                    title="Re-authorize the connected YouTube account"
+                  >
+                    Reconnect
+                  </a>
+                </div>
+              )
             ) : youtubeConfig?.youtube_client_id_configured ? (
               <a
                 href="#"
-                onClick={async (e) => {
-                  e.preventDefault();
-                  try {
-                    const res = await fetch("/api/youtube/auth/url");
-                    const data = await res.json();
-                    if (data.url) window.open(data.url, "_blank");
-                  } catch {}
-                }}
+                onClick={startYoutubeAuth}
                 className="btn-primary"
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", padding: "0.5rem", fontSize: "0.8rem", textDecoration: "none", background: "#ff0000", border: "none" }}
               >

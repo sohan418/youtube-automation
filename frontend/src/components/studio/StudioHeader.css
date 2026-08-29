@@ -118,6 +118,37 @@
   gap: 0.3rem;
 }
 
+.studio-logo-toggle {
+  font-size: 0.72rem;
+  padding: 0.28rem 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.studio-logo-toggle.is-active {
+  background: rgba(124, 92, 255, 0.15);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.studio-logo-toggle:not(.is-active):hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.studio-logo-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .studio-export-btn.btn-primary {
   background: var(--border);
   color: var(--text-muted);

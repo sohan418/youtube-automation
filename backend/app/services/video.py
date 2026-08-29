@@ -677,6 +677,7 @@ class VideoService:
         force_rebuild: bool = False,
         timeline_clips: list[dict] | None = None,
         track_states: dict | None = None,
+        logo_overlay: bool = False,
     ) -> str:
         resolution = self.resolve_resolution(ratio, resolution)
         project_path = storage_service.get_project_path(slug)
@@ -1030,6 +1031,21 @@ class VideoService:
                             subtitled.rename(output_path)
         else:
             self._concat_segments(concat_file, output_path, reencode=False)
+
+        # Optional: burn semi-transparent channel logo watermark (bottom-right)
+        if logo_overlay and output_path.exists():
+            self.set_progress(slug, 96, "joining", "Overlaying channel logo...")
+            logo = self._get_branding_logo(slug)
+            if logo and logo.exists() and logo.stat().st_size > 0:
+                watermarked = video_dir / "final_watermarked.mp4"
+                if self._overlay_logo(output_path, logo, watermarked) and watermarked.exists():
+                    try:
+                        output_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                    watermarked.rename(output_path)
+            else:
+                logger.warning("Logo overlay enabled but channel logo unavailable — skipping")
 
         relative = str(output_path.relative_to(storage_service.root.parent))
         self.set_progress(
@@ -1638,6 +1654,31 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         cmd += ["-shortest", str(output)]
         return self._run_ffmpeg(cmd)
 
+    def _overlay_logo(self, input_video: Path, logo: Path, output_video: Path) -> bool:
+        """Overlay a semi-transparent logo in the bottom-right corner of the video."""
+        cmd = [
+            settings.ffmpeg_path, "-y",
+            "-i", str(input_video),
+            "-i", str(logo),
+            "-filter_complex",
+            "[1:v]scale='min(ih*0.12\\,iw)':-2[logo];"
+            "[0:v][logo]overlay=W-w-30:H-h-30:format=auto:enable='gte(t,0)'[vx];"
+            "[vx]format=yuv420p,colorchannelmixer=aa=0.85[v]",
+            "-map", "[v]", "-map", "0:a?",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-c:a", "copy", "-movflags", "+faststart",
+            str(output_video),
+        ]
+        ok = self._run_ffmpeg(cmd)
+        if not ok:
+            logger.error("Logo overlay failed -> %s", output_video.name)
+        return ok and output_video.exists() and output_video.stat().st_size > 1024
+
+    def _get_branding_logo(self, slug: str) -> Path | None:
+        from app.services.youtube import youtube_service
+
+        return youtube_service.get_channel_logo_path(slug)
+
     def _overlay_narrations(
         self, video: Path, events: list[dict], total_duration: float | None
     ) -> None:
@@ -1650,9 +1691,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 narration_events=events, total_duration=total_duration,
             )
             if ok and out.exists() and out.stat().st_size > 1024:
-                video.unlink(missing_ok=True)
-                out.replace(video)
-                logger.info("Narration overlay fallback applied -> %s", video.name)
+                try:
+                    video.unlink(missing_ok=True)
+                    out.replace(video)
+                    logger.info("Narration overlay fallback applied -> %s", video.name)
+                except (PermissionError, OSError) as e:
+                    logger.warning(
+                        "Could not replace %s (locked/open?). Keeping it. %s",
+                        video.name, e,
+                    )
+                finally:
+                    out.unlink(missing_ok=True)
         finally:
             tmp_list.unlink(missing_ok=True)
 

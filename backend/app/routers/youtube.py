@@ -86,6 +86,34 @@ def get_channel():
     return {"connected": True, **info}
 
 
+@router.get("/verify")
+def verify_connection():
+    """Real connection status: verifies the stored token against the YouTube API.
+
+    Distinguishes 'not connected' (no tokens) from a bad/expired token that
+    requires the user to reconnect via OAuth.
+    """
+    stored = youtube_service.is_connected()
+    if not stored:
+        return {
+            "connected": False,
+            "needs_reconnect": False,
+            "reason": "not_connected",
+        }
+    ok = youtube_service.verify_connection()
+    if ok:
+        return {
+            "connected": True,
+            "needs_reconnect": False,
+            "reason": "ok",
+        }
+    return {
+        "connected": False,
+        "needs_reconnect": True,
+        "reason": "token_expired_or_revoked",
+    }
+
+
 @router.post("/upload/{project_id}")
 def upload_video(project_id: int, payload: YouTubeUploadRequest):
     db = next(get_db())

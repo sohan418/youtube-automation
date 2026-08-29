@@ -39,6 +39,12 @@ async def lifespan(app: FastAPI):
             logging.info("Migrating database: adding duration_manual column to scenes table")
             conn.execute(text("ALTER TABLE scenes ADD COLUMN duration_manual BOOLEAN DEFAULT 0"))
             conn.commit()
+        try:
+            conn.execute(text("SELECT logo_overlay FROM projects LIMIT 1"))
+        except Exception:
+            logging.info("Migrating database: adding logo_overlay column to projects table")
+            conn.execute(text("ALTER TABLE projects ADD COLUMN logo_overlay BOOLEAN DEFAULT 0"))
+            conn.commit()
 
     _seed_default_prompts()
     yield
