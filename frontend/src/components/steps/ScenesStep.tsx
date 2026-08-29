@@ -44,8 +44,9 @@ function parseImportedText(
     }
   } catch {}
 
-  const blocks = text.split(/(?:^|\n)(?=Scene\s+\d+[:\s]|---)/i).filter((b) => b.trim().length > 0);
-  if (blocks.length > 0) {
+  const hasSeparators = /(?:^|\n)\s*(?:Scene\s+\d+[:\s]|---)/i.test(text);
+  if (hasSeparators) {
+    const blocks = text.split(/(?:^|\n)(?=Scene\s+\d+[:\s]|---)/i).filter((b) => b.trim().length > 0);
     const result: { narration: string; image_prompt?: string; video_prompt?: string }[] = [];
     for (const block of blocks) {
       const narrationMatch = block.match(/(?:Narration|Text):\s*(.*?)(?=\n(?:Prompt|Video Prompt|Image Prompt):|$)/is);

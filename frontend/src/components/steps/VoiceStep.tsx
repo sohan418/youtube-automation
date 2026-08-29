@@ -65,7 +65,7 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
 
   const handleWaveClick = (index: number) => {
     if (!audioRef.current || duration <= 0) return;
-    const newTime = (index / WAVEFORM_HEIGHTS.length) * duration;
+    const newTime = ((index + 1) / WAVEFORM_HEIGHTS.length) * duration;
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
   };
@@ -102,7 +102,7 @@ function CustomAudioPlayer({ src, audioVersionKey }: { src: string; audioVersion
         className="voice-waveform"
       >
         {WAVEFORM_HEIGHTS.map((h, i) => {
-          const percent = (i / WAVEFORM_HEIGHTS.length) * 100;
+          const percent = ((i + 1) / WAVEFORM_HEIGHTS.length) * 100;
           const active = percent <= progress;
           return (
             <div

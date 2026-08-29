@@ -90,7 +90,7 @@ export default function UploadStep({
               </div>
             )}
             <div className="upload-meta-tags">
-              {seo.tags && <span className="upload-tag">Tags: {seo.tags.split(",").length}</span>}
+              {seo.tags && <span className="upload-tag">Tags: {seo.tags.split(/[\s,]+/).filter(Boolean).length}</span>}
               {seo.category && <span className="upload-tag">{seo.category}</span>}
             </div>
           </div>

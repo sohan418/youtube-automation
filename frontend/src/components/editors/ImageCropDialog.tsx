@@ -110,8 +110,15 @@ export default function ImageCropDialog({ file, onCancel, onConfirm }: Props) {
       const rawW = clamp(drag.orig.w + dx, MIN_SIZE, display.w - drag.orig.x);
       const rawH = clamp(drag.orig.h + dy, MIN_SIZE, display.h - drag.orig.y);
       if (aspect) {
-        let w = rawW;
+        const scaleX = drag.orig.w > 0 ? rawW / drag.orig.w : 1;
+        const scaleY = drag.orig.h > 0 ? rawH / drag.orig.h : 1;
+        const scale = Math.max(scaleX, scaleY);
+        let w = drag.orig.w * scale;
         let h = w / aspect;
+        if (w > display.w - drag.orig.x) {
+          w = display.w - drag.orig.x;
+          h = w / aspect;
+        }
         if (h > display.h - drag.orig.y) {
           h = display.h - drag.orig.y;
           w = h * aspect;

@@ -54,18 +54,38 @@ function parseImportedScript(text: string): ImportedScript | null {
     // Not valid JSON, fallback to text parsing
   }
 
-  const hookMatch = text.match(/^#+\s*Hook\s*[-–—:]?\s*\n(.*?)(?=\n\s*#+\s*Body|\n\s*##+\s*Body|\nBody:|\nBODY:)/is);
-  const bodyMatch = text.match(/^#+\s*Body\s*[-–—:]?\s*\n(.*?)(?=\n\s*#+\s*Ending|\n\s*##+\s*Ending|\nEnding:|\nENDING:|$)/is);
-  const endingMatch = text.match(/^#+\s*Ending\s*[-–—:]?\s*\n(.*)$/is);
-  const titleMatch = text.match(/^#+\s*(.+?)\s*\n/is);
+  const sectionRe = /^#+\s*(Hook|Body|Ending)\b/i;
+  const labelRe = /^(Hook|Body|Ending)\s*:\s*$/i;
 
-  const body = bodyMatch ? bodyMatch[1].trim() : text;
+  let title: string | undefined;
+  const parts: { hook?: string[]; body?: string[]; ending?: string[] } = {};
+  let current: "hook" | "body" | "ending" | null = null;
+
+  for (let raw of text.split(/\r?\n/)) {
+    if (title === undefined && current === null && /^\s*#/.test(raw) && !sectionRe.test(raw)) {
+      const t = raw.replace(/^\s*#+\s*/, "").trim();
+      if (t) {
+        title = t;
+        continue;
+      }
+    }
+    const header = raw.match(sectionRe)?.[1].toLowerCase()
+      ?? (labelRe.test(raw.trim()) ? raw.trim().replace(/[:\s]/g, "").toLowerCase() : null);
+    if (header === "hook" || header === "body" || header === "ending") {
+      current = header;
+      parts[current] = [];
+      continue;
+    }
+    if (current) parts[current]!.push(raw);
+  }
+
+  const body = (parts.body?.join("\n") ?? "").trim();
   if (!body) return null;
   return {
-    title: titleMatch ? titleMatch[1].trim() : undefined,
-    hook: hookMatch ? hookMatch[1].trim() : undefined,
+    title,
+    hook: (parts.hook?.join("\n") ?? "").trim() || undefined,
     body,
-    ending: endingMatch ? endingMatch[1].trim() : undefined,
+    ending: (parts.ending?.join("\n") ?? "").trim() || undefined,
   };
 }
 
@@ -227,23 +247,31 @@ export default function ScriptStep({
           onParseResponse={(text) => {
             if (!onImportScript) return;
             try {
-              const jsonMatch = text.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                if (parsed.body) {
-                  onImportScript({
-                    title: parsed.title,
-                    hook: parsed.hook,
-                    body: parsed.body,
-                    ending: parsed.ending,
-                  }, false);
+              const objMatch = text.match(/\{/);
+              if (objMatch) {
+                const start = objMatch.index!;
+                for (let i = text.length - 1; i > start; i--) {
+                  if (text[i] !== "}") continue;
+                  try {
+                    const parsed = JSON.parse(text.slice(start, i + 1));
+                    if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.body) {
+                      onImportScript({
+                        title: parsed.title,
+                        hook: parsed.hook,
+                        body: parsed.body,
+                        ending: parsed.ending,
+                      }, false);
+                      return;
+                    }
+                  } catch { /* keep scanning */ }
                 }
               }
             } catch {
-              // Fallback: treat entire text as body
-              if (text.trim().length > 50) {
-                onImportScript({ body: text.trim() }, false);
-              }
+              // ignore, fall through to text fallback
+            }
+            // Fallback: treat entire text as body
+            if (text.trim().length > 50) {
+              onImportScript({ body: text.trim() }, false);
             }
           }}
         />

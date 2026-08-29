@@ -34,7 +34,12 @@ function parseDescription(
   if (!full) return { body: "", timestamps: "", disclaimer: c.default_disclaimer };
 
   const disclaimerIdx = full.indexOf(`${c.section_sep}\n${c.disclaimer_marker}`);
-  const tsIdx = full.indexOf(`\n\n${c.timestamps_marker}`);
+  let tsIdx = full.indexOf(`\n\n${c.timestamps_marker}`);
+  let tsLeader = 2;
+  if (tsIdx === -1 && full.startsWith(c.timestamps_marker)) {
+    tsIdx = 0;
+    tsLeader = 0;
+  }
 
   let body = full;
   let timestamps = "";
@@ -51,10 +56,9 @@ function parseDescription(
   }
 
   if (tsIdx !== -1) {
-    const tsEnd = disclaimerIdx !== -1 ? disclaimerIdx : body.length + tsIdx;
-    const tsBlock = full.slice(tsIdx + 2, tsEnd !== body.length + tsIdx ? tsEnd : undefined).trim();
+    const tsEnd = disclaimerIdx !== -1 ? disclaimerIdx : undefined;
+    timestamps = full.slice(tsIdx + tsLeader, tsEnd).trim();
     body = full.slice(0, tsIdx).trimEnd();
-    timestamps = tsBlock;
   }
 
   return { body, timestamps, disclaimer };
@@ -143,14 +147,22 @@ function EditableField({
 function parseFreeAIResponse(text: string): Partial<SEOMetadata> {
   const result: Partial<SEOMetadata> = {};
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.title) result.title = parsed.title;
-      if (parsed.description) result.description = parsed.description;
-      if (parsed.tags) result.tags = Array.isArray(parsed.tags) ? parsed.tags.join(", ") : parsed.tags;
-      if (parsed.hashtags) result.hashtags = Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags;
-      if (result.title) return result;
+    const objMatch = text.match(/\{/);
+    if (objMatch) {
+      const start = objMatch.index!;
+      for (let i = text.length - 1; i > start; i--) {
+        if (text[i] !== "}") continue;
+        try {
+          const parsed = JSON.parse(text.slice(start, i + 1));
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            if (parsed.title) result.title = parsed.title;
+            if (parsed.description) result.description = parsed.description;
+            if (parsed.tags) result.tags = Array.isArray(parsed.tags) ? parsed.tags.join(", ") : parsed.tags;
+            if (parsed.hashtags) result.hashtags = Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags;
+            if (result.title) return result;
+          }
+        } catch { /* keep scanning */ }
+      }
     }
   } catch {}
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);

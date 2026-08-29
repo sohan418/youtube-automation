@@ -19,6 +19,7 @@ import {
   PX_MAX,
   PX_MIN,
   RIGHT_PAD,
+  RULER_H,
   TRACK_BY_ID,
   TRACK_ROWS,
   compatibleTracks,
@@ -126,17 +127,11 @@ export function useTimelineEngine(
   clipsRef.current = clips;
 
   const totalDuration = useMemo(() => {
-    let videoEnd = -1;
-    let narrEnd = -1;
     let anyEnd = -1;
     for (const c of clips) {
       const e = c.start + c.duration;
       anyEnd = Math.max(anyEnd, e);
-      if (c.track === "video") videoEnd = Math.max(videoEnd, e);
-      else if (c.track === "narration") narrEnd = Math.max(narrEnd, e);
     }
-    if (videoEnd >= 0) return Math.max(videoEnd, narrEnd, 0);
-    if (narrEnd >= 0) return narrEnd;
     return Math.max(anyEnd, 0);
   }, [clips]);
   const totalRef = useRef(totalDuration);
@@ -741,7 +736,7 @@ export function useTimelineEngine(
 
         const rect = contentRef.current?.getBoundingClientRect();
         if (rect) {
-          let top = rect.top;
+          let top = rect.top + RULER_H;
           let hovered: TimelineTrack | null = null;
           for (const r of TRACK_ROWS) {
             const h = rowHeight(r.id);

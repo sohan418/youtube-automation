@@ -164,6 +164,7 @@ export default function StudioStepContent({ ctx }: Props) {
             const provider = ctx.voiceProviders.find((pr) => pr.id === providerId);
             ctx.setSelectedProvider(providerId);
             if (provider) ctx.setSelectedVoice(provider.default);
+            if (providerId === "gemini") ctx.setSelectedVoiceRate("+0%");
           }}
           selectedVoice={ctx.selectedVoice}
           onVoiceChange={ctx.setSelectedVoice}

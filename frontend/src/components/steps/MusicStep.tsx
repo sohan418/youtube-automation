@@ -27,6 +27,7 @@ export default function MusicStep({ onAddToTimeline }: Props) {
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -73,24 +74,41 @@ export default function MusicStep({ onAddToTimeline }: Props) {
     } catch {}
   };
 
+  const releaseAudio = () => {
+    const current = audioRef.current;
+    if (current) {
+      current.pause();
+      current.removeAttribute("src");
+      current.load();
+      audioRef.current = null;
+    }
+  };
+
   const togglePlay = (track: MusicTrack) => {
-    if (playing === track.file_path) {
-      audioRef.current?.pause();
-      setPlaying(null);
+    const current = audioRef.current;
+    if (playing === track.file_path && current) {
+      if (current.paused) {
+        current.play().catch(() => {});
+        setPaused(false);
+      } else {
+        current.pause();
+        setPaused(true);
+      }
       return;
     }
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
+    releaseAudio();
     const audio = new Audio(mediaUrl(track.file_path));
     audioRef.current = audio;
     audio.addEventListener("timeupdate", () => setCurrentTime(audio.currentTime));
     audio.addEventListener("loadedmetadata", () => setDuration(audio.duration));
-    audio.addEventListener("ended", () => { setPlaying(null); setCurrentTime(0); });
+    audio.addEventListener("ended", () => { setPlaying(null); setPaused(false); setCurrentTime(0); });
     audio.play().catch(() => {});
     setPlaying(track.file_path);
+    setPaused(false);
     setCurrentTime(0);
   };
+
+  useEffect(() => () => releaseAudio(), []);
 
   return (
     <div className="music-step">
@@ -151,7 +169,7 @@ export default function MusicStep({ onAddToTimeline }: Props) {
                 onClick={() => togglePlay(track)}
                 className={`music-play-btn ${playing === track.file_path ? "playing" : ""}`}
               >
-                {playing === track.file_path ? <Pause size={14} /> : <Play size={14} className="music-play-icon" />}
+                {playing === track.file_path && !paused ? <Pause size={14} /> : <Play size={14} className="music-play-icon" />}
               </button>
 
               {/* Track info */}

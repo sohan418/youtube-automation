@@ -19,24 +19,35 @@ interface Props {
   recentVideos?: YouTubeVideo[];
 }
 
+function extractJsonArray(text: string): any[] | null {
+  const startMatch = text.match(/\[/);
+  if (!startMatch) return null;
+  const start = startMatch.index!;
+  for (let i = text.length - 1; i > start; i--) {
+    if (text[i] !== "]") continue;
+    try {
+      const parsed = JSON.parse(text.slice(start, i + 1));
+      if (Array.isArray(parsed)) return parsed;
+    } catch { /* keep scanning */ }
+  }
+  return null;
+}
+
 function parseFreeAIResponse(text: string): { title: string; description: string; category?: string; trending_score?: number }[] {
   try {
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item: any) => ({
-          title: item.title || item.name || "",
-          description: item.description || item.summary || "",
-          category: item.category || item.topic || undefined,
-          trending_score: (function() {
-            const sc = item.trending_score !== undefined ? item.trending_score : item.score;
-            if (sc === undefined) return undefined;
-            const parsedSc = parseInt(sc, 10);
-            return isNaN(parsedSc) ? undefined : parsedSc;
-          })(),
-        })).filter((i: any) => i.title);
-      }
+    const parsed = extractJsonArray(text);
+    if (parsed) {
+      return parsed.map((item: any) => ({
+        title: item.title || item.name || "",
+        description: item.description || item.summary || "",
+        category: item.category || item.topic || undefined,
+        trending_score: (function() {
+          const sc = item.trending_score !== undefined ? item.trending_score : item.score;
+          if (sc === undefined) return undefined;
+          const parsedSc = parseInt(sc, 10);
+          return isNaN(parsedSc) ? undefined : parsedSc;
+        })(),
+      })).filter((i: any) => i.title);
     }
   } catch {}
 

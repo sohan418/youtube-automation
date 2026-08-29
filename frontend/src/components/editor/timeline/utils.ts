@@ -55,8 +55,9 @@ export function majorStepFor(pxPerSec: number): number {
 
 export function rulerLabel(sec: number, step: number): string {
   if (step < 1) return `${sec.toFixed(2).replace(/\.?0+$/, "")}s`;
-  const m = Math.floor(sec / 60);
-  const r = Math.round(sec - m * 60);
+  const total = Math.floor(sec);
+  const m = Math.floor(total / 60);
+  const r = total - m * 60;
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 

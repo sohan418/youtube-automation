@@ -49,9 +49,15 @@ function trimVideo(video: HTMLVideoElement, start: number, end: number): Promise
 
       video.pause();
       let started = false;
+      let fallbackId: number | null = null;
       const startRecording = () => {
         if (started || rec.state === "recording") return;
         started = true;
+        if (fallbackId !== null) {
+          window.clearTimeout(fallbackId);
+          fallbackId = null;
+        }
+        video.removeEventListener("seeked", startRecording);
         rec.start(200);
         video.play().catch(() => {});
         const timer = window.setInterval(() => {
@@ -63,7 +69,7 @@ function trimVideo(video: HTMLVideoElement, start: number, end: number): Promise
         }, 100);
       };
       video.addEventListener("seeked", startRecording);
-      window.setTimeout(startRecording, 600);
+      fallbackId = window.setTimeout(startRecording, 600);
       video.currentTime = start;
     } catch (err) {
       reject(err instanceof Error ? err : new Error("Trimming not supported in this browser"));
@@ -148,6 +154,7 @@ export default function VideoTrimDialog({ file, maxDuration, onCancel, onConfirm
     trimVideo(v, start, effectiveEnd)
       .then((blob) => {
         const base = file.name.replace(/\.[^.]+$/, "") || "clip";
+        setSaving(false);
         onConfirm(blob, `${base}.webm`);
       })
       .catch((err: unknown) => {

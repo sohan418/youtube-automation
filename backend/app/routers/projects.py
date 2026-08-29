@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Project, ProjectStatus, SEOMetadata, Scene, SceneImage, Thumbnail
+from app.routers.seo import YOUTUBE_CATEGORIES
 from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.storage import storage_service
 
