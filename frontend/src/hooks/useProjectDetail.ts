@@ -158,12 +158,14 @@ export function useProjectDetail(projectId: number) {
 
   const activeScript: Script | null = scripts.find((s) => s.is_active) ?? null;
 
+  const [prompts, setPrompts] = useState<Record<string, { system: string; user: string }>>({});
+
   const loadAll = useCallback(
     async (isInitial = false) => {
       try {
         if (isInitial) setLoading(true);
         setError("");
-        const [proj, ideaList, scriptList, sceneList, thumbList, seoData, categoryList] = await Promise.all([
+        const [proj, ideaList, scriptList, sceneList, thumbList, seoData, categoryList, promptMap] = await Promise.all([
           api.getProject(projectId),
           api.listIdeas(projectId),
           api.listScripts(projectId),
@@ -171,7 +173,9 @@ export function useProjectDetail(projectId: number) {
           api.listThumbnails(projectId),
           api.getSEO(projectId),
           api.listSEOCategories(),
+          api.getPrompts(projectId).catch(() => ({})),
         ]);
+        setPrompts(promptMap || {});
         Promise.all([api.listVoices(proj.language), api.getVoiceConfig().catch(() => null)])
           .then(([cat, cfg]) => {
             setVoiceConfig(cfg);
@@ -1033,7 +1037,7 @@ export function useProjectDetail(projectId: number) {
   }, []);
 
   return {
-    project, ideas, scripts, scriptTopic, scenes, thumbnails, seo, setSeo, categories,
+    project, ideas, scripts, scriptTopic, scenes, thumbnails, seo, setSeo, categories, prompts,
     activeTab, activeSceneIdx, loading, actionLoading, error, success,
     exportInfo, voiceProviders, selectedProvider, selectedVoice, selectedVoiceRate,
     voiceConfig, voiceProgress, selectedRatio, onRatioChange, videoStatus, timeline,

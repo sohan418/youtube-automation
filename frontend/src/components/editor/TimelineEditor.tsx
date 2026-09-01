@@ -165,17 +165,51 @@ export default function TimelineEditor({
     }
   }, [activeScene, scenes, onActiveSceneChange]);
 
+  const onPlaybackStateChangeRef = useRef(onPlaybackStateChange);
+  onPlaybackStateChangeRef.current = onPlaybackStateChange;
+  const lastPlaybackStateRef = useRef<{
+    time: number;
+    playing: boolean;
+    activeVideoId: string | null;
+    activeSceneId: number | null;
+    activeCaption: string | null;
+  } | null>(null);
+
   useEffect(() => {
-    if (onPlaybackStateChange) {
-      onPlaybackStateChange({
-        time: E.time,
-        playing: E.playing,
-        activeVideo,
-        activeScene,
-        activeCaption,
-      });
+    const cb = onPlaybackStateChangeRef.current;
+    if (!cb) return;
+
+    const prev = lastPlaybackStateRef.current;
+    const activeVideoId = activeVideo?.id ?? null;
+    const activeSceneId = activeScene?.id ?? null;
+
+    if (
+      prev &&
+      prev.playing === E.playing &&
+      prev.activeVideoId === activeVideoId &&
+      prev.activeSceneId === activeSceneId &&
+      prev.activeCaption === activeCaption &&
+      Math.abs(prev.time - E.time) < 0.04
+    ) {
+      return;
     }
-  }, [E.time, E.playing, activeVideo, activeScene, activeCaption, onPlaybackStateChange]);
+
+    lastPlaybackStateRef.current = {
+      time: E.time,
+      playing: E.playing,
+      activeVideoId,
+      activeSceneId,
+      activeCaption,
+    };
+
+    cb({
+      time: E.time,
+      playing: E.playing,
+      activeVideo,
+      activeScene,
+      activeCaption,
+    });
+  }, [E.time, E.playing, activeVideo, activeScene, activeCaption]);
 
 
   const sel = E.selected;
@@ -688,6 +722,24 @@ export default function TimelineEditor({
             <Check size={11} /> Saved
           </span>
         )}
+        <button
+          className="btn-secondary"
+          onClick={() => E.closeGaps()}
+          title="Remove all empty spaces between clips and snap back-to-back"
+          style={{
+            fontSize: "11px",
+            padding: "4px 8px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.2rem",
+            background: "rgba(0, 229, 255, 0.12)",
+            border: "1px solid rgba(0, 229, 255, 0.35)",
+            color: "#00E5FF",
+            fontWeight: 600,
+          }}
+        >
+          <AlignStartVertical size={11} /> Close Gaps
+        </button>
         {onReset && (
           <button
             className="btn-secondary"

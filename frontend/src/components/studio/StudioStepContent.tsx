@@ -269,9 +269,11 @@ export default function StudioStepContent({ ctx }: Props) {
           thumbnails={ctx.thumbnails}
           actionLoading={ctx.actionLoading}
           mediaUrl={mediaUrl}
-          onGenerate={() =>
+          videoTopic={ctx.scriptTopic}
+          promptPair={ctx.prompts.thumbnail}
+          onGenerate={(customPrompt?: string, topic?: string) =>
             ctx.runAction("thumbnails", async () => {
-              await api.generateThumbnails(ctx.projectId, 3);
+              await api.generateThumbnails(ctx.projectId, 3, customPrompt, topic);
               ctx.setSuccess("Generated 3 thumbnail options!");
             })
           }
@@ -287,6 +289,12 @@ export default function StudioStepContent({ ctx }: Props) {
               ctx.setSuccess("Thumbnail uploaded!");
             })
           }
+          onDelete={(thumbId) =>
+            ctx.runAction("delete-thumb", async () => {
+              await api.deleteThumbnail(thumbId);
+              ctx.setSuccess("Thumbnail deleted!");
+            })
+          }
         />
       )}
 
@@ -296,6 +304,7 @@ export default function StudioStepContent({ ctx }: Props) {
           projectLanguage={ctx.project?.language}
           seo={ctx.seo}
           scenes={ctx.scenes}
+          timeline={ctx.timeline}
           activeScript={ctx.activeScript}
           actionLoading={ctx.actionLoading}
           projectCategory={ctx.project?.category ?? ""}
@@ -319,7 +328,8 @@ export default function StudioStepContent({ ctx }: Props) {
               if (data.description != null) update.description = data.description;
               if (data.tags != null) update.tags = data.tags;
               if (data.hashtags != null) update.hashtags = data.hashtags;
-              await api.updateSEO(ctx.projectId, update);
+              const updated = await api.updateSEO(ctx.projectId, update);
+              ctx.setSeo(updated);
               ctx.setSuccess("SEO data imported!");
             })
           }

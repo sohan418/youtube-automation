@@ -588,14 +588,17 @@ export function useTimelineEngine(
     [mediaUrl, rowStateOf],
   );
 
+  const syncAudioRef = useRef(syncAudio);
+  syncAudioRef.current = syncAudio;
+
   const setTime = useCallback(
     (t: number) => {
       const nt = clamp(round2(t), 0, totalRef.current);
       timeRef.current = nt;
       setTimeState(nt);
-      syncAudio(nt);
+      syncAudioRef.current(nt);
     },
-    [syncAudio],
+    [],
   );
 
   const clientXToTime = useCallback((clientX: number) => {
@@ -623,14 +626,14 @@ export function useTimelineEngine(
     if (playingRef.current) {
       playingRef.current = false;
       setPlaying(false);
-      syncAudio(timeRef.current);
+      syncAudioRef.current(timeRef.current);
       return;
     }
     if (clipsRef.current.length === 0) return;
     if (timeRef.current >= totalRef.current - 0.01) setTime(0);
     playingRef.current = true;
     setPlaying(true);
-  }, [setTime, syncAudio]);
+  }, [setTime]);
 
   useEffect(() => {
     if (!playing) return;
@@ -645,12 +648,12 @@ export function useTimelineEngine(
         setTimeState(totalRef.current);
         playingRef.current = false;
         setPlaying(false);
-        syncAudio(totalRef.current);
+        syncAudioRef.current(totalRef.current);
         return;
       }
       timeRef.current = nt;
       setTimeState(nt);
-      syncAudio(nt);
+      syncAudioRef.current(nt);
       const el = scrollRef.current;
       if (el) {
         const x = nt * pxRef.current;
@@ -665,7 +668,7 @@ export function useTimelineEngine(
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [playing, syncAudio]);
+  }, [playing]);
 
   useEffect(() => {
     const pool = audioPool.current;

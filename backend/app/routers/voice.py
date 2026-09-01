@@ -232,13 +232,12 @@ def upload_voice(
         )
 
     scene.audio_path = relative_path
-    if scene.duration_seconds is None:
-        if probed_duration and probed_duration > 0:
-            scene.duration_seconds = round(probed_duration, 3)
-        else:
-            scene.duration_seconds = (
-                duration if duration > 0 else voice_service._estimate_duration(scene.narration)
-            )
+    if probed_duration and probed_duration > 0:
+        scene.duration_seconds = round(probed_duration, 3)
+    elif duration and duration > 0:
+        scene.duration_seconds = round(duration, 3)
+    else:
+        scene.duration_seconds = voice_service._estimate_duration(scene.narration)
     project.status = ProjectStatus.AUDIO
     db.commit()
     db.refresh(scene)
@@ -292,8 +291,8 @@ def generate_voice(payload: VoiceGenerateRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     scene.audio_path = audio_path
-    if scene.duration_seconds is None:
-        scene.duration_seconds = duration
+    if duration and duration > 0:
+        scene.duration_seconds = round(duration, 3)
     project.status = ProjectStatus.AUDIO
     db.commit()
     db.refresh(scene)
@@ -339,8 +338,8 @@ def generate_all_voice(
                 rate=rate,
             )
             scene.audio_path = audio_path
-            if scene.duration_seconds is None:
-                scene.duration_seconds = duration
+            if duration and duration > 0:
+                scene.duration_seconds = round(duration, 3)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

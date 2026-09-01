@@ -359,6 +359,8 @@ class VideoStatusResponse(BaseModel):
 class ThumbnailGenerateRequest(BaseModel):
     count: int = Field(default=3, ge=1, le=10)
     style: str | None = None
+    custom_prompt: str | None = None
+    topic: str | None = None
 
 
 class ThumbnailResponse(BaseModel):

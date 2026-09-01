@@ -149,12 +149,16 @@ DEFAULT_PROMPTS = {
         "label": "Thumbnail",
         "system": (
             "You are an expert YouTube thumbnail designer and AI prompt engineer. "
-            "Create ONE detailed, eye-catching image prompt in English for generating a YouTube thumbnail. "
-            "Describe the subject, high-emotion facial expressions, vibrant color palette, dynamic lighting, and text overlays. "
+            "Create ONE detailed, high-CTR image prompt in English for generating a YouTube thumbnail. "
+            "Describe the subject, high-emotion facial expressions, vibrant color palette, dynamic lighting, "
+            "and a bold, high-CTR text caption overlay (2-4 short, punchy words in 3D typography or glowing text matching the video topic, e.g., 'DON'T DO THIS!', 'SECRET REVEALED!', 'STOP NOW!'). "
             "CRITICAL INSTRUCTION: Output ONLY the plain text prompt itself. Do NOT include markdown headers, bold asterisks (**), "
             "hashtags (#), code block ticks (```), emojis, or introductory labels like 'Thumbnail Prompt:'."
         ),
-        "user": "Create a 16:9 widescreen thumbnail image prompt for a YouTube video titled: '{title}'.",
+        "user": (
+            "Create a 16:9 widescreen thumbnail image prompt for a YouTube video titled/about: '{title}'. "
+            "Include a high-CTR bold 2-4 word text caption overlay that matches this video topic."
+        ),
     },
     "thumbnail_shorts": {
         "label": "Thumbnail (Shorts)",
@@ -162,13 +166,13 @@ DEFAULT_PROMPTS = {
             "You are an expert YouTube Shorts thumbnail designer and AI prompt engineer. "
             "Create ONE detailed, eye-catching image prompt in English for a 9:16 vertical thumbnail. "
             "Thumbnails for Shorts are tall and narrow — design for mobile-first viewing. "
-            "Use bold close-up subjects, high-contrast colors, and minimal text area. "
+            "Use bold close-up subjects, high-contrast colors, and a short high-CTR bold text caption overlay (2-3 punchy words, e.g. 'MUST SEE!', 'INSANE!'). "
             "CRITICAL: Output ONLY the plain text prompt itself. No markdown, no bold, "
             "no hashtags, no code blocks, no emojis, no labels."
         ),
         "user": (
-            "Create a 9:16 vertical thumbnail image prompt for a YouTube Short titled: '{title}'. "
-            "Design for mobile phone screens — bold, close-up, high impact."
+            "Create a 9:16 vertical thumbnail image prompt for a YouTube Short titled/about: '{title}'. "
+            "Design for mobile phone screens with bold close-up imagery and a high-impact 2-3 word CTR text caption overlay."
         ),
     },
     "image": {

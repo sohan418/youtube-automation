@@ -1030,53 +1030,34 @@ class VideoService:
             if not ass_path.exists():
                 ass_path = None
 
-        # Single combined FFmpeg pass: concat + narrations + music + subtitles in one re-encode
-        needs_combined = music_path or ass_path or narration_events
-        if needs_combined:
-            stage_msg = (
-                "Joining with voice, music & subtitles..."
-                if music_path and ass_path and narration_events
-                else ("Joining audio & subtitles..." if music_path or narration_events
-                      else "Joining & burning subtitles...")
-            )
-            if music_path and ass_path and not narration_events:
-                stage_msg = "Joining with music & subtitles..."
-            elif ass_path and not (music_path or narration_events):
-                stage_msg = "Joining & burning subtitles..."
-            elif music_path and not ass_path and not narration_events:
-                stage_msg = "Joining with background music..."
-            self.set_progress(slug, 93, "joining", stage_msg)
-            ok = self._concat_with_extras(
-                concat_file, output_path, music_path, music_volume, ass_path,
-                narration_events=narration_events, total_duration=current_time,
-            )
-            if not ok or not output_path.exists():
-                logger.error("Combined concat failed — attempting separate subtitle/music passes")
-                self._concat_segments(concat_file, output_path, reencode=False)
-                if output_path.exists():
-                    if narration_events:
-                        self._overlay_narrations(output_path, narration_events, current_time)
-                    if music_path:
-                        mixed = self._add_background_music(output_path, music_path, video_dir, music_volume)
-                        if mixed != output_path and mixed.exists() and mixed.stat().st_size > 1024:
-                            output_path = mixed
-                    if ass_path:
-                        subtitled = video_dir / "final_subtitled.mp4"
-                        self._burn_subtitles(output_path, ass_path, subtitled)
-                        if subtitled.exists() and subtitled.stat().st_size > 1024:
-                            try:
-                                output_path.unlink(missing_ok=True)
-                                subtitled.rename(output_path)
-                            except (PermissionError, OSError):
-                                logger.warning(
-                                    "Could not replace %s (locked/open?) — using %s as the final video",
-                                    output_path.name, subtitled.name,
-                                )
-                                output_path = subtitled
-        else:
-            self._concat_segments(concat_file, output_path, reencode=False)
+        # Fast, modular FFmpeg pass: stream-copy concat -> narrations -> background music -> subtitles
+        self.set_progress(slug, 93, "joining", "Joining video segments...")
+        self._concat_segments(concat_file, output_path, reencode=False)
+        if output_path.exists():
+            if narration_events:
+                self.set_progress(slug, 94, "joining", "Overlaying voice narration...")
+                self._overlay_narrations(output_path, narration_events, current_time)
+            if music_path:
+                self.set_progress(slug, 95, "joining", "Mixing background music...")
+                mixed = self._add_background_music(output_path, music_path, video_dir, music_volume)
+                if mixed != output_path and mixed.exists() and mixed.stat().st_size > 1024:
+                    output_path = mixed
+            if ass_path:
+                self.set_progress(slug, 96, "joining", "Burning subtitles...")
+                subtitled = video_dir / "final_subtitled.mp4"
+                self._burn_subtitles(output_path, ass_path, subtitled)
+                if subtitled.exists() and subtitled.stat().st_size > 1024:
+                    try:
+                        output_path.unlink(missing_ok=True)
+                        subtitled.rename(output_path)
+                    except (PermissionError, OSError):
+                        logger.warning(
+                            "Could not replace %s (locked/open?) — using %s as the final video",
+                            output_path.name, subtitled.name,
+                        )
+                        output_path = subtitled
 
-        _timed("join / concat" if not needs_combined else "join (combined)")
+        _timed("join / concat")
 
         # Optional: burn semi-transparent channel logo watermark
         if logo_overlay and output_path.exists():

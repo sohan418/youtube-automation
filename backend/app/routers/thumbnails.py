@@ -29,11 +29,18 @@ def generate_thumbnails(
         .filter(Script.project_id == project_id, Script.is_active.is_(True))
         .first()
     )
-    title = script.title if script else project.name
+    title = (
+        payload.topic.strip()
+        if payload.topic and payload.topic.strip()
+        else (script.title if script else project.name)
+    )
 
     thumbnails: list[Thumbnail] = []
     for i in range(payload.count):
-        prompt = ai_service.generate_thumbnail_prompt(title, payload.style)
+        if payload.custom_prompt and payload.custom_prompt.strip():
+            prompt = payload.custom_prompt.strip()
+        else:
+            prompt = ai_service.generate_thumbnail_prompt(title, payload.style)
         file_path = image_service.generate_thumbnail(project.slug, i + 1, prompt)
         thumb = Thumbnail(
             project_id=project_id,
@@ -65,6 +72,27 @@ def select_thumbnail(thumbnail_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(thumb)
     return thumb
+
+
+@router.delete("/{thumbnail_id}")
+def delete_thumbnail(thumbnail_id: int, db: Session = Depends(get_db)):
+    thumb = db.query(Thumbnail).filter(Thumbnail.id == thumbnail_id).first()
+    if not thumb:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+    project_id = thumb.project_id
+    was_selected = thumb.is_selected
+
+    db.delete(thumb)
+    db.commit()
+
+    if was_selected:
+        remaining = db.query(Thumbnail).filter(Thumbnail.project_id == project_id).first()
+        if remaining:
+            remaining.is_selected = True
+            db.commit()
+
+    return {"message": "Thumbnail deleted successfully", "id": thumbnail_id}
 
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "bmp"}

@@ -57,17 +57,27 @@ async function applyOriginalMediaLengths(
   let moved = false;
   const placed: TimelineClip[] = [];
   for (const sid of sceneIds) {
-    const arr = [...(byScene.get(sid) ?? [])].sort((a, b) => a.start - b.start);
+    const arr = [...(byScene.get(sid) ?? [])];
     if (arr.length === 0) continue;
-    const base = arr[0].start;
-    let end = cursor;
+
+    const narClip = arr.find((c) => c.track === "narration");
+    const vidClip = arr.find((c) => c.track === "video");
+
+    const sceneDuration = narClip?.duration && narClip.duration > 0
+      ? narClip.duration
+      : vidClip?.duration && vidClip.duration > 0
+        ? vidClip.duration
+        : 5;
+
+    let sceneEnd = cursor;
     for (const c of arr) {
-      const ns = r2(cursor + (c.start - base));
-      if (Math.abs(ns - c.start) > 1e-6) moved = true;
-      placed.push({ ...c, start: ns });
-      end = Math.max(end, ns + c.duration);
+      const ns = r2(cursor);
+      const newDur = c.track === "video" && narClip?.duration ? r2(sceneDuration) : c.duration;
+      if (Math.abs(ns - c.start) > 1e-6 || Math.abs(newDur - c.duration) > 1e-6) moved = true;
+      placed.push({ ...c, start: ns, duration: newDur });
+      sceneEnd = Math.max(sceneEnd, ns + newDur);
     }
-    cursor = end;
+    cursor = sceneEnd;
   }
   if (!changed && !moved) return clips;
   return [...placed, ...loose].sort((a, b) => a.start - b.start);

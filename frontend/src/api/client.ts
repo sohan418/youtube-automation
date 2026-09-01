@@ -489,14 +489,18 @@ export const api = {
 
   listThumbnails: (projectId: number) =>
     request<import("../types").Thumbnail[]>(`/thumbnails/project/${projectId}`),
-  generateThumbnails: (projectId: number, count?: number) =>
+  generateThumbnails: (projectId: number, count?: number, custom_prompt?: string, topic?: string) =>
     request<import("../types").Thumbnail[]>(
       `/thumbnails/project/${projectId}/generate`,
-      { method: "POST", body: JSON.stringify({ count: count || 3 }) },
+      { method: "POST", body: JSON.stringify({ count: count || 3, custom_prompt: custom_prompt || undefined, topic: topic || undefined }) },
     ),
   selectThumbnail: (thumbnailId: number) =>
     request<import("../types").Thumbnail>(`/thumbnails/${thumbnailId}/select`, {
       method: "POST",
+    }),
+  deleteThumbnail: (thumbnailId: number) =>
+    request<{ message: string; id: number }>(`/thumbnails/${thumbnailId}`, {
+      method: "DELETE",
     }),
   uploadThumbnail: (projectId: number, file: File) => {
     const form = new FormData();
@@ -518,7 +522,7 @@ export const api = {
     ),
   buildSEOPrompt: (
     projectId: number,
-    data: { script_title?: string; script_body?: string; language?: string },
+    data: { script_title?: string; script_body?: string; language?: string; timestamps?: string },
   ) =>
     request<{ system: string; user: string }>(`/seo/project/${projectId}/prompt`, {
       method: "POST",

@@ -508,12 +508,13 @@ class AIService:
         ]
 
     def build_seo_prompt(
-        self, script_title: str, script_body: str, language: str,
+        self, script_title: str, script_body: str, language: str, timestamps: str | None = None,
     ) -> dict[str, str]:
         system = "You are a YouTube SEO expert. Generate metadata as JSON."
+        timestamps_part = f"\n\nTimestamps Context:\n{timestamps.strip()}" if timestamps and timestamps.strip() else ""
         user = (
             f"Generate SEO metadata for a YouTube video.\nTitle: {script_title}\n"
-            f"Script excerpt: {script_body[:500]}\nLanguage: {language}\n"
+            f"Script excerpt: {script_body[:500]}\nLanguage: {language}{timestamps_part}\n\n"
             'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}\n'
             "CRITICAL: The tags field is a single comma-separated string. "
             "The entire tags string MUST be 500 characters or fewer (YouTube's hard limit). "
@@ -523,21 +524,22 @@ class AIService:
         return {"system": system, "user": user}
 
     def generate_seo(
-        self, script_title: str, script_body: str, language: str
+        self, script_title: str, script_body: str, language: str, timestamps: str | None = None
     ) -> dict[str, str]:
-        prompts = self.build_seo_prompt(script_title, script_body, language)
+        prompts = self.build_seo_prompt(script_title, script_body, language, timestamps)
         return self._generate_json(prompts["system"], prompts["user"], label="SEO generation")
 
     def generate_thumbnail_prompt(self, title: str, style: str | None = None) -> str:
         style_text = f" Style: {style}." if style else ""
         system = (
             "You are an expert YouTube thumbnail designer and AI prompt engineer. "
-            "Create ONE detailed, eye-catching image prompt in English for generating a YouTube thumbnail. "
-            "Describe the subject, high-emotion facial expressions, vibrant color palette, dynamic lighting, and text overlays. "
+            "Create ONE detailed, high-CTR image prompt in English for generating a YouTube thumbnail. "
+            "Describe the subject, high-emotion facial expressions, vibrant color palette, dynamic lighting, "
+            "and a bold, high-CTR text caption overlay (2-4 short, punchy words in 3D typography or glowing text matching the video topic, e.g., 'DON'T DO THIS!', 'SECRET REVEALED!', 'STOP NOW!'). "
             "CRITICAL INSTRUCTION: Output ONLY the plain text prompt itself. Do NOT include markdown headers, bold asterisks (**), "
             "hashtags (#), code block ticks (```), emojis, or introductory labels like 'Thumbnail Prompt:'."
         )
-        user = f"Create a thumbnail image prompt for a video titled: '{title}'.{style_text}"
+        user = f"Create a thumbnail image prompt for a video titled/about: '{title}'. Include a high-CTR bold 2-4 word text caption overlay that matches this video topic.{style_text}"
         raw = self._chat(system, user)
         return self._clean_prompt(raw)
 

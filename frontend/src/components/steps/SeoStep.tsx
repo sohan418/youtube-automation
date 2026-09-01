@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Sparkles, Download, Upload, X, Clock, ShieldAlert, FileText, Edit2, Check, RotateCcw } from "lucide-react";
-import type { SEOConstants, SEOMetadata, Scene, Script } from "../../types";
+import type { SEOConstants, SEOMetadata, Scene, Script, TimelineData } from "../../types";
 import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
 import "./SeoStep.css";
@@ -15,14 +15,36 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function buildTimestamps(scenes: Scene[], timestampsMarker: string): string {
+function buildTimestamps(scenes: Scene[], timestampsMarker: string, timeline?: TimelineData | null): string {
   if (!scenes.length) return "";
   const lines = [timestampsMarker];
-  let t = 0;
-  for (const s of [...scenes].sort((a, b) => a.order_index - b.order_index)) {
+
+  const sceneStartMap = new Map<number, number>();
+  if (timeline && timeline.clips && timeline.clips.length > 0) {
+    for (const c of timeline.clips) {
+      if (c.scene_id != null && c.start != null) {
+        if (!sceneStartMap.has(c.scene_id) || c.start < sceneStartMap.get(c.scene_id)!) {
+          sceneStartMap.set(c.scene_id, c.start);
+        }
+      }
+    }
+  }
+
+  const sorted = [...scenes].sort((a, b) => {
+    const tA = sceneStartMap.has(a.id) ? sceneStartMap.get(a.id)! : Infinity;
+    const tB = sceneStartMap.has(b.id) ? sceneStartMap.get(b.id)! : Infinity;
+    if (tA !== Infinity || tB !== Infinity) {
+      return tA - tB;
+    }
+    return a.order_index - b.order_index;
+  });
+
+  let accum = 0;
+  for (const s of sorted) {
+    const startTime = sceneStartMap.has(s.id) ? sceneStartMap.get(s.id)! : accum;
     const label = (s.narration || `Scene ${s.order_index}`).split("\n")[0].slice(0, 60);
-    lines.push(`${formatTimestamp(t)} – ${label}`);
-    t += s.duration_seconds ?? 5;
+    lines.push(`${formatTimestamp(startTime)} – ${label}`);
+    accum = startTime + (s.duration_seconds ?? 5);
   }
   return lines.join("\n");
 }
@@ -77,6 +99,7 @@ interface Props {
   projectLanguage?: string;
   seo: SEOMetadata | null;
   scenes: Scene[];
+  timeline?: TimelineData | null;
   activeScript: Script | null;
   actionLoading: string;
   projectCategory: string;
@@ -180,7 +203,7 @@ function parseFreeAIResponse(text: string): Partial<SEOMetadata> {
 }
 
 export default function SeoStep({
-  projectId, projectLanguage, seo, scenes, activeScript, actionLoading, projectCategory,
+  projectId, projectLanguage, seo, scenes, timeline, activeScript, actionLoading, projectCategory,
   onGenerate, onSave, onFreeAIResponse,
 }: Props) {
   const [showImport, setShowImport] = useState(false);
@@ -189,14 +212,17 @@ export default function SeoStep({
   const [showFreeAI, setShowFreeAI] = useState(false);
   const [dynamicPrompt, setDynamicPrompt] = useState<{ system: string; user: string } | null>(null);
 
+  const tsContext = constants && scenes.length ? buildTimestamps(scenes, constants.timestamps_marker, timeline) : "";
+
   useEffect(() => {
     if (!showFreeAI) return;
     api.buildSEOPrompt(projectId, {
       script_title: activeScript?.title || undefined,
       script_body: activeScript?.body || undefined,
       language: projectLanguage || "en",
+      timestamps: tsContext || undefined,
     }).then(setDynamicPrompt).catch(() => {});
-  }, [showFreeAI, projectId, projectLanguage, activeScript]);
+  }, [showFreeAI, projectId, projectLanguage, activeScript, scenes, constants, tsContext]);
 
   // Fetch marker constants once from the backend — single source of truth
   useEffect(() => {
@@ -209,7 +235,7 @@ export default function SeoStep({
     : { body: seo?.description ?? "", timestamps: "", disclaimer: "" };
   const { body, timestamps, disclaimer } = parsed;
 
-  const freeAIPrompt = `SYSTEM PROMPT:\nYou are a YouTube SEO expert. Generate metadata as JSON.\n\nUSER PROMPT:\nGenerate SEO metadata for a YouTube video.\nTitle: ${activeScript?.title || "Your Video Title"}\nScript excerpt: ${(activeScript?.body || "").substring(0, 500)}\nLanguage: ${projectLanguage || "en"}\nReturn JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}`;
+  const freeAIPrompt = `SYSTEM PROMPT:\nYou are a YouTube SEO expert. Generate metadata as JSON.\n\nUSER PROMPT:\nGenerate SEO metadata for a YouTube video.\nTitle: ${activeScript?.title || "Your Video Title"}\nScript excerpt: ${(activeScript?.body || "").substring(0, 500)}\nLanguage: ${projectLanguage || "en"}${tsContext ? `\n\nTimestamps Context:\n${tsContext}` : ""}\n\nReturn JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}`;
 
   const handleFreeAIResponse = (text: string) => {
     if (!onFreeAIResponse) return;
@@ -246,7 +272,7 @@ export default function SeoStep({
   // Rebuild timestamps from current scenes and save
   const handleRegenerateTimestamps = async () => {
     if (!seo || !constants) return;
-    const newTs = buildTimestamps(scenes, constants.timestamps_marker);
+    const newTs = buildTimestamps(scenes, constants.timestamps_marker, timeline);
     const full = combineDescription(body, newTs, disclaimer, constants);
     await onSave({ description: full });
   };
