@@ -1,6 +1,6 @@
 import shutil
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +8,8 @@ from app.models import Project, ProjectStatus, SEOMetadata, Scene, SceneImage, T
 from app.routers.seo import YOUTUBE_CATEGORIES
 from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.storage import storage_service
+from app.services.youtube import youtube_service
+from app.services.video import video_service
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -53,6 +55,10 @@ def _serialize_project(db: Session, project: Project) -> ProjectResponse:
         caption_outline=project.caption_outline,
         caption_font_size=project.caption_font_size,
         logo_overlay=project.logo_overlay,
+        logo_position=project.logo_position,
+        logo_size=project.logo_size,
+        logo_margin=project.logo_margin,
+        logo_opacity=project.logo_opacity,
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
@@ -147,3 +153,86 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     )
     db.delete(project)
     db.commit()
+
+
+@router.get("/{project_id}/logo")
+def get_project_logo(project_id: int, refresh: bool = False, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    logo_path = youtube_service.get_channel_logo_path(project.slug, force_refresh=refresh)
+    if not logo_path or not logo_path.exists():
+        raise HTTPException(status_code=404, detail="Channel logo not found")
+
+    rel_path = logo_path.relative_to(storage_service.root.parent)
+    mtime = int(logo_path.stat().st_mtime)
+    return {"logo_url": f"{rel_path.as_posix()}?t={mtime}"}
+
+
+@router.post("/{project_id}/logo")
+async def upload_project_logo(
+    project_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty logo file")
+
+    branding_dir = storage_service.get_project_path(project.slug) / "branding"
+    branding_dir.mkdir(parents=True, exist_ok=True)
+    logo_path = branding_dir / "logo.png"
+
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(content)).convert("RGBA")
+        img.save(logo_path, "PNG")
+        youtube_service._ensure_circular_logo(logo_path)
+    except Exception:
+        logo_path.write_bytes(content)
+
+    rel_path = logo_path.relative_to(storage_service.root.parent)
+    mtime = int(logo_path.stat().st_mtime)
+    return {"logo_url": f"{rel_path.as_posix()}?t={mtime}"}
+
+
+@router.get("/{project_id}/subtitles/srt")
+def export_project_srt(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    subtitle_entries = video_service.get_subtitle_entries(project.id, db)
+    srt_text = video_service.generate_srt_content(subtitle_entries)
+
+    filename = f"{project.slug}.srt"
+    return Response(
+        content=srt_text,
+        media_type="application/x-subrip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/{project_id}/subtitles/vtt")
+def export_project_vtt(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    subtitle_entries = video_service.get_subtitle_entries(project.id, db)
+    vtt_text = video_service.generate_vtt_content(subtitle_entries)
+
+    filename = f"{project.slug}.vtt"
+    return Response(
+        content=vtt_text,
+        media_type="text/vtt",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+

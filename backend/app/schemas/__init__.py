@@ -32,6 +32,10 @@ class ProjectUpdate(BaseModel):
     caption_outline: float | None = None
     caption_font_size: int | None = None
     logo_overlay: bool | None = None
+    logo_position: str | None = None
+    logo_size: float | None = Field(default=None, ge=1.0, le=100.0)
+    logo_margin: int | None = Field(default=None, ge=0, le=500)
+    logo_opacity: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class ProjectResponse(ProjectBase):
@@ -51,6 +55,10 @@ class ProjectResponse(ProjectBase):
     caption_outline: float = 2.0
     caption_font_size: int | None = None
     logo_overlay: bool = False
+    logo_position: str = "bottom-right"
+    logo_size: float = 12.0
+    logo_margin: int = 30
+    logo_opacity: float = 0.85
     created_at: datetime
     updated_at: datetime
 
@@ -303,6 +311,10 @@ class VideoBuildRequest(BaseModel):
     subtitle_font_size: int | None = Field(default=None, ge=8, le=200)
     force_rebuild: bool = False
     logo_overlay: bool = False
+    logo_position: str = "bottom-right"
+    logo_size: float = Field(default=12.0, ge=1.0, le=100.0)
+    logo_margin: int = Field(default=30, ge=0, le=500)
+    logo_opacity: float = Field(default=0.85, ge=0.0, le=1.0)
     timeline: TimelineData | None = None
 
 

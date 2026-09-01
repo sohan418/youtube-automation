@@ -196,6 +196,10 @@ class AIService:
         user = (
             f"Generate {count} trending YouTube video ideas{topic_text}{category_text}. "
             f"Language: {language}. "
+            "IMPORTANT: Each idea must be thematically connected to the one before it — "
+            "think of them as episodes in a series where each video naturally leads into the next. "
+            "If the first idea is about a topic, the second should follow from it, "
+            "the third from the second, and so on, creating a cohesive content chain. "
         )
         if recent_videos:
             user += "Here are my recent videos (for context - generate NEW and DIFFERENT ideas, don't repeat these):\n"
@@ -510,7 +514,11 @@ class AIService:
         user = (
             f"Generate SEO metadata for a YouTube video.\nTitle: {script_title}\n"
             f"Script excerpt: {script_body[:500]}\nLanguage: {language}\n"
-            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}'
+            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}\n'
+            "CRITICAL: The tags field is a single comma-separated string. "
+            "The entire tags string MUST be 500 characters or fewer (YouTube's hard limit). "
+            "Prioritise the most relevant tags first; drop low-value ones if you approach the limit. "
+            "Do NOT pad with generic filler tags."
         )
         return {"system": system, "user": user}
 

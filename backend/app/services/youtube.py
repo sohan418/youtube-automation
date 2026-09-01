@@ -22,7 +22,11 @@ from app.services.storage import storage_service
 logger = logging.getLogger(__name__)
 
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+]
 REDIRECT_URI = "http://localhost:8000/api/youtube/auth/callback"
 
 # Upload progress tracking (same pattern as video build)
@@ -117,11 +121,18 @@ class YouTubeService:
             ch = items[0]
             snippet = ch.get("snippet", {})
             stats = ch.get("statistics", {})
+            thumbnails = snippet.get("thumbnails", {})
+            avatar_url = (
+                thumbnails.get("high", {}).get("url")
+                or thumbnails.get("medium", {}).get("url")
+                or thumbnails.get("default", {}).get("url")
+                or ""
+            )
             return {
                 "channel_id": ch.get("id", ""),
                 "title": snippet.get("title", ""),
                 "description": snippet.get("description", ""),
-                "avatar": snippet.get("thumbnails", {}).get("default", {}).get("url", ""),
+                "avatar": avatar_url,
                 "subscribers": stats.get("subscriberCount", "0"),
                 "videos": stats.get("videoCount", "0"),
             }
@@ -151,32 +162,56 @@ class YouTubeService:
         except Exception as e:
             logger.error(f"Failed to make logo circular: {e}")
 
-    def get_channel_logo_path(self, project_slug: str) -> Path | None:
+    def _create_default_logo(self, logo_path: Path):
+        """Generates a stylish circular default channel logo PNG if avatar download fails or offline."""
+        try:
+            logo_path.parent.mkdir(parents=True, exist_ok=True)
+            size = (200, 200)
+            img = Image.new("RGBA", size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+
+            # Red circular background
+            draw.ellipse((4, 4, 195, 195), fill=(225, 29, 72, 245), outline=(255, 255, 255, 230), width=5)
+
+            # White play icon triangle
+            play_points = [(82, 65), (82, 135), (135, 100)]
+            draw.polygon(play_points, fill=(255, 255, 255, 255))
+
+            img.save(logo_path, "PNG")
+        except Exception as e:
+            logger.error(f"Failed to create default logo: {e}")
+
+    def get_channel_logo_path(self, project_slug: str, force_refresh: bool = False) -> Path | None:
         """Download & cache the connected channel's logo into the project folder."""
         branding_dir = storage_service.get_project_path(project_slug) / "branding"
         logo = branding_dir / "logo.png"
-        if logo.exists() and logo.stat().st_size > 0:
+
+        if not force_refresh and logo.exists() and logo.stat().st_size > 300:
             self._ensure_circular_logo(logo)
             return logo
+
         try:
             info = self.get_channel_info()
             avatar = (info or {}).get("avatar", "")
-            if not avatar:
-                logger.warning("No channel avatar available for logo overlay")
-                return None
-            resp = httpx.Client(timeout=15).get(avatar)
-            resp.raise_for_status()
-            if len(resp.content) == 0:
-                return None
-            branding_dir.mkdir(parents=True, exist_ok=True)
-            logo.write_bytes(resp.content)
-            if logo.exists():
-                self._ensure_circular_logo(logo)
-                return logo
-            return None
+            if avatar:
+                resp = httpx.Client(timeout=15).get(avatar)
+                resp.raise_for_status()
+                if len(resp.content) > 100:
+                    branding_dir.mkdir(parents=True, exist_ok=True)
+                    logo.write_bytes(resp.content)
+                    self._ensure_circular_logo(logo)
+                    return logo
         except Exception:
-            logger.exception("Failed to download channel logo")
-            return None
+            logger.exception(f"Failed to download YouTube channel logo for {project_slug}")
+
+        # Fallback: Create default circular logo if avatar download fails or not connected
+        if not logo.exists() or logo.stat().st_size < 100:
+            self._create_default_logo(logo)
+
+        if logo.exists():
+            return logo
+
+        return None
 
     def get_auth_url(self) -> str:
         global _auth_code_verifier
@@ -335,22 +370,83 @@ class YouTubeService:
                     video_url=video_url,
                 )
 
-                # Upload thumbnail if available
+                # Upload thumbnail if available with auto JPEG conversion & retry loop
                 if thumbnail_path and Path(thumbnail_path).exists():
-                    suffix = Path(thumbnail_path).suffix.lower()
-                    mime = {
-                        ".png": "image/png",
-                        ".webp": "image/webp",
-                        ".gif": "image/gif",
-                        ".bmp": "image/bmp",
-                    }.get(suffix, "image/jpeg")
+                    thumb_p = Path(thumbnail_path).resolve()
+                    upload_thumb_path = thumb_p
+
+                    # Convert image to standard JPEG (1280x720) under 2MB for max YouTube compatibility
                     try:
-                        youtube.thumbnails().set(
-                            videoId=video_id,
-                            media_body=MediaFileUpload(str(Path(thumbnail_path).resolve()), mimetype=mime),
-                        ).execute()
-                    except Exception:
-                        logger.warning("Failed to upload thumbnail, continuing...")
+                        from PIL import Image
+                        with Image.open(thumb_p) as img:
+                            img = img.convert("RGB")
+                            if img.width > 1280 or img.height > 720:
+                                img.thumbnail((1280, 720), Image.Resampling.LANCZOS)
+                            converted_path = thumb_p.parent / f"yt_{thumb_p.stem}.jpg"
+                            img.save(converted_path, "JPEG", quality=90)
+                            upload_thumb_path = converted_path
+                    except Exception as prep_err:
+                        logger.warning(f"Thumbnail prep note: {prep_err}")
+
+                    # Retry loop (3 attempts) allowing YouTube server to register video_id
+                    thumb_uploaded = False
+                    for attempt in range(1, 4):
+                        time.sleep(2.5)
+                        try:
+                            youtube.thumbnails().set(
+                                videoId=video_id,
+                                media_body=MediaFileUpload(str(upload_thumb_path), mimetype="image/jpeg"),
+                            ).execute()
+                            logger.info(f"Successfully uploaded thumbnail for video {video_id} on attempt {attempt}")
+                            thumb_uploaded = True
+                            break
+                        except Exception as e:
+                            logger.warning(f"Thumbnail upload attempt {attempt} failed for video {video_id}: {e}")
+
+                    if not thumb_uploaded:
+                        logger.error(f"Failed to upload thumbnail for video {video_id} after 3 attempts.")
+
+                # Auto-upload SRT captions track if available for project
+                try:
+                    from app.database import SessionLocal
+                    from app.models import Project
+                    from app.services.video import video_service
+
+                    db = SessionLocal()
+                    try:
+                        project = db.query(Project).filter(Project.slug == project_slug).first()
+                        if project:
+                            subtitle_entries = video_service.get_subtitle_entries(project.id, db)
+                            if subtitle_entries:
+                                srt_text = video_service.generate_srt_content(subtitle_entries)
+                                branding_dir = storage_service.get_project_path(project_slug) / "branding"
+                                branding_dir.mkdir(parents=True, exist_ok=True)
+                                srt_path = branding_dir / "captions.srt"
+                                srt_path.write_text(srt_text, encoding="utf-8")
+
+                                _upload_progress[key].update(
+                                    progress=95,
+                                    stage="captions",
+                                    message="Uploading YouTube closed captions...",
+                                )
+                                caption_body = {
+                                    "snippet": {
+                                        "videoId": video_id,
+                                        "language": project.language or "en",
+                                        "name": "English Subtitles",
+                                        "isDraft": False,
+                                    }
+                                }
+                                youtube.captions().insert(
+                                    part="snippet",
+                                    body=caption_body,
+                                    media_body=MediaFileUpload(str(srt_path.resolve()), mimetype="application/x-subrip", resumable=True),
+                                ).execute()
+                                logger.info("Auto-uploaded SRT captions to YouTube video %s", video_id)
+                    finally:
+                        db.close()
+                except Exception as caption_err:
+                    logger.warning("Failed to auto-upload SRT captions to YouTube: %s", caption_err)
 
                 _upload_progress[key].update(
                     progress=100,

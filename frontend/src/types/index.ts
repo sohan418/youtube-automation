@@ -11,6 +11,15 @@ export type ProjectStatus =
   | "completed"
   | "exported";
 
+export type LogoPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+export interface LogoConfig {
+  logo_position: LogoPosition;
+  logo_size: number;
+  logo_margin: number;
+  logo_opacity: number;
+}
+
 export interface Project {
   id: number;
   name: string;
@@ -30,6 +39,10 @@ export interface Project {
   caption_outline: number;
   caption_font_size: number | null;
   logo_overlay: boolean;
+  logo_position: LogoPosition;
+  logo_size: number;
+  logo_margin: number;
+  logo_opacity: number;
   created_at: string;
   updated_at: string;
 }

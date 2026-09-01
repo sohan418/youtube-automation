@@ -1053,6 +1053,36 @@ export function useTimelineEngine(
     [rowStates, timeline, onChange],
   );
 
+  const muteAllVideoClips = useCallback(
+    (mute: boolean) => {
+      const nextClips = clipsRef.current.map((c) =>
+        c.track === "video" ? { ...c, muted: mute } : c
+      );
+      clipsRef.current = nextClips;
+      const past = historyRef.current.past;
+      past.push(timeline);
+      if (past.length > 100) past.shift();
+      historyRef.current.future = [];
+      lastMerge.current = { key: "", t: 0 };
+      bumpHistory((v) => v + 1);
+
+      const cur = rowStates.video ?? { muted: false, locked: false };
+      const nextAll = {
+        ...rowStates,
+        video: { ...cur, muted: mute },
+      } as Partial<Record<TimelineTrack, RowState>>;
+      setRowStates(nextAll);
+      rowStatesHydrated.current = JSON.stringify(nextAll);
+      onChange({
+        ...timeline,
+        clips: nextClips,
+        duration: totalRef.current,
+        track_states: nextAll,
+      });
+    },
+    [rowStates, timeline, onChange],
+  );
+
   const clearMarkers = useCallback(() => setMarkers([]), []);
 
   const toggleCollapsed = useCallback((id: TimelineTrack) => {
@@ -1112,6 +1142,7 @@ export function useTimelineEngine(
     rowStateOf,
     rowHeight,
     toggleRowFlag,
+    muteAllVideoClips,
     toggleCollapsed,
     collapsed,
     contentW,

@@ -1,10 +1,12 @@
 import hashlib
+from typing import Any
 import logging
 import os
 import re
 import shutil
 import subprocess
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -678,11 +680,26 @@ class VideoService:
         timeline_clips: list[dict] | None = None,
         track_states: dict | None = None,
         logo_overlay: bool = False,
+        logo_position: str = "bottom-right",
+        logo_size: float = 12.0,
+        logo_margin: int = 30,
+        logo_opacity: float = 0.85,
     ) -> str:
         resolution = self.resolve_resolution(ratio, resolution)
+        video_width, video_height = self._parse_resolution(resolution)
+        logo_height_px = max(1, int(video_height * (logo_size / 100.0))) if logo_size else 0
         project_path = storage_service.get_project_path(slug)
         video_dir = project_path / "video"
         video_dir.mkdir(exist_ok=True)
+
+        t0 = time.perf_counter()
+        t_prev = t0
+
+        def _timed(step: str) -> None:
+            nonlocal t_prev
+            now = time.perf_counter()
+            logger.info("[build:%s] %-20s %.2fs", slug, step, now - t_prev)
+            t_prev = now
 
         concat_file = video_dir / "concat_list.txt"
         output_path = video_dir / "final.mp4"
@@ -775,8 +792,12 @@ class VideoService:
                 )
                 current_time += duration
 
+        _timed("prepare plans")
+
         if not plans:
-            return self._create_placeholder_video(slug, resolution)
+            out = self._create_placeholder_video(slug, resolution)
+            _timed("placeholder video")
+            return out
 
         segment_files: list[Path] = []
         rendered_orders: set[int] = set()
@@ -824,7 +845,9 @@ class VideoService:
 
                 if plan.get("kind") == "gap":
                     self._set_scene_status(slug, order, "rendering")
+                    gap_start = time.perf_counter()
                     ok = self._create_black_segment(duration, segment, resolution)
+                    gap_elapsed = time.perf_counter() - gap_start
                     self._set_scene_status(slug, order, "done" if ok else "failed")
                     with done_lock:
                         done_images += 1
@@ -836,11 +859,13 @@ class VideoService:
                         f"Filling gap {done_local}/{total_images}...",
                     )
                     if segment.exists() and segment.stat().st_size > 1024:
+                        logger.info("[build:%s] Gap %03d rendered in %.2fs", slug, order, gap_elapsed)
                         return segment
                     build_errors.append(f"Gap {order}")
                     return None
 
                 self._set_scene_status(slug, order, "rendering")
+                scene_start = time.perf_counter()
                 try:
                     if len(media) == 1:
                         item = media[0]
@@ -919,8 +944,16 @@ class VideoService:
                     if segment.exists():
                         rendered_orders.add(order)
                         self._set_scene_status(slug, order, "done")
+                        logger.info(
+                            "[build:%s] Scene %03d (%d media) rendered in %.2fs",
+                            slug, order, len(media), time.perf_counter() - scene_start,
+                        )
                         return segment
                     self._set_scene_status(slug, order, "failed")
+                    logger.info(
+                        "[build:%s] Scene %03d FAILED after %.2fs",
+                        slug, order, time.perf_counter() - scene_start,
+                    )
                     return None
                 except Exception:
                     logger.exception("Scene %d render failed", order)
@@ -946,6 +979,8 @@ class VideoService:
                     result = _build_one(plan)
                     if result:
                         segment_files.append(result)
+
+        _timed("render segments")
 
         segment_files.sort()
         if not segment_files:
@@ -1022,23 +1057,40 @@ class VideoService:
                     if narration_events:
                         self._overlay_narrations(output_path, narration_events, current_time)
                     if music_path:
-                        self._add_background_music(output_path, music_path, video_dir, music_volume)
+                        mixed = self._add_background_music(output_path, music_path, video_dir, music_volume)
+                        if mixed != output_path and mixed.exists() and mixed.stat().st_size > 1024:
+                            output_path = mixed
                     if ass_path:
                         subtitled = video_dir / "final_subtitled.mp4"
                         self._burn_subtitles(output_path, ass_path, subtitled)
-                        if subtitled.exists():
-                            output_path.unlink(missing_ok=True)
-                            subtitled.rename(output_path)
+                        if subtitled.exists() and subtitled.stat().st_size > 1024:
+                            try:
+                                output_path.unlink(missing_ok=True)
+                                subtitled.rename(output_path)
+                            except (PermissionError, OSError):
+                                logger.warning(
+                                    "Could not replace %s (locked/open?) — using %s as the final video",
+                                    output_path.name, subtitled.name,
+                                )
+                                output_path = subtitled
         else:
             self._concat_segments(concat_file, output_path, reencode=False)
 
-        # Optional: burn semi-transparent channel logo watermark (bottom-right)
+        _timed("join / concat" if not needs_combined else "join (combined)")
+
+        # Optional: burn semi-transparent channel logo watermark
         if logo_overlay and output_path.exists():
             self.set_progress(slug, 96, "joining", "Overlaying channel logo...")
             logo = self._get_branding_logo(slug)
             if logo and logo.exists() and logo.stat().st_size > 0:
                 watermarked = video_dir / "final_watermarked.mp4"
-                if self._overlay_logo(output_path, logo, watermarked) and watermarked.exists():
+                if self._overlay_logo(
+                    output_path, logo, watermarked,
+                    logo_height=logo_height_px,
+                    position=logo_position,
+                    margin=logo_margin,
+                    opacity=logo_opacity,
+                ) and watermarked.exists():
                     try:
                         output_path.unlink(missing_ok=True)
                     except OSError:
@@ -1046,11 +1098,13 @@ class VideoService:
                     watermarked.rename(output_path)
             else:
                 logger.warning("Logo overlay enabled but channel logo unavailable — skipping")
+            _timed("logo overlay")
 
         relative = str(output_path.relative_to(storage_service.root.parent))
         self.set_progress(
             slug, 100, "done", "Video built successfully", running=False, output=relative
         )
+        logger.info("[build:%s] %-20s %.2fs", slug, "TOTAL BUILD TIME", time.perf_counter() - t0)
         return relative
 
     @staticmethod
@@ -1101,7 +1155,23 @@ class VideoService:
                 pass
 
         is_vertical = height > width
-        alignment = self._position_to_alignment(position, is_vertical)
+
+        custom_y = None
+        if position and position.startswith("custom:"):
+            try:
+                custom_y = float(position.split(":")[1])
+            except Exception:
+                custom_y = 80.0
+        elif position == "custom":
+            custom_y = 80.0
+
+        if custom_y is not None:
+            margin_v = max(10, int(height * (1.0 - (custom_y / 100.0))))
+            alignment = 2
+        else:
+            alignment = self._position_to_alignment(position, is_vertical)
+            margin_v = int(height * 0.12) if position == "bottom" else int(height * 0.04)
+
         primary_colour = self._hex_to_ass_color(color)
         outline_colour = self._hex_to_ass_color(outline_color)
 
@@ -1109,17 +1179,14 @@ class VideoService:
         if style == "shorts":
             auto_size = int(height * 0.032) if is_vertical else int(height * 0.045)
             fs = font_size if font_size is not None else auto_size
-            margin_v = int(height * 0.12) if position == "bottom" else int(height * 0.04)
             style_lines.append(f"Style: Default,Impact,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,-1,0,0,0,100,100,0,0,1,{max(outline_thickness, 3.5):.1f},0,{alignment},20,20,{margin_v},1")
         elif style == "classic":
             auto_size = int(height * 0.024) if is_vertical else int(height * 0.035)
             fs = font_size if font_size is not None else auto_size
-            margin_v = int(height * 0.08) if position == "bottom" else int(height * 0.04)
             style_lines.append(f"Style: Default,Arial,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,0,0,0,0,100,100,0,0,1,{max(outline_thickness, 1.8):.1f},1,{alignment},20,20,{margin_v},1")
         else:
             auto_size = int(height * 0.026) if is_vertical else int(height * 0.038)
             fs = font_size if font_size is not None else auto_size
-            margin_v = int(height * 0.08) if position == "bottom" else int(height * 0.04)
             style_lines.append(f"Style: Default,Arial,{fs},{primary_colour},&H000000FF,{outline_colour},&H00000000,-1,0,0,0,100,100,0,0,1,{max(outline_thickness, 2.0):.1f},1,{alignment},20,20,{margin_v},1")
 
         header = f"""[Script Info]
@@ -1163,40 +1230,140 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 .replace("\r", " ")
             )
 
-        is_word_by_word = True
+        active_color_tag = self._hex_to_ass_color(color or "#00E5FF")
+        white_color_tag = "&H00FFFFFF"
+        is_word_by_word = style in ["word_by_word", "shorts"]
+
         with output_path.open("w", encoding="utf-8") as f:
             f.write(header)
             for entry in subtitle_entries:
                 text = _escape_ass_text(entry["text"]).strip()
                 if not text:
                     continue
+                words = text.split()
+                if not words:
+                    continue
+
                 if is_word_by_word:
-                    chunks = self._split_into_word_chunks(text)
-                    total_words = len(text.split())
-                    entry_duration = entry["end"] - entry["start"]
-                    padding = min(0.05, entry_duration * 0.05) if entry_duration >= 0.3 else 0.0
-                    cursor = entry["start"] + padding
-                    end_time = entry["end"] - padding if entry_duration >= 0.3 else entry["end"]
-                    available = max(end_time - cursor, 0.01)
-                    for idx, chunk in enumerate(chunks):
-                        chunk_words = len(chunk.split())
-                        if idx == len(chunks) - 1:
-                            chunk_end = end_time
-                        else:
-                            chunk_duration = (chunk_words / total_words) * available if total_words else available / len(chunks)
-                            chunk_end = cursor + chunk_duration
-                        if chunk_end > end_time:
-                            chunk_end = end_time
-                        if chunk_end < cursor:
-                            chunk_end = cursor + 0.01
-                        f.write(
-                            f"Dialogue: 0,{format_ass_time(cursor)},{format_ass_time(chunk_end)},Default,,0,0,0,,{chunk}\n"
-                        )
-                        cursor = chunk_end
+                    entry_duration = max(entry["end"] - entry["start"], 0.1)
+                    word_duration = entry_duration / len(words)
+
+                    # Group words into 4-word display blocks matching frontend preview
+                    CHUNK_SIZE = 4
+                    for block_start_idx in range(0, len(words), CHUNK_SIZE):
+                        block_words = words[block_start_idx : block_start_idx + CHUNK_SIZE]
+
+                        # For each word in the 4-word block, create an event where that specific word is highlighted
+                        for active_in_block_idx, _ in enumerate(block_words):
+                            global_word_idx = block_start_idx + active_in_block_idx
+                            w_start = entry["start"] + (global_word_idx * word_duration)
+                            w_end = w_start + word_duration
+                            if global_word_idx == len(words) - 1:
+                                w_end = entry["end"]
+
+                            # Build formatted text line with active word highlighted
+                            line_parts = []
+                            for idx, w in enumerate(block_words):
+                                if idx == active_in_block_idx:
+                                    line_parts.append(f"{{\\c{active_color_tag}&}}{w}{{\\c{white_color_tag}&}}")
+                                else:
+                                    line_parts.append(w)
+
+                            formatted_line = " ".join(line_parts)
+                            f.write(
+                                f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},Default,,0,0,0,,{formatted_line}\n"
+                            )
                 else:
                     start_str = format_ass_time(entry["start"])
                     end_str = format_ass_time(entry["end"])
                     f.write(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{text}\n")
+
+    def get_subtitle_entries(self, project_id: int, db: Any) -> list[dict]:
+        """Gather subtitle entries for a project from database scenes."""
+        from app.models import Scene
+        scenes = (
+            db.query(Scene)
+            .filter(Scene.project_id == project_id)
+            .order_by(Scene.order_index)
+            .all()
+        )
+
+        entries = []
+        current_time = 0.0
+        for s in scenes:
+            dur = s.duration_seconds or 5.0
+            if s.narration and s.narration.strip():
+                entries.append({
+                    "start": current_time,
+                    "end": current_time + dur,
+                    "text": s.narration.strip(),
+                })
+            current_time += dur
+        return entries
+
+    def generate_srt_content(self, subtitle_entries: list[dict]) -> str:
+        """Generates standard UTF-8 SRT subtitle file content."""
+        def format_srt_time(sec: float) -> str:
+            if sec < 0:
+                sec = 0.0
+            h = int(sec // 3600)
+            m = int((sec % 3600) // 60)
+            s = int(sec % 60)
+            ms = int(round((sec - int(sec)) * 1000))
+            if ms >= 1000:
+                s += 1
+                ms = 0
+            if s >= 60:
+                m += 1
+                s = 0
+            if m >= 60:
+                h += 1
+                m = 0
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+        lines = []
+        index = 1
+        for entry in subtitle_entries:
+            text = entry.get("text", "").strip()
+            if not text:
+                continue
+            start_str = format_srt_time(entry["start"])
+            end_str = format_srt_time(entry["end"])
+            lines.append(f"{index}\n{start_str} --> {end_str}\n{text}\n")
+            index += 1
+        return "\n".join(lines)
+
+    def generate_vtt_content(self, subtitle_entries: list[dict]) -> str:
+        """Generates standard WebVTT subtitle file content."""
+        def format_vtt_time(sec: float) -> str:
+            if sec < 0:
+                sec = 0.0
+            h = int(sec // 3600)
+            m = int((sec % 3600) // 60)
+            s = int(sec % 60)
+            ms = int(round((sec - int(sec)) * 1000))
+            if ms >= 1000:
+                s += 1
+                ms = 0
+            if s >= 60:
+                m += 1
+                s = 0
+            if m >= 60:
+                h += 1
+                m = 0
+            return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
+
+        lines = ["WEBVTT\n"]
+        index = 1
+        for entry in subtitle_entries:
+            text = entry.get("text", "").strip()
+            if not text:
+                continue
+            start_str = format_vtt_time(entry["start"])
+            end_str = format_vtt_time(entry["end"])
+            lines.append(f"{index}\n{start_str} --> {end_str}\n{text}\n")
+            index += 1
+        return "\n".join(lines)
 
     def _burn_subtitles(self, input_video: Path, ass_path: Path, output_video: Path) -> None:
         escaped_path = ass_path.as_posix().replace(":", "\\:")
@@ -1654,16 +1821,44 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         cmd += ["-shortest", str(output)]
         return self._run_ffmpeg(cmd)
 
-    def _overlay_logo(self, input_video: Path, logo: Path, output_video: Path) -> bool:
-        """Overlay a semi-transparent logo in the bottom-right corner of the video."""
+    def _overlay_logo(
+        self,
+        input_video: Path,
+        logo: Path,
+        output_video: Path,
+        logo_height: int = 0,
+        position: str = "bottom-right",
+        margin: int = 30,
+        opacity: float = 0.85,
+    ) -> bool:
+        """Overlay a semi-transparent logo at a user-configurable corner of the video.
+
+        `logo_height` is the target height in pixels for the logo (aspect ratio
+        preserved). `position` is one of top-left / top-right / bottom-left /
+        bottom-right. `margin` is the distance in px from the chosen edges.
+        `opacity` controls the alpha (0..1).
+        """
+        if logo_height and logo_height > 0:
+            scale = f"scale=-2:{logo_height}"
+        else:
+            scale = "scale='min(ih*0.5\\,iw)':-2"
+        if "left" in position:
+            x_expr = str(margin)
+        else:
+            x_expr = f"W-w-{margin}"
+        if "top" in position:
+            y_expr = str(margin)
+        else:
+            y_expr = f"H-h-{margin}"
+        alpha = max(0.0, min(1.0, opacity))
         cmd = [
             settings.ffmpeg_path, "-y",
             "-i", str(input_video),
             "-i", str(logo),
             "-filter_complex",
-            "[1:v]scale='min(ih*0.12\\,iw)':-2[logo];"
-            "[0:v][logo]overlay=W-w-30:H-h-30:format=auto:enable='gte(t,0)'[vx];"
-            "[vx]format=yuv420p,colorchannelmixer=aa=0.85[v]",
+            f"[1:v]{scale},format=rgba,colorchannelmixer=aa={alpha:.2f}[logo];"
+            f"[0:v][logo]overlay={x_expr}:{y_expr}:format=auto:enable='gte(t,0)'[vx];"
+            f"[vx]format=yuv420p[v]",
             "-map", "[v]", "-map", "0:a?",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
             "-c:a", "copy", "-movflags", "+faststart",
@@ -1909,13 +2104,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             return False
 
     def _run_ffmpeg(self, cmd: list[str]) -> bool:
+        started = time.perf_counter()
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds, check=False
             )
+            elapsed = time.perf_counter() - started
+            label = self._ffmpeg_label(cmd)
             if result.returncode != 0:
-                logger.error("FFmpeg error: %s", result.stderr)
+                logger.error("FFmpeg error (%.2fs): %s", elapsed, result.stderr)
                 return False
+            logger.info("[ffmpeg] %s ok in %.2fs", label, elapsed)
             return True
         except FileNotFoundError:
             logger.error("FFmpeg not found. Install FFmpeg and add to PATH.")
@@ -1924,11 +2123,27 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.error("FFmpeg timed out after %ds: %s", settings.ffmpeg_timeout_seconds, " ".join(cmd[:6]))
             return False
 
+    @staticmethod
+    def _ffmpeg_label(cmd: list[str]) -> str:
+        if not cmd:
+            return "?"
+        last = cmd[-1]
+        base = os.path.basename(str(last))
+        return base if base else str(last)
+
     def _run_ffmpeg_with_result(self, cmd: list[str]) -> subprocess.CompletedProcess[str] | None:
+        started = time.perf_counter()
         try:
-            return subprocess.run(
+            result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds, check=False
             )
+            elapsed = time.perf_counter() - started
+            label = self._ffmpeg_label(cmd)
+            if result.returncode != 0:
+                logger.error("FFmpeg error (%.2fs): %s", elapsed, result.stderr)
+            else:
+                logger.info("[ffmpeg] %s ok in %.2fs", label, elapsed)
+            return result
         except FileNotFoundError:
             logger.error("FFmpeg not found. Install FFmpeg and add to PATH.")
             return None

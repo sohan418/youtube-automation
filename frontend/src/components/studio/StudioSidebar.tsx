@@ -1,4 +1,3 @@
-import { Zap } from "lucide-react";
 import { type StepDef, type StudioStep } from "./studioSteps";
 import "./StudioSidebar.css";
 
@@ -12,12 +11,6 @@ interface Props {
 export default function StudioSidebar({ activeTab, steps, done, onSelect }: Props) {
   return (
     <aside className="studio-sidebar">
-      <div className="sidebar-logo-row">
-        <div className="sidebar-logo">
-          <Zap size={16} />
-        </div>
-      </div>
-
       <div className="sidebar-steps">
         {steps.map((step) => {
           const isActive = step.key === activeTab;

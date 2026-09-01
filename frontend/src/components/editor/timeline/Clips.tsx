@@ -126,6 +126,11 @@ function TopRow({
       <span style={{ display: "inline-flex", color: "#fff", filter: "drop-shadow(0 1px 1px rgba(0,0,0,.7))" }}>
         {icon}
       </span>
+      {clip.muted && (
+        <span title="Audio muted" style={{ display: "inline-flex", color: "#ff8a94", filter: "drop-shadow(0 1px 1px rgba(0,0,0,.7))" }}>
+          <VolumeX size={10} />
+        </span>
+      )}
       {showLabel && (
         <span
           style={{

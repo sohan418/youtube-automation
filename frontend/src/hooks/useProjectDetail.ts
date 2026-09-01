@@ -3,6 +3,7 @@ import { api, API_BASE, mediaUrl } from "../api/client";
 import type {
   ExportResult,
   Idea,
+  LogoConfig,
   Project,
   Scene,
   Script,
@@ -113,11 +114,30 @@ export function useProjectDetail(projectId: number) {
   const [enableSubtitles, setEnableSubtitles] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState("shorts");
   const [subtitlePosition, setSubtitlePosition] = useState("bottom");
+  const [subtitleCustomY, setSubtitleCustomY] = useState<number | undefined>(undefined);
+
+  const handleSubtitlePositionChange = useCallback((position: string, customY?: number) => {
+    setSubtitlePosition(position);
+    if (customY != null) {
+      setSubtitleCustomY(customY);
+      const posStr = `custom:${customY}`;
+      api.updateProject(projectId, { caption_position: posStr }).catch(() => {});
+    } else {
+      api.updateProject(projectId, { caption_position: position }).catch(() => {});
+    }
+  }, [projectId]);
+
   const [subtitleColor, setSubtitleColor] = useState("#FFFF00");
   const [subtitleOutlineColor, setSubtitleOutlineColor] = useState("#000000");
   const [subtitleOutline, setSubtitleOutline] = useState(2.0);
   const [subtitleFontSize, setSubtitleFontSize] = useState<number | null>(null);
   const [logoOverlay, setLogoOverlay] = useState(false);
+  const [logoConfig, setLogoConfig] = useState<LogoConfig>({
+    logo_position: "bottom-right",
+    logo_size: 12,
+    logo_margin: 30,
+    logo_opacity: 0.85,
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("studio_sidebar_collapsed") === "true";
@@ -170,11 +190,21 @@ export function useProjectDetail(projectId: number) {
         setEnableSubtitles(proj.captions_enabled);
         setSubtitleStyle(proj.caption_style);
         setSubtitlePosition(proj.caption_position);
+        if (proj.caption_position?.startsWith("custom:")) {
+          const y = parseFloat(proj.caption_position.split(":")[1]);
+          if (!isNaN(y)) setSubtitleCustomY(y);
+        }
         setSubtitleColor(proj.caption_color);
         setSubtitleOutlineColor(proj.caption_outline_color);
         setSubtitleOutline(proj.caption_outline);
         setSubtitleFontSize(proj.caption_font_size);
         setLogoOverlay(proj.logo_overlay);
+        setLogoConfig({
+          logo_position: proj.logo_position,
+          logo_size: proj.logo_size,
+          logo_margin: proj.logo_margin,
+          logo_opacity: proj.logo_opacity,
+        });
         setIdeas(ideaList);
         const selectedIdea = ideaList.find((i) => i.is_selected);
         setScriptTopic((prev) => prev || selectedIdea?.title || proj.name);
@@ -333,6 +363,14 @@ export function useProjectDetail(projectId: number) {
     setLogoOverlay(value);
     try {
       const updated = await api.updateProject(projectId, { logo_overlay: value });
+      setProject(updated);
+    } catch {}
+  };
+
+  const saveLogoConfig = async (patch: Partial<LogoConfig>) => {
+    setLogoConfig((prev) => ({ ...prev, ...patch }));
+    try {
+      const updated = await api.updateProject(projectId, patch);
       setProject(updated);
     } catch {}
   };
@@ -580,19 +618,40 @@ export function useProjectDetail(projectId: number) {
         timeline: options?.timeline ?? timeline,
         subtitles: options?.subtitles ?? enableSubtitles,
         subtitle_style: options?.subtitle_style ?? subtitleStyle,
-        subtitle_position: options?.subtitle_position ?? subtitlePosition,
+        subtitle_position: options?.subtitle_position ?? (subtitleCustomY != null ? `custom:${subtitleCustomY}` : subtitlePosition),
         subtitle_color: options?.subtitle_color ?? subtitleColor,
         subtitle_outline_color: options?.subtitle_outline_color ?? subtitleOutlineColor,
         subtitle_outline: options?.subtitle_outline ?? subtitleOutline,
         subtitle_font_size: options?.subtitle_font_size !== undefined ? options.subtitle_font_size : subtitleFontSize,
         force_rebuild: options?.force_rebuild ?? false,
         logo_overlay: options?.logo_overlay ?? logoOverlay,
+        logo_position: logoConfig.logo_position,
+        logo_size: logoConfig.logo_size,
+        logo_margin: logoConfig.logo_margin,
+        logo_opacity: logoConfig.logo_opacity,
       });
       setSuccess(result.message);
       const finalStatus = await pollVideoStatus();
       if (finalStatus.error) throw new Error(finalStatus.error);
       setVideoStatus(null);
       setSuccess(finalStatus.output ? `Video built successfully → ${finalStatus.output}` : "Video built successfully.");
+    });
+  };
+
+  const importVideo = async (file: File) => {
+    await runAction("video-import", async () => {
+      const result = await api.importFinalVideo(projectId, file);
+      setVideoStatus({
+        running: false,
+        progress: 100,
+        stage: "done",
+        message: "Imported external final video",
+        output: result.output,
+        error: null,
+        updated_at: null,
+        scene_statuses: {},
+      });
+      setSuccess(result.message);
     });
   };
 
@@ -987,9 +1046,10 @@ export function useProjectDetail(projectId: number) {
     editingScript, creatingScript, scriptForm, showScrollTop, sidebarCollapsed,
     activeScript,
     enableSubtitles, setEnableSubtitles, subtitleStyle, setSubtitleStyle,
-    subtitlePosition, setSubtitlePosition, subtitleColor, setSubtitleColor,
+    subtitlePosition, setSubtitlePosition, subtitleCustomY, setSubtitleCustomY, handleSubtitlePositionChange, subtitleColor, setSubtitleColor,
     subtitleOutlineColor, setSubtitleOutlineColor, subtitleOutline, setSubtitleOutline,
     subtitleFontSize, setSubtitleFontSize, logoOverlay, setLogoOverlay, saveLogoOverlay,
+    logoConfig, setLogoConfig, saveLogoConfig,
     setActiveTab, setActiveSceneIdx, setError, setSuccess, setEditingSettings,
     setScriptTopic, setScriptForm, setCreatingScript, setEditingScript, setIdeaTopic, setSceneCount,
     setNewSceneNarration, setImageUrlInputs, setDragMedia, setDraggingOverScene,
@@ -1008,6 +1068,7 @@ export function useProjectDetail(projectId: number) {
     openSceneEdit, cancelSceneEdit, saveSceneEdit, clearScenes, updateSceneEffect,
     startRecording, toggleRecordingPause, stopRecording, handleAudioFileSelected,
     clearSceneAudio, combineAudioPreview, downloadCombinedAudio, audioPreviewUrl, formatRecordTime, buildVideo,
+    importVideo,
     handleTileDragOver, handleTileDrop, handleSceneDrop, handleUploadTileDrop, handlePaste,
     audioInputRef, uploadYouTube,
   };

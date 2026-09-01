@@ -61,6 +61,7 @@ const POSITIONS = [
   { value: "top", label: "Top" },
   { value: "center", label: "Center" },
   { value: "bottom", label: "Bottom" },
+  { value: "custom", label: "Custom (Draggable)" },
 ];
 
 const COLOR_PRESETS = [

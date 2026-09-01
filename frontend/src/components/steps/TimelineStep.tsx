@@ -123,6 +123,9 @@ interface Props {
   timeline: TimelineData | null;
   onTimelineChange: (tl: TimelineData) => void;
   onAddScene?: () => Promise<Scene | null>;
+  onActiveSceneChange?: (idx: number) => void;
+  onPlaybackStateChange?: (state: any) => void;
+  onSelectedClipInfoChange?: (info: any) => void;
 }
 
 export default function TimelineStep({
@@ -135,6 +138,9 @@ export default function TimelineStep({
   timeline,
   onTimelineChange,
   onAddScene,
+  onActiveSceneChange,
+  onPlaybackStateChange,
+  onSelectedClipInfoChange,
 }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -239,7 +245,10 @@ export default function TimelineStep({
           dirty={dirty}
           saved={saved}
           saving={saving}
+          onActiveSceneChange={onActiveSceneChange}
+          onPlaybackStateChange={onPlaybackStateChange}
           voiceOverruns={voiceOverruns}
+          onSelectedClipInfoChange={onSelectedClipInfoChange}
         />
       )}
 

@@ -45,9 +45,32 @@ async def lifespan(app: FastAPI):
             logging.info("Migrating database: adding logo_overlay column to projects table")
             conn.execute(text("ALTER TABLE projects ADD COLUMN logo_overlay BOOLEAN DEFAULT 0"))
             conn.commit()
+        _migrate_columns(
+            conn,
+            [
+                ("logo_position", "VARCHAR(20) DEFAULT 'bottom-right'"),
+                ("logo_size", "FLOAT DEFAULT 12.0"),
+                ("logo_margin", "INTEGER DEFAULT 30"),
+                ("logo_opacity", "FLOAT DEFAULT 0.85"),
+            ],
+            "projects",
+        )
 
     _seed_default_prompts()
     yield
+
+
+def _migrate_columns(conn, columns: list[tuple[str, str]], table: str) -> None:
+    """Add each column to `table` if it does not already exist."""
+    from sqlalchemy import text
+
+    for col, definition in columns:
+        try:
+            conn.execute(text(f"SELECT {col} FROM {table} LIMIT 1"))
+        except Exception:
+            logging.info(f"Migrating database: adding {col} column to {table} table")
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {definition}"))
+            conn.commit()
 
 
 def _seed_default_prompts():

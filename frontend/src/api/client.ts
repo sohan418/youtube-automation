@@ -41,6 +41,18 @@ export const api = {
     }),
   getProject: (id: number) =>
     request<import("../types").Project>(`/projects/${id}`),
+  getProjectLogo: (id: number, refresh?: boolean) =>
+    request<{ logo_url: string }>(`/projects/${id}/logo${refresh ? "?refresh=true" : ""}`),
+  getSrtUrl: (id: number) => `${API_BASE}/projects/${id}/subtitles/srt`,
+  getVttUrl: (id: number) => `${API_BASE}/projects/${id}/subtitles/vtt`,
+  uploadProjectLogo: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<{ logo_url: string }>(`/projects/${id}/logo`, {
+      method: "POST",
+      body: formData,
+    });
+  },
   updateProject: (id: number, data: Partial<import("../types").Project>) =>
     request<import("../types").Project>(`/projects/${id}`, {
       method: "PATCH",
@@ -449,6 +461,10 @@ export const api = {
       subtitle_font_size?: number | null;
       force_rebuild?: boolean;
       logo_overlay?: boolean;
+      logo_position?: import("../types").LogoPosition;
+      logo_size?: number;
+      logo_margin?: number;
+      logo_opacity?: number;
     },
   ) =>
     request<{ message: string; detail: string }>(
@@ -459,6 +475,17 @@ export const api = {
     request<import("../types").VideoStatus>(
       `/video/project/${projectId}/status`,
     ),
+  importFinalVideo: (projectId: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request<{
+      message: string;
+      output: string;
+      width: number | null;
+      height: number | null;
+      size_bytes: number;
+    }>(`/video/project/${projectId}/import`, { method: "POST", body: form });
+  },
 
   listThumbnails: (projectId: number) =>
     request<import("../types").Thumbnail[]>(`/thumbnails/project/${projectId}`),

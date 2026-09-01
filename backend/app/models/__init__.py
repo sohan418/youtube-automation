@@ -53,6 +53,10 @@ class Project(Base):
     caption_outline: Mapped[float] = mapped_column(Float, default=2.0)
     caption_font_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     logo_overlay: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    logo_position: Mapped[str] = mapped_column(String(20), default="bottom-right", nullable=False)
+    logo_size: Mapped[float] = mapped_column(Float, default=12.0, nullable=False)
+    logo_margin: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    logo_opacity: Mapped[float] = mapped_column(Float, default=0.85, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

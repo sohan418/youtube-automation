@@ -128,23 +128,27 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
         <p>Find your next video idea</p>
       </div>
 
-      {/* Input row */}
+      {/* Input card */}
       <div className="card ideas-input-card">
-        <div className="ideas-input-row">
-          <input
-            value={ideaTopic}
-            onChange={(e) => onTopicChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !actionLoading && onGenerate()}
-            placeholder="What do you want to make?"
-            className="ideas-topic-input"
-          />
-          <button className="btn-primary ideas-generate-btn" disabled={!!actionLoading} onClick={onGenerate}>
-            {actionLoading === "ideas" ? "Generating..." : <><Sparkles size={15} /> Generate with AI</>}
-          </button>
-        </div>
+        <textarea
+          value={ideaTopic}
+          onChange={(e) => onTopicChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              if (!actionLoading) onGenerate();
+            }
+          }}
+          placeholder="What do you want your video to be about? Enter a topic or detailed prompt... (Press Ctrl+Enter to generate)"
+          className="ideas-topic-textarea"
+          rows={3}
+        />
 
-        {/* Action buttons row */}
-        <div className="ideas-action-row">
+        {/* Action buttons toolbar below textarea */}
+        <div className="ideas-actions-toolbar">
+          <button className="btn-primary ideas-generate-btn" disabled={!!actionLoading} onClick={onGenerate}>
+            {actionLoading === "ideas" ? "Generating..." : <><Sparkles size={14} /> Generate</>}
+          </button>
           <button className="btn-secondary ideas-action-btn" onClick={() => setShowFreeAI(!showFreeAI)}>
             {showFreeAI ? "Hide Free AI" : "Free AI"}
           </button>
@@ -273,7 +277,7 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
         <div className="empty-state">
           <Lightbulb size={40} strokeWidth={1.5} className="ideas-empty-icon" />
           <div className="empty-state-title">No ideas yet</div>
-          <div className="empty-state-desc">Enter a topic above and click Generate with AI to brainstorm video ideas.</div>
+          <div className="empty-state-desc">Enter a topic above and click Generate to brainstorm video ideas.</div>
         </div>
       ) : (
         <div className="ideas-grid">

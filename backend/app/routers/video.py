@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import shutil
 import threading
 import urllib.parse
 
@@ -158,6 +160,90 @@ def video_build_status(project_id: int, db: Session = Depends(get_db)):
     return video_service.get_progress(project.slug)
 
 
+@router.post("/project/{project_id}/import")
+async def import_final_video(
+    project_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Replace the project's final video with an externally-edited video file.
+
+    The uploaded video is validated to contain a real video stream, then
+    written to the project's `video/final.mp4`. Because preview, YouTube
+    upload and export all read `final.mp4`, the imported video becomes the
+    new final video immediately.
+    """
+    from app.services.storage import storage_service
+    from app.services.video import video_service
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    valid_exts = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in valid_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid video format '{ext}'. Supported formats: {', '.join(sorted(valid_exts))}",
+        )
+
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    video_dir = storage_service.get_project_path(project.slug) / "video"
+    video_dir.mkdir(parents=True, exist_ok=True)
+
+    tmp = video_dir / "final_import.tmp"
+    tmp.write_bytes(content)
+
+    info = video_service._probe_video_info(tmp)
+    if not info or not info.get("width") or not info.get("height"):
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is not a valid video (no video stream detected).",
+        )
+
+    final = video_dir / "final.mp4"
+    # Atomically replace the existing final video (also releases a player lock
+    # by writing to a fresh file before swapping).
+    try:
+        os.replace(tmp, final)
+    except OSError:
+        shutil.copyfile(tmp, final)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    # Remove stale intermediate outputs so a rebuild / re-import is clean.
+    for name in ("final_watermarked.mp4", "final_subtitled.mp4"):
+        stale = video_dir / name
+        if stale.exists():
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+
+    video_service.set_progress(
+        project.slug, 100, "done", "Imported external final video",
+        running=False, output=f"projects/{project.slug}/video/final.mp4",
+    )
+
+    return {
+        "message": "Imported video successfully",
+        "output": f"projects/{project.slug}/video/final.mp4",
+        "width": info["width"],
+        "height": info["height"],
+        "size_bytes": len(content),
+    }
+
+
 def _load_timeline_payload(db: Session, project_id: int) -> dict | None:
     tl = db.query(Timeline).filter(Timeline.project_id == project_id).first()
     if not tl or not tl.data:
@@ -180,6 +266,10 @@ def _run_build(
     track_states: dict | None = None,
     background_music: str | None = None,
     music_volume: float = 0.12,
+    logo_position: str = "bottom-right",
+    logo_size: float = 12.0,
+    logo_margin: int = 30,
+    logo_opacity: float = 0.85,
 ) -> None:
     from app.services.video import video_service
 
@@ -202,6 +292,10 @@ def _run_build(
             timeline_clips=timeline_clips,
             track_states=track_states,
             logo_overlay=payload.logo_overlay,
+            logo_position=logo_position,
+            logo_size=logo_size,
+            logo_margin=logo_margin,
+            logo_opacity=logo_opacity,
         )
         db = SessionLocal()
         try:
@@ -287,9 +381,19 @@ def build_video(
     video_service.set_progress(
         project.slug, 0, "starting", "Starting video build..."
     )
+    logo_position = payload.logo_position or project.logo_position or "bottom-right"
+    logo_size = payload.logo_size if payload.logo_size is not None else (
+        project.logo_size if project.logo_size is not None else 12.0
+    )
+    logo_margin = payload.logo_margin if payload.logo_margin is not None else (
+        project.logo_margin if project.logo_margin is not None else 30
+    )
+    logo_opacity = payload.logo_opacity if payload.logo_opacity is not None else (
+        project.logo_opacity if project.logo_opacity is not None else 0.85
+    )
     thread = threading.Thread(
         target=_run_build,
-        args=(project_id, project.slug, scene_data, payload, timeline_clips, track_states, background_music, music_volume),
+        args=(project_id, project.slug, scene_data, payload, timeline_clips, track_states, background_music, music_volume, logo_position, logo_size, logo_margin, logo_opacity),
         daemon=True,
     )
     thread.start()

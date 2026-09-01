@@ -35,8 +35,9 @@ interface Props {
   canTrimEnd: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
-  textAreaRef: React.RefObject<HTMLTextAreaElement | null>;
+  textAreaRef?: React.RefObject<HTMLTextAreaElement | null>;
   sourceDuration?: number | null;
+  variant?: "bar" | "sidebar";
   onPatch: (patch: Partial<TimelineClip>, mergeKey?: string) => void;
   onSplit: () => void;
   onTrimStart: () => void;
@@ -99,6 +100,7 @@ export function Inspector({
   onDuplicate,
   onDelete,
   onMoveRow,
+  variant = "bar",
 }: Props) {
   const def = TRACK_BY_ID[clip.track];
   const isAudio = clip.track === "narration" || clip.track === "music";
@@ -108,6 +110,136 @@ export function Inspector({
       : (clip.video_path ?? clip.audio_path ?? `Scene ${orderIndex ?? ""}`)
           .split(/[\\/]/)
           .pop();
+
+  if (variant === "sidebar") {
+    return (
+      <div className="inspector-sidebar-card">
+        {/* Header */}
+        <div className="inspector-sidebar-header">
+          <span className="inspector-track-icon" style={{ background: def.softColor, borderColor: `${def.color}55`, color: def.color }}>
+            {clip.track === "video" ? (clip.video_path ? <Film size={13} /> : <ImageIcon size={13} />) : clip.track === "text" ? <Type size={13} /> : clip.track === "music" ? <Music2 size={13} /> : <Mic size={13} />}
+          </span>
+          <div className="inspector-title-group">
+            <strong title={name}>{name}</strong>
+            <span className="inspector-track-badge" style={{ color: def.color, background: def.softColor, borderColor: `${def.color}44` }}>{def.label}</span>
+          </div>
+          <div className="inspector-header-actions">
+            <button className="btn-secondary" onClick={() => onMoveRow(-1)} disabled={!canMoveUp} title="Move to track above" style={{ padding: "3px 5px", fontSize: 10 }}>▲</button>
+            <button className="btn-secondary" onClick={() => onMoveRow(1)} disabled={!canMoveDown} title="Move to track below" style={{ padding: "3px 5px", fontSize: 10 }}>▼</button>
+            <button className="btn-secondary" onClick={onDuplicate} title="Duplicate (Ctrl+D)"><Copy size={12} /></button>
+            <button className="btn-danger" onClick={onDelete} title="Delete (Del)"><Trash2 size={12} /></button>
+          </div>
+        </div>
+
+        {/* Text editor for captions */}
+        {clip.track === "text" && (
+          <div className="inspector-section">
+            <label className="inspector-section-label">Caption Content</label>
+            <textarea
+              ref={textAreaRef}
+              value={clip.text ?? ""}
+              onChange={(e) => onPatch({ text: e.target.value }, `txt:${clip.id}`)}
+              rows={2}
+              placeholder="Caption text…"
+              className="inspector-textarea"
+            />
+          </div>
+        )}
+
+        {/* Timing Section */}
+        <div className="inspector-section">
+          <label className="inspector-section-label">Timing & Duration</label>
+          <div className="inspector-grid-2">
+            <Field label="Start">
+              <input type="number" min={0} step={0.1} value={Number(clip.start.toFixed(2))} onChange={(e) => onPatch({ start: Math.max(0, parseFloat(e.target.value) || 0) }, `st:${clip.id}`)} style={numInputStyle} />
+            </Field>
+            <Field label="Duration">
+              <input type="number" min={0.1} step={0.1} value={Number(clip.duration.toFixed(2))} onChange={(e) => onPatch({ duration: Math.max(0.1, parseFloat(e.target.value) || 0.1) }, `du:${clip.id}`)} style={numInputStyle} />
+            </Field>
+          </div>
+          {sourceDuration != null && (
+            <div className="inspector-subtext">
+              Media Length: <strong>{sourceDuration.toFixed(1)}s</strong>
+            </div>
+          )}
+        </div>
+
+        {/* Audio Section */}
+        {clip.track !== "text" && (
+          <div className="inspector-section">
+            <div className="inspector-section-header">
+              <label className="inspector-section-label">Volume & Audio ({Math.round(clip.volume * 100)}%)</label>
+              <button
+                type="button"
+                title={clip.muted ? "Unmute clip audio" : "Mute clip audio"}
+                onClick={() => onPatch({ muted: !clip.muted }, `mu:${clip.id}`)}
+                className={`inspector-mute-btn ${clip.muted ? "is-muted" : ""}`}
+              >
+                {clip.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+              </button>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={clip.muted ? 0 : clip.volume}
+              disabled={clip.muted}
+              onChange={(e) => onPatch({ volume: parseFloat(e.target.value) }, `vo:${clip.id}`)}
+              className="inspector-volume-slider"
+            />
+            {isAudio && (
+              <div className="inspector-grid-2" style={{ marginTop: 6 }}>
+                <Field label="Audio In">
+                  <input type="number" min={0} step={0.1} value={Number((clip.audio_in ?? 0).toFixed(2))} onChange={(e) => onPatch({ audio_in: Math.max(0, parseFloat(e.target.value) || 0) }, `ai:${clip.id}`)} style={numInputStyle} />
+                </Field>
+                <Field label="Fade In">
+                  <input type="number" min={0} step={0.1} value={clip.fade_in ?? 0} onChange={(e) => onPatch({ fade_in: Math.max(0, parseFloat(e.target.value) || 0) }, `fi:${clip.id}`)} style={numInputStyle} />
+                </Field>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Motion Section */}
+        {clip.track === "video" && (
+          <div className="inspector-section">
+            <label className="inspector-section-label">Motion Effect</label>
+            <select
+              value={clip.motion_effect ?? "none"}
+              onChange={(e) => onPatch({ motion_effect: e.target.value })}
+              className="inspector-select"
+            >
+              {ZOOM_OPTIONS.map((z) => (
+                <option key={z.value} value={z.value}>{z.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="inspector-section">
+          <label className="inspector-section-label">Quick Actions</label>
+          <div className="inspector-actions-grid">
+            <button className="btn-secondary inspector-action-btn" onClick={onSplit} disabled={!canSplit} title="Split at playhead (S)">
+              <Scissors size={12} /> Split
+            </button>
+            <button className="btn-secondary inspector-action-btn" onClick={onTrimStart} disabled={!canTrimStart} title="Trim start to playhead">
+              ◀ Trim In
+            </button>
+            <button className="btn-secondary inspector-action-btn" onClick={onTrimEnd} disabled={!canTrimEnd} title="Trim end to playhead">
+              Trim Out ▶
+            </button>
+            {isAudio && onCleanSilence && (
+              <button className="btn-secondary inspector-action-btn" onClick={onCleanSilence} title="Detect silent space at clip edges and trim it">
+                <Waves size={12} /> Clean Silence
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

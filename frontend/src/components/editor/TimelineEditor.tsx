@@ -29,7 +29,7 @@ import {
   Save,
   Check,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Scene,
   TimelineClip,
@@ -51,7 +51,7 @@ import {
   TRACK_ROWS,
 } from "./timeline/constants";
 import { ContextMenu, type MenuItem } from "./timeline/ContextMenu";
-import { Inspector } from "./timeline/Inspector";
+import { PreviewPanel } from "./timeline/PreviewPanel";
 import { Ruler } from "./timeline/Ruler";
 import { fmtTime, freshId, round2 } from "./timeline/utils";
 import { useTimelineEngine } from "./timeline/useEngine";
@@ -75,6 +75,7 @@ interface Props {
   scenes: Scene[];
   mediaUrl: (path: string | null | undefined) => string;
   previewRatio?: VideoRatio;
+  showPreview?: boolean;
   projectId?: number;
   onAddScene?: () => Promise<Scene | null>;
   onChange: (tl: TimelineData) => void;
@@ -83,7 +84,16 @@ interface Props {
   dirty?: boolean;
   saved?: boolean;
   saving?: boolean;
+  onActiveSceneChange?: (idx: number) => void;
+  onPlaybackStateChange?: (state: {
+    time: number;
+    playing: boolean;
+    activeVideo: TimelineClip | null;
+    activeScene: Scene | null;
+    activeCaption: string | null;
+  }) => void;
   voiceOverruns?: number[];
+  onSelectedClipInfoChange?: (info: any) => void;
 }
 
 export default function TimelineEditor({
@@ -91,6 +101,7 @@ export default function TimelineEditor({
   scenes,
   mediaUrl,
   previewRatio: _previewRatio,
+  showPreview = false,
   projectId,
   onAddScene,
   onChange,
@@ -99,9 +110,13 @@ export default function TimelineEditor({
   dirty,
   saved,
   saving,
+  onActiveSceneChange,
+  onPlaybackStateChange,
   voiceOverruns,
+  onSelectedClipInfoChange,
 }: Props) {
   const E = useTimelineEngine(timeline, scenes, mediaUrl, onChange);
+  const [showPreviewState, setShowPreviewState] = useState(showPreview);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -123,6 +138,44 @@ export default function TimelineEditor({
   const t = E.time;
   const px = E.px;
 
+  const clipAtTime = (track: TimelineTrack, time: number): TimelineClip | null => {
+    let active: TimelineClip | null = null;
+    for (const c of E.clips) {
+      if (c.track !== track) continue;
+      if (time >= c.start && time < c.start + c.duration) {
+        if (!active || c.start > active.start) active = c;
+      }
+    }
+    return active;
+  };
+
+  const activeVideo = useMemo(() => clipAtTime("video", E.time), [E.clips, E.time]);
+  const activeCaption = useMemo(() => {
+    const c = clipAtTime("text", E.time);
+    return c?.text && c.text.trim() ? c.text.trim() : null;
+  }, [E.clips, E.time]);
+  const activeScene = activeVideo ? E.sceneById.get(activeVideo.scene_id) ?? null : null;
+
+  useEffect(() => {
+    if (activeScene && activeScene.id !== undefined && onActiveSceneChange) {
+      const idx = scenes.findIndex((s) => s.id === activeScene.id);
+      if (idx !== -1) {
+        onActiveSceneChange(idx);
+      }
+    }
+  }, [activeScene, scenes, onActiveSceneChange]);
+
+  useEffect(() => {
+    if (onPlaybackStateChange) {
+      onPlaybackStateChange({
+        time: E.time,
+        playing: E.playing,
+        activeVideo,
+        activeScene,
+        activeCaption,
+      });
+    }
+  }, [E.time, E.playing, activeVideo, activeScene, activeCaption, onPlaybackStateChange]);
 
 
   const sel = E.selected;
@@ -135,6 +188,53 @@ export default function TimelineEditor({
         : null,
     sel?.audio_path ? "audio" : "video",
   );
+
+  const ERef = useRef(E);
+  ERef.current = E;
+
+  const onSelectedClipInfoChangeRef = useRef(onSelectedClipInfoChange);
+  onSelectedClipInfoChangeRef.current = onSelectedClipInfoChange;
+
+  useEffect(() => {
+    const cb = onSelectedClipInfoChangeRef.current;
+    if (!cb) return;
+    if (sel && selDef) {
+      cb({
+        clip: sel,
+        orderIndex: sel.scene_id >= 0 ? ERef.current.sceneById.get(sel.scene_id)?.order_index : undefined,
+        canSplit: t > sel.start + MIN_DUR && t < sel.start + sel.duration - MIN_DUR,
+        canTrimStart: t > sel.start + MIN_DUR,
+        canTrimEnd: t < sel.start + sel.duration - MIN_DUR,
+        canMoveUp: !!ERef.current.adjacentRow(sel.track, -1),
+        canMoveDown: !!ERef.current.adjacentRow(sel.track, 1),
+        sourceDuration: selSrcDur,
+        onPatch: (patch: any, mergeKey?: string) => ERef.current.patchClip(sel.id, patch, mergeKey),
+        onSplit: () => ERef.current.splitClipAt(sel, t),
+        onTrimStart: () => ERef.current.trimSelectedEdge("start"),
+        onTrimEnd: () => ERef.current.trimSelectedEdge("end"),
+        onCleanSilence: sel.audio_path ? () => void ERef.current.removeSilentEdges(sel.id) : undefined,
+        onDuplicate: () => ERef.current.duplicateClip(sel),
+        onDelete: () => ERef.current.deleteClipOp(sel, ERef.current.rippleOn),
+        onMoveRow: (dir: -1 | 1) => ERef.current.moveClipRow(sel, dir),
+      });
+    } else {
+      cb(null);
+    }
+  }, [
+    sel?.id,
+    sel?.start,
+    sel?.duration,
+    sel?.volume,
+    sel?.muted,
+    sel?.text,
+    sel?.audio_in,
+    sel?.fade_in,
+    sel?.fade_out,
+    sel?.motion_effect,
+    selDef?.id,
+    selSrcDur,
+    t,
+  ]);
 
   const [dragDepth, setDragDepth] = useState(0);
   const [droppingFile, setDroppingFile] = useState<string | null>(null);
@@ -298,9 +398,18 @@ export default function TimelineEditor({
       {
         label: clip.muted ? "Unmute clip" : "Mute clip",
         icon: clip.muted ? <Volume2 size={13} /> : <VolumeX size={13} />,
-        disabled: !clip.audio_path,
+        disabled: !(clip.audio_path || clip.video_path || clip.track === "video"),
         onSelect: () => E.patchClip(clip.id, { muted: !clip.muted }),
       },
+      ...(clip.track === "video"
+        ? ([
+            {
+              label: E.rowStateOf("video").muted ? "Unmute all video scenes" : "Mute all video scenes",
+              icon: E.rowStateOf("video").muted ? <Volume2 size={13} /> : <VolumeX size={13} />,
+              onSelect: () => E.muteAllVideoClips(!E.rowStateOf("video").muted),
+            },
+          ] as MenuItem[])
+        : []),
       {
         label: "Delete",
         icon: <Trash2 size={13} />,
@@ -732,6 +841,18 @@ export default function TimelineEditor({
                 )}
                 <button
                   className="btn-secondary"
+                  onClick={() => {
+                    const isMuted = E.rowStateOf("video").muted;
+                    E.muteAllVideoClips(!isMuted);
+                    setSettingsOpen(false);
+                  }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", color: E.rowStateOf("video").muted ? "#ff8a94" : "#fff", cursor: "pointer" }}
+                >
+                  {E.rowStateOf("video").muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                  {E.rowStateOf("video").muted ? "Unmute All Video Scene Sounds" : "Mute All Video Scene Sounds"}
+                </button>
+                <button
+                  className="btn-secondary"
                   style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 8px", color: "var(--danger)", justifyContent: "flex-start", textAlign: "left", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}
                   onClick={() => {
                     E.clearMarkers();
@@ -762,6 +883,7 @@ export default function TimelineEditor({
         />
         {btn("Zoom in (+)", <ZoomIn size={14} />, () => E.zoomAt(1.3))}
         {btn("Fit timeline", <Maximize size={14} />, E.fitTimeline)}
+        {btn(showPreviewState ? "Hide Timeline Preview" : "Show Timeline Preview", showPreviewState ? <EyeOff size={14} /> : <Eye size={14} />, () => setShowPreviewState((v) => !v))}
         <span
           style={{
             fontSize: 10.5,
@@ -776,6 +898,27 @@ export default function TimelineEditor({
       </div>
 
      
+      {showPreviewState && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            minHeight: 0,
+          }}
+        >
+          <PreviewPanel
+            ratio={_previewRatio}
+            activeVideo={activeVideo}
+            activeCaption={activeCaption}
+            scene={activeScene}
+            time={E.time}
+            totalDuration={E.totalDuration}
+            playing={E.playing}
+            onTogglePlay={E.togglePlay}
+            mediaUrl={mediaUrl}
+          />
+        </div>
+      )}
 
       <div
         style={{
@@ -938,24 +1081,31 @@ export default function TimelineEditor({
                       <span style={{ flex: 1 }} />
                       <button
                         title={
-                          def.kind === "audio"
-                            ? rs.muted
-                              ? "Unmute track"
+                          rs.muted
+                            ? row.id === "video"
+                              ? "Unmute all video scene sounds"
+                              : "Unmute track"
+                            : row.id === "video"
+                              ? "Mute all video scene sounds"
                               : "Mute track"
-                            : rs.muted
-                              ? "Show track"
-                              : "Hide track"
                         }
-                        onClick={() => E.toggleRowFlag(row.id, "muted")}
+                        onClick={() => {
+                          if (row.id === "video") {
+                            E.muteAllVideoClips(!rs.muted);
+                          } else {
+                            E.toggleRowFlag(row.id, "muted");
+                          }
+                        }}
                         style={{
                           background: "transparent",
                           border: "none",
                           color: rs.muted ? "#ff8a94" : "#8e8e98",
                           padding: 2,
                           display: "inline-flex",
+                          cursor: "pointer",
                         }}
                       >
-                        {rs.muted ? <EyeOff size={12} /> : def.kind === "audio" ? <Volume2 size={12} /> : <Eye size={12} />}
+                        {rs.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
                       </button>
                       <button
                         title={rs.locked ? "Unlock track" : "Lock track"}
@@ -1158,37 +1308,7 @@ export default function TimelineEditor({
           </div>
       </div>
 
-      {sel && selDef && (
-        <Inspector
-          clip={sel}
-          orderIndex={
-            sel.scene_id >= 0
-              ? E.sceneById.get(sel.scene_id)?.order_index
-              : undefined
-          }
-          canSplit={
-            t > sel.start + MIN_DUR && t < sel.start + sel.duration - MIN_DUR
-          }
-          canTrimStart={t > sel.start + MIN_DUR}
-          canTrimEnd={t < sel.start + sel.duration - MIN_DUR}
-          canMoveUp={!!E.adjacentRow(sel.track, -1)}
-          canMoveDown={!!E.adjacentRow(sel.track, 1)}
-          textAreaRef={E.textAreaRef}
-          sourceDuration={selSrcDur}
-          onPatch={(patch, mergeKey) => E.patchClip(sel.id, patch, mergeKey)}
-          onSplit={() => E.splitClipAt(sel, t)}
-          onTrimStart={() => E.trimSelectedEdge("start")}
-          onTrimEnd={() => E.trimSelectedEdge("end")}
-          onCleanSilence={
-            sel.audio_path
-              ? () => void E.removeSilentEdges(sel.id)
-              : undefined
-          }
-          onDuplicate={() => E.duplicateClip(sel)}
-          onDelete={() => E.deleteClipOp(sel, E.rippleOn)}
-          onMoveRow={(dir) => E.moveClipRow(sel, dir)}
-        />
-      )}
+
 
       {menu && (
         <ContextMenu
