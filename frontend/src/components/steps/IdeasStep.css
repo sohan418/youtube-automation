@@ -267,6 +267,31 @@
   color: var(--accent);
 }
 
+.ideas-idea-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ideas-idea-delete-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 0.25rem 0.45rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.ideas-idea-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
 .ideas-idea-use-btn {
   font-size: 0.72rem;
   padding: 0.25rem 0.6rem;

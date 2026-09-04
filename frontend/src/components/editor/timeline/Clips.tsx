@@ -146,7 +146,12 @@ function TopRow({
           {label}
         </span>
       )}
-      <span style={{ marginLeft: "auto", display: "inline-flex", gap: 3 }}>
+      <span style={{ marginLeft: "auto", display: "inline-flex", gap: 3, alignItems: "center" }}>
+        {clip.speed && clip.speed !== 1 && (
+          <span title={`Playback speed: ${clip.speed}x`} style={{ fontSize: 9, fontWeight: 700, background: "rgba(99,102,241,0.3)", color: "#a5b4fc", padding: "1px 3px", borderRadius: 3, border: "1px solid rgba(165,180,252,0.4)" }}>
+            ⚡{clip.speed}x
+          </span>
+        )}
         {clip.muted && <VolumeX size={10} color="#ffb4b4" />}
         {clip.locked && <Lock size={10} color="#ffd166" />}
         <Chip>{clip.duration.toFixed(1)}s</Chip>

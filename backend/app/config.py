@@ -1,4 +1,7 @@
+import os
 import re
+import tempfile
+import threading
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -6,6 +9,7 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+_env_file_lock = threading.Lock()
 
 
 class Settings(BaseSettings):
@@ -79,21 +83,54 @@ class Settings(BaseSettings):
     def resolve_path(self, relative: str) -> Path:
         return (BACKEND_DIR / relative).resolve()
 
-    def update_api_key(self, field: str, value: str) -> None:
-        env_name = field.upper()
-        setattr(self, field, value.strip())
-        env_path = BACKEND_DIR / ".env"
-        if not env_path.exists():
-            env_path.write_text(f"{env_name}={value.strip()}\n", encoding="utf-8")
+    def update_api_keys(self, updates: dict[str, str]) -> None:
+        """Atomically update multiple keys in memory and safely persist to .env with file locking."""
+        if not updates:
             return
-        lines = env_path.read_text(encoding="utf-8").splitlines()
-        pattern = re.compile(rf"^\s*{re.escape(env_name)}\s*=")
-        value_line = f"{env_name}={value.strip()}"
-        if any(pattern.match(line) for line in lines):
-            lines = [value_line if pattern.match(line) else line for line in lines]
-        else:
-            lines.append(value_line)
-        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        with _env_file_lock:
+            clean_updates: dict[str, str] = {}
+            for field, val in updates.items():
+                val_str = str(val or "").strip()
+                setattr(self, field, val_str)
+                clean_updates[field.upper()] = val_str
+
+            env_path = BACKEND_DIR / ".env"
+            lines: list[str] = []
+            if env_path.exists():
+                try:
+                    lines = env_path.read_text(encoding="utf-8").splitlines()
+                except Exception:
+                    lines = []
+
+            for env_name, val_str in clean_updates.items():
+                pattern = re.compile(rf"^\s*{re.escape(env_name)}\s*=")
+                value_line = f"{env_name}={val_str}"
+                found = False
+                for i, line in enumerate(lines):
+                    if pattern.match(line):
+                        lines[i] = value_line
+                        found = True
+                        break
+                if not found:
+                    lines.append(value_line)
+
+            content = "\n".join(lines).strip() + "\n"
+            temp_fd, temp_path = tempfile.mkstemp(dir=BACKEND_DIR, prefix=".env_tmp_")
+            try:
+                with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                    f.write(content)
+                os.replace(temp_path, env_path)
+            except Exception:
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+                raise
+
+    def update_api_key(self, field: str, value: str) -> None:
+        self.update_api_keys({field: value})
 
 
 settings = Settings()

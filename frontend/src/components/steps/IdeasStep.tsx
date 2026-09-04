@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Sparkles, Download, Upload, X, ArrowRight, Lightbulb, Play, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Download, Upload, X, ArrowRight, Lightbulb, Play, ChevronDown, ChevronUp, Copy, Check, Trash2 } from "lucide-react";
 import type { Idea, YouTubeVideo } from "../../types";
 import { api } from "../../api/client";
 import FreeAIGuide from "../editors/FreeAIGuide";
@@ -15,8 +15,10 @@ interface Props {
   onTopicChange: (v: string) => void;
   onGenerate: () => void;
   onSelect: (id: number) => void;
+  onDeleteIdea?: (id: number) => void;
   onFreeAIResponse?: (ideas: { title: string; description: string; category?: string; trending_score?: number }[]) => void;
   recentVideos?: YouTubeVideo[];
+  onOpenSettings?: () => void;
 }
 
 function extractJsonArray(text: string): any[] | null {
@@ -68,14 +70,15 @@ function parseFreeAIResponse(text: string): { title: string; description: string
 
 const CATEGORIES = ["Trending", "AI", "Education", "Comedy", "Facts", "Gaming", "Technology", "Science"];
 
-export default function IdeasStep({ projectId, projectLanguage, projectCategory, ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onFreeAIResponse, recentVideos }: Props) {
+export default function IdeasStep({ projectId, projectLanguage, projectCategory, ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onDeleteIdea, onFreeAIResponse, recentVideos, onOpenSettings }: Props) {
   const [showFreeAI, setShowFreeAI] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [previewIdea, setPreviewIdea] = useState<Idea | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [showRecentVideos, setShowRecentVideos] = useState(false);
+  const [showRecentVideos, setShowRecentVideos] = useState(true);
   const [dynamicPrompt, setDynamicPrompt] = useState<{ system: string; user: string } | null>(null);
+  const [copiedJson, setCopiedJson] = useState(false);
 
   useEffect(() => {
     if (!showFreeAI) return;
@@ -104,6 +107,18 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
       setImportText("");
       setShowImport(false);
     }
+  };
+
+  const handleCopyJson = () => {
+    const data = ideas.map((i) => ({
+      title: i.title,
+      description: i.description || "",
+      category: i.category || "",
+      trending_score: i.trending_score ?? 0,
+    }));
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    setCopiedJson(true);
+    setTimeout(() => setCopiedJson(false), 2000);
   };
 
   const downloadFile = (content: string, filename: string, type: string) => {
@@ -157,10 +172,11 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
           </button>
           {ideas.length > 0 && (
             <>
-              <button className="btn-secondary ideas-action-btn-flex" onClick={() => downloadFile(JSON.stringify(ideas.map((i) => ({ title: i.title, description: i.description, category: i.category })), null, 2), "ideas.json", "application/json")}>
-                <Download size={11} /> JSON
+              <button className="btn-secondary ideas-action-btn-flex" onClick={handleCopyJson}>
+                {copiedJson ? <Check size={11} color="#10b981" /> : <Copy size={11} />}
+                {copiedJson ? "Copied!" : "Copy JSON"}
               </button>
-              <button className="btn-secondary ideas-action-btn-flex" onClick={() => downloadFile(ideas.map((i, idx) => `${idx + 1}. ${i.title}\n${i.description}`).join("\n\n"), "ideas.txt", "text/plain")}>
+              <button className="btn-secondary ideas-action-btn-flex" onClick={() => downloadFile(ideas.map((i, idx) => `${idx + 1}. ${i.title}${i.trending_score ? ` (Score: ${i.trending_score})` : ""}\n${i.description || ""}`).join("\n\n"), "ideas.txt", "text/plain")}>
                 <Download size={11} /> Text
               </button>
             </>
@@ -180,7 +196,7 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
       )}
 
       {/* Recent Videos from YouTube */}
-      {recentVideos && recentVideos.length > 0 && (
+      {recentVideos && recentVideos.length > 0 ? (
         <div className="card ideas-recent-card">
           <button
             className="ideas-recent-toggle"
@@ -188,7 +204,7 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
           >
             <Play size={16} color="#ff0000" />
             <span className="ideas-recent-title">
-              Your Recent Videos ({recentVideos.length})
+              Your Channel's Recent 10 Videos ({recentVideos.length})
             </span>
             {showRecentVideos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -216,10 +232,24 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
                 </div>
               ))}
               <p className="ideas-recent-note">
-                AI uses these as context to generate new, different ideas.
+                AI automatically uses these 10 recent videos as context to generate unique, brand-new ideas!
               </p>
             </div>
           )}
+        </div>
+      ) : (
+        <div
+          className="card ideas-recent-card"
+          style={{ opacity: 0.95, cursor: onOpenSettings ? "pointer" : "default" }}
+          onClick={onOpenSettings}
+          title="Click to open Settings & connect YouTube channel"
+        >
+          <div className="ideas-recent-toggle">
+            <Play size={16} color="#ff0000" />
+            <span className="ideas-recent-title" style={{ fontSize: "0.82rem", color: "var(--primary)" }}>
+              YouTube Channel Context: <u>Click here to Connect YouTube in Settings</u> to auto-sync your latest 10 channel videos as AI context!
+            </span>
+          </div>
         </div>
       )}
 
@@ -315,13 +345,27 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
                     </span>
                   )}
                 </div>
-                <button
-                  className={`${idea.is_selected ? "btn-primary" : "btn-secondary"} ideas-idea-use-btn`}
-                  disabled={!!actionLoading}
-                  onClick={(e) => { e.stopPropagation(); onSelect(idea.id); }}
-                >
-                  {idea.is_selected ? "Selected" : <>Use Idea <ArrowRight size={11} /></>}
-                </button>
+                <div className="ideas-idea-actions">
+                  {onDeleteIdea && (
+                    <button
+                      className="ideas-idea-delete-btn"
+                      title="Delete Idea"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteIdea(idea.id);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                  <button
+                    className={`${idea.is_selected ? "btn-primary" : "btn-secondary"} ideas-idea-use-btn`}
+                    disabled={!!actionLoading}
+                    onClick={(e) => { e.stopPropagation(); onSelect(idea.id); }}
+                  >
+                    {idea.is_selected ? "Selected" : <>Use Idea <ArrowRight size={11} /></>}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -357,6 +401,18 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
               <span>Format: YouTube Video</span>
             </div>
             <div className="ideas-preview-actions">
+              {onDeleteIdea && (
+                <button
+                  className="ideas-idea-delete-btn"
+                  title="Delete Idea"
+                  onClick={() => {
+                    onDeleteIdea(previewIdea.id);
+                    setPreviewIdea(null);
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
               <button className="btn-secondary" onClick={() => setPreviewIdea(null)}>Close</button>
               <button
                 className="btn-primary ideas-preview-use-btn"

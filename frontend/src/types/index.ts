@@ -251,6 +251,7 @@ export interface TimelineClip {
   muted?: boolean;
   fade_in?: number;
   fade_out?: number;
+  speed?: number;
 }
 
 export type TimelineTrackState = { muted: boolean; locked: boolean };

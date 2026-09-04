@@ -201,6 +201,56 @@ export function Inspector({
           </div>
         )}
 
+        {/* Playback Speed Section */}
+        {clip.track === "video" && (
+          <div className="inspector-section">
+            <div className="inspector-section-header">
+              <label className="inspector-section-label">Playback Speed ({(clip.speed ?? 1).toFixed(2)}x)</label>
+              {(clip.speed ?? 1) !== 1 && (
+                <button
+                  type="button"
+                  title="Reset speed to 1x"
+                  onClick={() => onPatch({ speed: 1.0 }, `sp:${clip.id}`)}
+                  style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.7rem", cursor: "pointer" }}
+                >
+                  Reset 1x
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.4rem" }}>
+              {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onPatch({ speed: s }, `sp:${clip.id}`)}
+                  style={{
+                    flex: 1,
+                    padding: "0.2rem 0.1rem",
+                    fontSize: "0.68rem",
+                    borderRadius: "4px",
+                    border: `1px solid ${(clip.speed ?? 1.0) === s ? "var(--primary)" : "var(--border)"}`,
+                    background: (clip.speed ?? 1.0) === s ? "rgba(99, 102, 241, 0.2)" : "transparent",
+                    color: (clip.speed ?? 1.0) === s ? "var(--primary)" : "var(--text-muted)",
+                    cursor: "pointer",
+                    fontWeight: (clip.speed ?? 1.0) === s ? 700 : 400,
+                  }}
+                >
+                  {s}x
+                </button>
+              ))}
+            </div>
+            <input
+              type="range"
+              min={0.25}
+              max={3.0}
+              step={0.05}
+              value={clip.speed ?? 1.0}
+              onChange={(e) => onPatch({ speed: parseFloat(e.target.value) }, `sp:${clip.id}`)}
+              className="inspector-volume-slider"
+            />
+          </div>
+        )}
+
         {/* Motion Section */}
         {clip.track === "video" && (
           <div className="inspector-section">
@@ -506,6 +556,19 @@ export function Inspector({
               }
               style={{ width: 96, accentColor: THEME.accent, cursor: "pointer" }}
             />
+          </Field>
+        )}
+        {clip.track === "video" && (
+          <Field label={`Speed ${(clip.speed ?? 1).toFixed(2)}x`}>
+            <select
+              value={clip.speed ?? 1.0}
+              onChange={(e) => onPatch({ speed: parseFloat(e.target.value) }, `sp:${clip.id}`)}
+              style={{ width: 70, padding: "3px 5px", fontSize: 11.5 }}
+            >
+              {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
+                <option key={s} value={s}>{s}x</option>
+              ))}
+            </select>
           </Field>
         )}
         {clip.track === "video" && (

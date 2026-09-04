@@ -198,7 +198,9 @@ export function useTimelineEngine(
       const kind = c.audio_path ? "audio" : "video";
       const d = getCachedMediaDuration(mediaUrl(url), kind);
       if (d == null || !(d > 0)) return Infinity;
-      return Math.max(MIN_DUR, d - (c.audio_path ? c.audio_in ?? 0 : 0));
+      const speed = c.speed || 1.0;
+      const rawMax = d - (c.audio_path ? c.audio_in ?? 0 : 0);
+      return Math.max(MIN_DUR, rawMax / speed);
     },
     [mediaUrl],
   );
@@ -229,11 +231,31 @@ export function useTimelineEngine(
   const patchClip = useCallback(
     (id: string, patch: Partial<TimelineClip>, mergeKey?: string) => {
       const nextPatch = { ...patch };
-      if (typeof nextPatch.duration === "number") {
-        const target = clipsRef.current.find((c) => c.id === id);
-        if (target) {
+      const target = clipsRef.current.find((c) => c.id === id);
+      if (target) {
+        if (
+          typeof nextPatch.speed === "number" &&
+          isFinite(nextPatch.speed) &&
+          nextPatch.speed > 0
+        ) {
+          const oldSpeed = target.speed || 1.0;
+          const newSpeed = nextPatch.speed;
+          if (
+            newSpeed !== oldSpeed &&
+            typeof nextPatch.duration !== "number"
+          ) {
+            const baseMediaLength = target.duration * oldSpeed;
+            const newDuration = Math.max(
+              MIN_DUR,
+              round2(baseMediaLength / newSpeed),
+            );
+            nextPatch.duration = newDuration;
+          }
+        }
+        if (typeof nextPatch.duration === "number") {
+          const updatedClip = { ...target, ...nextPatch };
           nextPatch.duration = round2(
-            Math.min(nextPatch.duration, srcCapOf(target)),
+            Math.min(nextPatch.duration, srcCapOf(updatedClip)),
           );
           if (nextPatch.duration < MIN_DUR) nextPatch.duration = MIN_DUR;
         }
@@ -532,6 +554,7 @@ export function useTimelineEngine(
           src: mediaUrl(c.audio_path),
           vol: clamp(c.volume * fadeGain(c, t - c.start), 0, 1),
           offset: Math.max(0, (c.audio_in ?? 0) + (t - c.start)),
+          speed: c.speed || 1.0,
         });
       }
       if (want.size === 0) {
@@ -545,6 +568,7 @@ export function useTimelineEngine(
             src: mediaUrl(srcFile),
             vol: clamp(c.volume * fadeGain(c, t - c.start), 0, 1),
             offset: Math.max(0, (c.audio_in ?? 0) + (t - c.start)),
+            speed: c.speed || 1.0,
           });
           break;
         }
@@ -571,6 +595,7 @@ export function useTimelineEngine(
           }
         }
         el.volume = cfg.vol;
+        el.playbackRate = (cfg as any).speed || 1.0;
         if (playingRef.current) {
           if (Math.abs(el.currentTime - cfg.offset) > 0.35) {
             try {

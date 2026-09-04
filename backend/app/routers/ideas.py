@@ -151,3 +151,14 @@ def select_idea(idea_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(idea)
     return idea
+
+
+@router.delete("/{idea_id}")
+def delete_idea(idea_id: int, db: Session = Depends(get_db)):
+    idea = db.query(Idea).filter(Idea.id == idea_id).first()
+    if not idea:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    db.delete(idea)
+    db.commit()
+    return {"message": "Idea deleted", "id": idea_id}

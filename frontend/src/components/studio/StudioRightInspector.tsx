@@ -223,6 +223,54 @@ export default function StudioRightInspector({ clipInfo }: Props) {
                 />
               </div>
 
+              {clip.track === "video" && (
+                <div className="card-group-field" style={{ marginTop: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label className="field-label">Playback Speed ({(clip.speed ?? 1).toFixed(2)}x)</label>
+                    {(clip.speed ?? 1) !== 1 && (
+                      <button
+                        type="button"
+                        onClick={() => onPatch({ speed: 1.0 }, `sp:${clip.id}`)}
+                        style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.7rem", cursor: "pointer" }}
+                      >
+                        Reset 1x
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.25rem", margin: "4px 0" }}>
+                    {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => onPatch({ speed: s }, `sp:${clip.id}`)}
+                        style={{
+                          flex: 1,
+                          padding: "0.2rem 0.1rem",
+                          fontSize: "0.68rem",
+                          borderRadius: "4px",
+                          border: `1px solid ${(clip.speed ?? 1.0) === s ? "var(--primary)" : "var(--border)"}`,
+                          background: (clip.speed ?? 1.0) === s ? "rgba(99, 102, 241, 0.25)" : "transparent",
+                          color: (clip.speed ?? 1.0) === s ? "var(--primary)" : "var(--text-muted)",
+                          cursor: "pointer",
+                          fontWeight: (clip.speed ?? 1.0) === s ? 700 : 400,
+                        }}
+                      >
+                        {s}x
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={3.0}
+                    step={0.05}
+                    value={clip.speed ?? 1.0}
+                    onChange={(e) => onPatch({ speed: parseFloat(e.target.value) }, `sp:${clip.id}`)}
+                    className="right-inspector-slider"
+                  />
+                </div>
+              )}
+
               {isAudio && (
                 <>
                   <div className="card-group-grid-2">
@@ -339,6 +387,54 @@ export default function StudioRightInspector({ clipInfo }: Props) {
               {sourceDuration != null && (
                 <div className="right-subtext">
                   Actual Media File Length: <strong>{sourceDuration.toFixed(1)}s</strong>
+                </div>
+              )}
+
+              {clip.track === "video" && (
+                <div style={{ marginTop: 12 }}>
+                  <div className="card-group-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Playback Speed ({(clip.speed ?? 1).toFixed(2)}x)</span>
+                    {(clip.speed ?? 1) !== 1 && (
+                      <button
+                        type="button"
+                        onClick={() => onPatch({ speed: 1.0 }, `sp:${clip.id}`)}
+                        style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.7rem", cursor: "pointer" }}
+                      >
+                        Reset 1x
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.25rem", margin: "6px 0" }}>
+                    {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => onPatch({ speed: s }, `sp:${clip.id}`)}
+                        style={{
+                          flex: 1,
+                          padding: "0.25rem 0.1rem",
+                          fontSize: "0.68rem",
+                          borderRadius: "4px",
+                          border: `1px solid ${(clip.speed ?? 1.0) === s ? "var(--primary)" : "var(--border)"}`,
+                          background: (clip.speed ?? 1.0) === s ? "rgba(99, 102, 241, 0.25)" : "transparent",
+                          color: (clip.speed ?? 1.0) === s ? "var(--primary)" : "var(--text-muted)",
+                          cursor: "pointer",
+                          fontWeight: (clip.speed ?? 1.0) === s ? 700 : 400,
+                        }}
+                      >
+                        {s}x
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={3.0}
+                    step={0.05}
+                    value={clip.speed ?? 1.0}
+                    onChange={(e) => onPatch({ speed: parseFloat(e.target.value) }, `sp:${clip.id}`)}
+                    style={{ width: "100%", accentColor: "var(--primary)", cursor: "pointer" }}
+                  />
                 </div>
               )}
 

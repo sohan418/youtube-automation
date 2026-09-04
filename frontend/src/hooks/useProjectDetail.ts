@@ -402,6 +402,14 @@ export function useProjectDetail(projectId: number) {
     });
   };
 
+  const deleteIdea = async (ideaId: number) => {
+    await runAction("delete-idea", async () => {
+      await api.deleteIdea(ideaId);
+      setIdeas((prev) => prev.filter((i) => i.id !== ideaId));
+      setSuccess("Idea deleted");
+    });
+  };
+
   const importFreeIdeas = async (items: { title: string; description: string; category?: string; trending_score?: number }[]) => {
     await runAction("import-ideas", async () => {
       await api.importIdeas(projectId, items);
@@ -1062,7 +1070,7 @@ export function useProjectDetail(projectId: number) {
     setSelectedVoiceRate, setClipboardImageId,
     toggleSidebarCollapse,
     runAction, openSettings, saveSettings, saveCaptions, loadAll,
-    generateIdeas, selectIdea, importFreeIdeas, generateScript, openScriptEdit,
+    generateIdeas, selectIdea, deleteIdea, importFreeIdeas, generateScript, openScriptEdit,
     saveScript, createScript, generateAllVoice, generateSceneVoice,
     addSceneImageUrl, handleImageFileSelected, applyImageCrop, generateSceneImage,
     handleVideoFileSelected, applyVideoUpload, removeSceneVideo, removeSceneImage,

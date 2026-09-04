@@ -67,6 +67,7 @@ export const PreviewPanel = memo(function PreviewPanel({
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !activeVideo?.video_path) return;
+    el.playbackRate = activeVideo.speed || 1.0;
 
     const seekTo = (t: number) => {
       if (!isFinite(t)) return;

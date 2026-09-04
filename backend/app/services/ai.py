@@ -335,46 +335,91 @@ class AIService:
             return json.loads(self._mock_script(prompts["user"]))
 
     def build_script_prompt(
-        self, topic: str, language: str, target_duration_minutes: int,
+        self, topic: str, language: str, target_duration_minutes: float | int = 1,
     ) -> dict[str, str]:
-        system = "You are an expert YouTube scriptwriter. Write engaging scripts as JSON."
-        user = (
-            f"Write a {target_duration_minutes}-minute YouTube script about: {topic}. "
-            f"Language: {language}. Include hook, body, and ending. "
-            'Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}'
-        )
+        if float(target_duration_minutes) <= 1.5:
+            system = (
+                "You are an expert YouTube Shorts & Reels scriptwriter. Write ultra-concise, "
+                "high-impact scripts for vertical short videos up to 90 seconds. Hook the viewer in "
+                "the first 1-3 seconds. Use fast pacing, relatable examples, and short punchy sentences."
+            )
+            user = (
+                f"Write a YouTube Shorts script (up to 90 seconds total, max 12 scenes) about: {topic}.\n"
+                f"Language: {language}.\n\n"
+                "REQUIRED SCRIPT FLOW STRUCTURE:\n"
+                "1. Starting Hook (1-3 sec): High-impact opening statement/question to stop the scroll.\n"
+                "2. Example / Visual Scenario: A fast, relatable visual example or scenario.\n"
+                "3. Short Explanation: Concise core explanation & key takeaways.\n"
+                "4. End Hook & Closing: Brief closing statement leading directly into the mandatory ending CTA.\n\n"
+                "MANDATORY ENDING SCENE:\n"
+                "The 'ending' field MUST ALWAYS be exactly:\n"
+                "\"वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!\" (or target language equivalent).\n\n"
+                "Word count: Keep total narration under 200 words (~90 seconds spoken).\n"
+                'Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!"}'
+            )
+        else:
+            system = "You are an expert YouTube scriptwriter. Write engaging scripts as JSON."
+            user = (
+                f"Write a {target_duration_minutes}-minute YouTube script about: {topic}. "
+                f"Language: {language}. Include hook, body, and ending. "
+                'Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}'
+            )
         return {"system": system, "user": user}
 
     def build_scenes_prompt(
         self, script_body: str, hook: str, ending: str, language: str = "en",
         count: int | None = None, ratio: str = "16:9",
     ) -> dict[str, str]:
-        system = (
-            "You are a video director. Break scripts into scenes as JSON. "
-            "Each scene has a 'narration', an 'image_prompt', and a 'video_prompt'. "
-            "Narrations are spoken voice-over text ONLY — never include instructions, "
-            "JSON, or any metadata in them. Keep each narration short (one or two "
-            "sentences). If a section of the script is long, split it into multiple scenes. "
-            "Write every narration in the requested language; image prompts stay in English. "
-            "Both the image_prompt and video_prompt MUST always mention the aspect ratio "
-            f"'{ratio}' so every scene stays consistent."
-        )
+        is_shorts = (ratio == "9:16")
         lang_name = _LANGUAGE_NAMES.get(language, language or "English")
-        count_text = (
-            f"Split the script into EXACTLY {count} scenes."
-            if count
-            else "Split the script into a natural number of scenes based on the content."
-        )
-        user = (
-            f"Break this script into scenes. Each scene needs narration, an image prompt, "
-            f"and a video prompt.\n\n"
-            f"Language: {language} ({lang_name})\n\n"
-            f"Aspect ratio: {ratio}\n\n"
-            f"Write all narrations in {lang_name}.\n\n"
-            f"{count_text}\n\n"
-            f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
-            'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
-        )
+
+        if is_shorts:
+            system = (
+                "You are a YouTube Shorts video director. Break scripts into quick, "
+                "visually dynamic scenes for a 9:16 vertical video. Each scene is 3-8 "
+                "seconds long. Narrations are spoken voice-over ONLY — never include instructions, "
+                "JSON, or metadata. Image prompts must describe bold, close-up, vertically-framed compositions. "
+                "Both image_prompt and video_prompt MUST mention the 9:16 vertical aspect ratio."
+            )
+            max_scenes = count if count else 12
+            user = (
+                f"Break this Shorts script into MAX {max_scenes} SCENES for a ~90-second Short video.\n\n"
+                f"Language: {language} ({lang_name})\n\n"
+                f"Aspect ratio: 9:16 (vertical / Shorts)\n\n"
+                "SCENE FLOW STRUCTURE (Max 12 scenes total):\n"
+                "- Scene 1: Starting Hook (1-3 seconds)\n"
+                "- Scene 2: Example / Visual scenario\n"
+                "- Scenes 3-11: Short Explanation breakdown\n"
+                "- Final Scene: MANDATORY ENDING CTA: \"वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!\" (or target language equivalent).\n\n"
+                f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
+                'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
+            )
+        else:
+            system = (
+                "You are a video director. Break scripts into scenes as JSON. "
+                "Each scene has a 'narration', an 'image_prompt', and a 'video_prompt'. "
+                "Narrations are spoken voice-over text ONLY — never include instructions, "
+                "JSON, or any metadata in them. Keep each narration short (one or two "
+                "sentences). If a section of the script is long, split it into multiple scenes. "
+                "Write every narration in the requested language; image prompts stay in English. "
+                "Both the image_prompt and video_prompt MUST always mention the aspect ratio "
+                f"'{ratio}' so every scene stays consistent."
+            )
+            count_text = (
+                f"Split the script into EXACTLY {count} scenes."
+                if count
+                else "Split the script into a natural number of scenes based on the content."
+            )
+            user = (
+                f"Break this script into scenes. Each scene needs narration, an image prompt, "
+                f"and a video prompt.\n\n"
+                f"Language: {language} ({lang_name})\n\n"
+                f"Aspect ratio: {ratio}\n\n"
+                f"Write all narrations in {lang_name}.\n\n"
+                f"{count_text}\n\n"
+                f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
+                'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
+            )
         return {"system": system, "user": user}
 
     def generate_scenes(
@@ -406,6 +451,22 @@ class AIService:
                     "video_prompt": video_prompt,
                 }
             )
+
+        if ratio == "9:16":
+            if len(scenes) > 12:
+                scenes = scenes[:12]
+            mandatory_cta = "वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!"
+            if scenes and mandatory_cta not in scenes[-1]["narration"]:
+                # Ensure final scene has ending CTA for Shorts
+                if "Like" not in scenes[-1]["narration"] and "Subscribe" not in scenes[-1]["narration"]:
+                    scenes.append({
+                        "narration": mandatory_cta,
+                        "image_prompt": f"A vibrant YouTube call-to-action screen with Like, Share, and Subscribe icons, 9:16 aspect ratio",
+                        "video_prompt": f"Dynamic animation of Like, Share, and Subscribe buttons glowing on screen, 9:16 aspect ratio",
+                    })
+                    if len(scenes) > 12:
+                        scenes = scenes[:12]
+
         return scenes
 
     @staticmethod

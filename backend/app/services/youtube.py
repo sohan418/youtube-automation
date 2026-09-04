@@ -40,19 +40,14 @@ class YouTubeService:
         self._client = httpx.Client(timeout=15)
 
     def _get_credentials(self) -> Credentials | None:
-        if not settings.youtube_client_id or not settings.youtube_client_secret:
-            return None
-        if not settings.youtube_access_token or not settings.youtube_refresh_token:
+        if not settings.youtube_access_token and not settings.youtube_refresh_token:
             return None
         expiry = None
         if settings.youtube_token_expiry:
             try:
                 expiry = datetime.fromisoformat(settings.youtube_token_expiry)
-                # Ensure timezone-aware (google-auth requires it)
-                if expiry.tzinfo is None:
-                    expiry = expiry.replace(tzinfo=timezone.utc)
-                    # Re-store with timezone so it's correct next time
-                    settings.update_api_key("youtube_token_expiry", expiry.isoformat())
+                if expiry.tzinfo is not None:
+                    expiry = expiry.replace(tzinfo=None)
             except (ValueError, TypeError):
                 expiry = None
         return Credentials(
@@ -74,14 +69,17 @@ class YouTubeService:
 
     def _ensure_fresh(self, creds: Credentials) -> None:
         """Refresh token if needed, avoiding timezone comparison issues."""
-        if not creds.refresh_token:
+        if not creds.refresh_token or not creds.client_id or not creds.client_secret:
             return
         try:
             is_expired = creds.expired
         except TypeError:
             is_expired = True  # timezone mismatch = treat as expired
         if is_expired:
-            self._refresh_credentials(creds)
+            try:
+                self._refresh_credentials(creds)
+            except Exception as e:
+                logger.warning("Token refresh skipped: %s", e)
 
     def is_connected(self) -> bool:
         """Quick check: do we have tokens stored?"""
@@ -268,8 +266,55 @@ class YouTubeService:
     def fetch_recent_videos(self, playlist_id: str | None = None, max_results: int = 10) -> list[dict[str, Any]]:
         api_key = settings.youtube_api_key
         pid = playlist_id or settings.youtube_playlist_id
+
+        creds = self._get_credentials()
+
+        # If playlist_id is missing, try auto-discovering uploads playlist via OAuth
+        if not pid and creds:
+            try:
+                self._ensure_fresh(creds)
+                youtube = build("youtube", "v3", credentials=creds)
+                ch_resp = youtube.channels().list(part="contentDetails", mine=True).execute()
+                items = ch_resp.get("items", [])
+                if items:
+                    pid = items[0].get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
+                    if pid:
+                        settings.update_api_key("youtube_playlist_id", pid)
+            except Exception as ch_err:
+                logger.warning("Could not auto-fetch channel uploads playlist: %s", ch_err)
+
+        if not pid and not creds and not api_key:
+            return []
+
+        # 1. Try OAuth playlistItems fetch if connected
+        if creds and pid:
+            try:
+                self._ensure_fresh(creds)
+                youtube = build("youtube", "v3", credentials=creds)
+                resp = youtube.playlistItems().list(
+                    part="snippet,contentDetails",
+                    playlistId=pid,
+                    maxResults=min(max_results, 50),
+                ).execute()
+                videos: list[dict[str, Any]] = []
+                for item in resp.get("items", []):
+                    snippet = item.get("snippet", {})
+                    content = item.get("contentDetails", {})
+                    videos.append({
+                        "title": snippet.get("title", ""),
+                        "description": snippet.get("description", ""),
+                        "published_at": snippet.get("publishedAt", ""),
+                        "video_id": content.get("videoId", ""),
+                        "channel_title": snippet.get("channelTitle", ""),
+                    })
+                return videos
+            except Exception as oauth_err:
+                logger.warning("OAuth fetch_recent_videos failed: %s, trying API key fallback", oauth_err)
+
+        # 2. Fallback to API Key fetch
         if not api_key or not pid:
             return []
+
         try:
             resp = self._client.get(
                 f"{YOUTUBE_API_BASE}/playlistItems",
@@ -282,21 +327,21 @@ class YouTubeService:
             )
             resp.raise_for_status()
             data = resp.json()
+            videos: list[dict[str, Any]] = []
+            for item in data.get("items", []):
+                snippet = item.get("snippet", {})
+                content = item.get("contentDetails", {})
+                videos.append({
+                    "title": snippet.get("title", ""),
+                    "description": snippet.get("description", ""),
+                    "published_at": snippet.get("publishedAt", ""),
+                    "video_id": content.get("videoId", ""),
+                    "channel_title": snippet.get("channelTitle", ""),
+                })
+            return videos
         except Exception:
-            logger.exception("Failed to fetch YouTube playlist items")
+            logger.exception("Failed to fetch YouTube playlist items via API key")
             return []
-        videos: list[dict[str, Any]] = []
-        for item in data.get("items", []):
-            snippet = item.get("snippet", {})
-            content = item.get("contentDetails", {})
-            videos.append({
-                "title": snippet.get("title", ""),
-                "description": snippet.get("description", ""),
-                "published_at": snippet.get("publishedAt", ""),
-                "video_id": content.get("videoId", ""),
-                "channel_title": snippet.get("channelTitle", ""),
-            })
-        return videos
 
     def upload_video(
         self,

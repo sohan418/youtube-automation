@@ -80,6 +80,10 @@ export const api = {
     request<import("../types").Idea>(`/ideas/${ideaId}/select`, {
       method: "POST",
     }),
+  deleteIdea: (ideaId: number) =>
+    request<{ message: string; id: number }>(`/ideas/${ideaId}`, {
+      method: "DELETE",
+    }),
   importIdeas: (
     projectId: number,
     ideas: { title: string; description?: string; category?: string; trending_score?: number }[],

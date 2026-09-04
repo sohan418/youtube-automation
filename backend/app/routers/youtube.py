@@ -42,14 +42,17 @@ def get_youtube_config():
 
 @router.post("/config")
 def update_youtube_config(payload: YouTubeConfigUpdate):
+    to_update: dict[str, str] = {}
     if payload.youtube_api_key is not None:
-        settings.update_api_key("youtube_api_key", payload.youtube_api_key)
+        to_update["youtube_api_key"] = payload.youtube_api_key
     if payload.youtube_playlist_id is not None:
-        settings.update_api_key("youtube_playlist_id", payload.youtube_playlist_id)
+        to_update["youtube_playlist_id"] = payload.youtube_playlist_id
     if payload.youtube_client_id is not None:
-        settings.update_api_key("youtube_client_id", payload.youtube_client_id)
+        to_update["youtube_client_id"] = payload.youtube_client_id
     if payload.youtube_client_secret is not None:
-        settings.update_api_key("youtube_client_secret", payload.youtube_client_secret)
+        to_update["youtube_client_secret"] = payload.youtube_client_secret
+    if to_update:
+        settings.update_api_keys(to_update)
     return get_youtube_config()
 
 

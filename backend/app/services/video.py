@@ -309,6 +309,18 @@ class VideoService:
                 logger.error("WEBM conversion failed: %s", video)
         return video
 
+    def _get_atempo_filter(self, speed: float) -> str:
+        s = max(0.25, min(4.0, float(speed)))
+        filters = []
+        while s > 2.0:
+            filters.append("atempo=2.0")
+            s /= 2.0
+        while s < 0.5:
+            filters.append("atempo=0.5")
+            s /= 0.5
+        filters.append(f"atempo={s:.4f}")
+        return ",".join(filters)
+
     def _create_video_segment(
         self,
         video: Path,
@@ -318,6 +330,7 @@ class VideoService:
         output: Path,
         resolution: str,
         volume: float = 1.0,
+        speed: float = 1.0,
         video_start: float | None = None,
         audio_start: float | None = None,
     ) -> None:
@@ -357,6 +370,10 @@ class VideoService:
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},setsar=1"
         )
+        clip_speed = max(0.25, min(4.0, float(speed)))
+        if abs(clip_speed - 1.0) > 0.01:
+            vf += f",setpts=PTS/{clip_speed:.4f}"
+
         v_ss = video_start if video_start is not None else start
         if vid_duration is not None:
             available = max(vid_duration - v_ss, 0.0)
@@ -390,15 +407,22 @@ class VideoService:
             a_ss = audio_start if audio_start is not None else start
             base_cmd += ["-ss", f"{a_ss:.3f}", "-t", f"{duration:.3f}", "-i", str(audio)]
             fade_st = max(duration - 0.5, 0.0)
+            af_str = f"volume={max(0.001, min(1.0, float(volume))):.3f}"
+            if abs(clip_speed - 1.0) > 0.01:
+                af_str += f",{self._get_atempo_filter(clip_speed)}"
+            af_str += f",apad,afade=t=out:st={fade_st:.3f}:d=0.5"
             base_cmd += [
                 "-map", "0:v", "-map", "1:a",
-                "-af", f"volume={max(0.001, min(1.0, float(volume))):.3f},apad,afade=t=out:st={fade_st:.3f}:d=0.5",
+                "-af", af_str,
                 "-c:a", "aac", "-b:a", "192k",
             ]
         elif self._has_audio_stream(video) and not silent_audio:
+            af_str = f"volume={max(0.001, min(1.0, float(volume))):.3f}"
+            if abs(clip_speed - 1.0) > 0.01:
+                af_str += f",{self._get_atempo_filter(clip_speed)}"
             base_cmd += [
                 "-map", "0:v", "-map", "0:a",
-                "-af", f"volume={max(0.001, min(1.0, float(volume))):.3f}",
+                "-af", af_str,
                 "-c:a", "aac", "-b:a", "192k",
             ]
         else:
@@ -431,10 +455,21 @@ class VideoService:
         if _render(fallback_cmd):
             return
 
-        copy_cmd = base_cmd + [
-            "-c", "copy",
-            str(output),
-        ]
+        if silent_audio:
+            copy_cmd = [
+                settings.ffmpeg_path, "-y",
+                "-ss", f"{v_ss:.3f}", "-t", f"{duration:.3f}",
+                "-i", str(video),
+                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+                "-map", "0:v", "-map", "1:a",
+                "-c:v", "libx264", "-c:a", "aac", "-b:a", "192k",
+                str(output),
+            ]
+        else:
+            copy_cmd = base_cmd + [
+                "-c", "copy",
+                str(output),
+            ]
         if _render(copy_cmd):
             return
 
@@ -540,10 +575,15 @@ class VideoService:
                     {"start": cursor, "end": cursor + duration, "text": narration_text}
                 )
 
+            clip_vol = float(v.get("volume") if v.get("volume") is not None else 1.0)
+            is_muted = bool(v.get("muted") or ts_muted["video"] or clip_vol <= 0.001)
+            clip_speed = max(0.25, min(4.0, float(v.get("speed") if v.get("speed") is not None else 1.0)))
+
             sig = (
-                f"v4|{idx}|{duration:.3f}|{Path(str(media[0]['path'])).name}"
-                f"|{float(v.get('volume') if v.get('volume') is not None else 1.0):.2f}"
-                f"|{1 if (v.get('muted') or ts_muted['video']) else 0}"
+                f"v5|{idx}|{duration:.3f}|{Path(str(media[0]['path'])).name}"
+                f"|{clip_vol:.2f}"
+                f"|{1 if is_muted else 0}"
+                f"|{clip_speed:.2f}"
             )
             digest = hashlib.md5(sig.encode()).hexdigest()[:8]
             plans.append(
@@ -556,11 +596,9 @@ class VideoService:
                     "full_audio": None,
                     "audio_off": 0.0,
                     "duration": duration,
-                    "volume": max(
-                        0.0,
-                        min(1.0, float(v.get("volume") if v.get("volume") is not None else 1.0)),
-                    ),
-                    "mute_audio": bool(v.get("muted") or ts_muted["video"]),
+                    "volume": 0.0 if is_muted else max(0.0, min(1.0, clip_vol)),
+                    "mute_audio": is_muted,
+                    "speed": clip_speed,
                     "timeline_start": round(tl_start, 3),
                     "render_start": round(start, 3),
                     "motion_effect": (v.get("motion_effect") or (scene or {}).get("motion_effect") or "none")
@@ -884,6 +922,7 @@ class VideoService:
                                 item["path"], full_audio if audio_ok else None,
                                 0, duration, segment, resolution,
                                 volume=0.0 if plan.get("mute_audio") else float(plan.get("volume", 1.0)),
+                                speed=float(plan.get("speed", 1.0)),
                                 audio_start=audio_off if audio_ok else None,
                             )
                         elif audio_ok:
@@ -924,6 +963,7 @@ class VideoService:
                                     item["path"], full_audio if has_audio else None,
                                     cur, part, seg, resolution,
                                     volume=0.0 if plan.get("mute_audio") else float(plan.get("volume", 1.0)),
+                                    speed=float(plan.get("speed", 1.0)),
                                     video_start=0.0,
                                 )
                             elif has_audio:

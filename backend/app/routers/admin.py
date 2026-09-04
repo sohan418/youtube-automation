@@ -64,17 +64,23 @@ DEFAULT_PROMPTS = {
     "script_shorts": {
         "label": "Script (Shorts)",
         "system": (
-            "You are an expert YouTube Shorts scriptwriter. Write ultra-concise, "
-            "high-impact scripts for 60-second vertical videos. Every word must "
-            "earn its place — no filler, no intros, no outros. Hook the viewer in "
-            "the first 1-2 seconds. Use fast pacing and short punchy sentences."
+            "You are an expert YouTube Shorts & Reels scriptwriter. Write ultra-concise, "
+            "high-impact scripts for vertical short videos up to 90 seconds. Hook the viewer in "
+            "the first 1-3 seconds. Use fast pacing, relatable examples, and short punchy sentences."
         ),
         "user": (
-            "Write a YouTube Shorts script (max 60 seconds) about: {topic}. "
-            "Language: {language}. "
-            "Structure: Hook (1-2 sec), Core content (50 sec), CTA/closing (5-8 sec). "
-            "Keep total narration under 150 words. Be direct, fast-paced, and engaging. "
-            'Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "..."}'
+            "Write a YouTube Shorts script (up to 90 seconds total, max 12 scenes) about: {topic}.\n"
+            "Language: {language}.\n\n"
+            "REQUIRED SCRIPT FLOW STRUCTURE:\n"
+            "1. Starting Hook (1-3 sec): High-impact opening statement/question to stop the scroll.\n"
+            "2. Example / Visual Scenario: A fast, relatable visual example or scenario.\n"
+            "3. Short Explanation: Concise core explanation & key takeaways.\n"
+            "4. End Hook & Closing: Brief closing statement leading directly into the mandatory ending CTA.\n\n"
+            "MANDATORY ENDING SCENE:\n"
+            "The 'ending' field MUST ALWAYS be exactly:\n"
+            "\"वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!\" (or target language equivalent).\n\n"
+            "Word count: Keep total narration under 200 words (~90 seconds spoken).\n"
+            'Return JSON: {"title": "...", "hook": "...", "body": "...", "ending": "वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!"}'
         ),
     },
     "scenes": {
@@ -112,13 +118,15 @@ DEFAULT_PROMPTS = {
             "Both image_prompt and video_prompt MUST mention the 9:16 vertical aspect ratio."
         ),
         "user": (
-            "Break this Shorts script into scenes. Each scene needs one narration line, "
-            "an image prompt, and a video prompt.\n\n"
+            "Break this Shorts script into MAX 12 SCENES for a ~90-second Short video.\n\n"
             "Language: {language}\n\n"
             "Aspect ratio: 9:16 (vertical / Shorts)\n\n"
-            "Each narration should be 1-2 short sentences max.\n\n"
+            "SCENE FLOW STRUCTURE (Max 12 scenes total):\n"
+            "- Scene 1: Starting Hook (1-3 seconds)\n"
+            "- Scene 2: Example / Visual scenario\n"
+            "- Scenes 3-11: Short Explanation breakdown\n"
+            "- Final Scene (Scene 12): MANDATORY ENDING CTA: \"वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!\" (or target language equivalent).\n\n"
             "Hook: {hook}\n\nBody: {body}\n\nEnding: {ending}\n\n"
-            "Aim for 5-8 scenes total for a ~60 second Short.\n\n"
             'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
         ),
     },

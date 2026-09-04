@@ -35,8 +35,10 @@ export default function StudioStepContent({ ctx }: Props) {
           onTopicChange={ctx.setIdeaTopic}
           onGenerate={ctx.generateIdeas}
           onSelect={ctx.selectIdea}
+          onDeleteIdea={ctx.deleteIdea}
           onFreeAIResponse={ctx.importFreeIdeas}
           recentVideos={ctx.recentVideos}
+          onOpenSettings={ctx.openSettings}
         />
       )}
 
