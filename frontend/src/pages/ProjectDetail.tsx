@@ -14,7 +14,8 @@ import { api, mediaUrl } from "../api/client";
 import TimelineStep from "../components/steps/TimelineStep";
 import TimelineVideoCanvas, { type TimelinePlaybackState } from "../components/studio/TimelineVideoCanvas";
 import StudioRightInspector from "../components/studio/StudioRightInspector";
-import { PanelLeftOpen } from "lucide-react";
+import { StudioCopilotDrawer } from "../components/studio/StudioCopilotDrawer";
+import { PanelLeftOpen, Bot } from "lucide-react";
 import "./ProjectDetail.css";
 
 export default function ProjectDetail() {
@@ -29,6 +30,7 @@ export default function ProjectDetail() {
   const [selectedClipInfo, setSelectedClipInfo] = useState<any | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [toolPanelCollapsed, setToolPanelCollapsed] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
   const handleFetchLogo = (refresh = false) => {
     if (!projectId) return;
@@ -40,23 +42,15 @@ export default function ProjectDetail() {
         } else {
           api
             .getProjectLogo(projectId, refresh)
-            .then((res) => setLogoUrl(mediaUrl(res.logo_url)))
-            .catch(() => {
-              if (h.project?.slug) {
-                setLogoUrl(mediaUrl(`projects/${h.project.slug}/branding/logo.png`));
-              }
-            });
+            .then((res) => setLogoUrl(res.logo_url ? mediaUrl(res.logo_url) : null))
+            .catch(() => setLogoUrl(null));
         }
       })
       .catch(() => {
         api
           .getProjectLogo(projectId, refresh)
-          .then((res) => setLogoUrl(mediaUrl(res.logo_url)))
-          .catch(() => {
-            if (h.project?.slug) {
-              setLogoUrl(mediaUrl(`projects/${h.project.slug}/branding/logo.png`));
-            }
-          });
+          .then((res) => setLogoUrl(res.logo_url ? mediaUrl(res.logo_url) : null))
+          .catch(() => setLogoUrl(null));
       });
   };
 
@@ -155,7 +149,7 @@ export default function ProjectDetail() {
       const result = await api.exportProject(projectId);
       h.setExportInfo(result);
       h.setSuccess(`${result.message} (${result.files.length} files)`);
-      const targetVideo = result.files.find((f) => f.startsWith("video/") && f.endsWith(".mp4")) || "video/final.mp4";
+      const targetVideo = result.files.find((f) => f.startsWith("video/") && f.endsWith(".mp4")) || result.files[0];
       if (targetVideo) {
         const downloadUrl = mediaUrl(`${result.export_path}/${targetVideo}`);
         const link = document.createElement("a");
@@ -428,6 +422,43 @@ export default function ProjectDetail() {
         />
       )}
       <MediaPreviewOverlay previewMedia={h.previewMedia} onClose={() => h.setPreviewMedia(null)} />
+
+      {/* Floating AI Copilot Trigger Button */}
+      {!copilotOpen && (
+        <button
+          onClick={() => setCopilotOpen(true)}
+          style={{
+            position: "fixed",
+            bottom: "1.5rem",
+            right: "1.5rem",
+            zIndex: 40,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            borderRadius: "9999px",
+            background: "linear-gradient(135deg, #9333ea, #4f46e5)",
+            padding: "0.75rem 1.25rem",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            color: "#ffffff",
+            boxShadow: "0 10px 25px -5px rgba(147, 51, 234, 0.4)",
+            cursor: "pointer",
+            border: "none",
+          }}
+          title="Open AI Video Copilot Assistant"
+        >
+          <Bot size={16} />
+          <span>AI Assistant</span>
+        </button>
+      )}
+
+      {/* Studio AI Copilot Drawer */}
+      <StudioCopilotDrawer
+        isOpen={copilotOpen}
+        onClose={() => setCopilotOpen(false)}
+        projectId={projectId}
+        onStateModified={() => h.loadAll()}
+      />
     </div>
   );
 }

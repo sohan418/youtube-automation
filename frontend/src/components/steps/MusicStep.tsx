@@ -1,14 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import { Music, Upload, Trash2, Play, Pause, Clock, HardDrive, Plus, Check } from "lucide-react";
+import { Music, Upload, Trash2, Play, Pause, Clock, HardDrive, Plus, Check, Pencil, X } from "lucide-react";
 import type { MusicTrack } from "../../types";
 import { api, mediaUrl } from "../../api/client";
 import StepHeader from "../studio/StepHeader";
+import Tabs from "../ui/Tabs";
 import "./MusicStep.css";
 
 interface Props {
   onAddToTimeline?: (track: MusicTrack) => void;
   activeMusicPath?: string | null;
   onCollapse?: () => void;
+}
+
+type MusicCategoryTab = "all" | "background" | "upbeat" | "cinematic" | "short" | "other";
+
+function getMusicCategory(filename: string, durationSeconds: number | null): MusicCategoryTab {
+  const f = filename.toLowerCase();
+  if (durationSeconds && durationSeconds < 30) return "short";
+  if (f.includes("bg") || f.includes("background") || f.includes("ambient") || f.includes("lofi") || f.includes("chill") || f.includes("soft")) return "background";
+  if (f.includes("upbeat") || f.includes("dance") || f.includes("pop") || f.includes("fast") || f.includes("hype") || f.includes("synth") || f.includes("beat") || f.includes("energetic")) return "upbeat";
+  if (f.includes("cinematic") || f.includes("epic") || f.includes("dramatic") || f.includes("trailer") || f.includes("orchestral") || f.includes("action")) return "cinematic";
+  return "other";
 }
 
 function formatDuration(seconds: number | null): string {
@@ -34,6 +46,9 @@ export default function MusicStep({ onAddToTimeline, activeMusicPath, onCollapse
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [justAddedPath, setJustAddedPath] = useState<string | null>(null);
+  const [editingFilename, setEditingFilename] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
+  const [activeCat, setActiveCat] = useState<MusicCategoryTab>("all");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -42,6 +57,32 @@ export default function MusicStep({ onAddToTimeline, activeMusicPath, onCollapse
   };
 
   useEffect(() => { loadTracks(); }, []);
+
+  const filteredTracks = tracks.filter((track) => {
+    if (activeCat === "all") return true;
+    if (activeCat === "short") return track.duration_seconds && track.duration_seconds < 30;
+    const cat = getMusicCategory(track.filename, track.duration_seconds);
+    return cat === activeCat;
+  });
+
+  const handleRenameTrack = async (track: MusicTrack, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === track.name) {
+      setEditingFilename(null);
+      return;
+    }
+    try {
+      const updated = await api.renameGlobalMusic(track.filename, trimmed);
+      setTracks((prev) => prev.map((t) => (t.filename === track.filename ? updated : t)));
+      if (playing === track.file_path) {
+        setPlaying(updated.file_path);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to rename music track");
+    } finally {
+      setEditingFilename(null);
+    }
+  };
 
   const uploadFile = async (file: File) => {
     setUploading(true);
@@ -118,8 +159,23 @@ export default function MusicStep({ onAddToTimeline, activeMusicPath, onCollapse
     <div className="music-step">
       <StepHeader
         title="Music Library"
-        subtitle="Global music tracks — available across all projects"
+        subtitle=""
         onCollapse={onCollapse}
+      />
+
+      {/* Category Filter Tabs */}
+      <Tabs
+        value={activeCat}
+        onChange={(val) => setActiveCat(val as MusicCategoryTab)}
+        options={[
+          { label: "All Tracks", value: "all", count: tracks.length },
+          { label: "Background & Chill", value: "background", count: tracks.filter((t) => getMusicCategory(t.filename, t.duration_seconds) === "background").length },
+          { label: "Upbeat & Energy", value: "upbeat", count: tracks.filter((t) => getMusicCategory(t.filename, t.duration_seconds) === "upbeat").length },
+          { label: "Cinematic & Epic", value: "cinematic", count: tracks.filter((t) => getMusicCategory(t.filename, t.duration_seconds) === "cinematic").length },
+          { label: "Short Clips (<30s)", value: "short", count: tracks.filter((t) => t.duration_seconds && t.duration_seconds < 30).length },
+          { label: "Other", value: "other", count: tracks.filter((t) => getMusicCategory(t.filename, t.duration_seconds) === "other").length },
+        ]}
+        style={{ margin: "0.5rem 0 0.8rem 0", width: "100%" }}
       />
 
       {/* Upload area with Drag and Drop */}
@@ -153,15 +209,19 @@ export default function MusicStep({ onAddToTimeline, activeMusicPath, onCollapse
           <Music size={40} strokeWidth={1.5} className="music-empty-icon" />
           <div className="empty-state-desc">Loading music library...</div>
         </div>
-      ) : tracks.length === 0 ? (
+      ) : filteredTracks.length === 0 ? (
         <div className="empty-state">
           <Music size={40} strokeWidth={1.5} className="music-empty-icon" />
-          <div className="empty-state-title">No music tracks yet</div>
-          <div className="empty-state-desc">Upload audio files to build your global music library.</div>
+          <div className="empty-state-title">
+            {tracks.length === 0 ? "No music tracks yet" : "No tracks in this category"}
+          </div>
+          <div className="empty-state-desc">
+            {tracks.length === 0 ? "Upload audio files to build your global music library." : "Try selecting another category tab or upload a new track."}
+          </div>
         </div>
       ) : (
         <div className="music-list">
-          {tracks.map((track) => (
+          {filteredTracks.map((track) => (
             <div
               key={track.filename}
               className={`card music-item ${playing === track.file_path ? "playing" : ""}`}
@@ -181,9 +241,60 @@ export default function MusicStep({ onAddToTimeline, activeMusicPath, onCollapse
 
               {/* Track info */}
               <div className="music-info">
-                <div className="music-name">
-                  {track.name}
-                </div>
+                {editingFilename === track.filename ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <input
+                      type="text"
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRenameTrack(track, editNameValue);
+                        if (e.key === "Escape") setEditingFilename(null);
+                      }}
+                      autoFocus
+                      style={{
+                        flex: 1,
+                        fontSize: "0.8rem",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        background: "rgba(0,0,0,0.5)",
+                        border: "1px solid var(--primary)",
+                        color: "#fff",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRenameTrack(track, editNameValue)}
+                      style={{ background: "none", border: "none", color: "var(--success)", cursor: "pointer", padding: "2px" }}
+                      title="Save Name"
+                    >
+                      <Check size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingFilename(null)}
+                      style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "2px" }}
+                      title="Cancel"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div className="music-name">{track.name}</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFilename(track.filename);
+                        setEditNameValue(track.name);
+                      }}
+                      style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "2px", opacity: 0.7 }}
+                      title="Rename music track"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                  </div>
+                )}
                 <div className="music-meta">
                   <span className="music-meta-item">
                     <Clock size={13} /> {formatDuration(track.duration_seconds)}

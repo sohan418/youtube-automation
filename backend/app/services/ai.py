@@ -3,7 +3,7 @@ import logging
 import re
 from typing import Any
 
-from app.services.providers import TextProvider, build_provider
+from app.services.providers import TextProvider, build_provider, get_all_configured_providers
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,25 @@ class AIService:
     def _chat(self, system: str, user: str, json_mode: bool = False) -> str:
         if self.provider is None:
             return self._mock_response(system, user)
-        return self.provider.complete(system, user, json_mode=json_mode)
+        try:
+            return self.provider.complete(system, user, json_mode=json_mode)
+        except Exception as exc:
+            logger.warning(
+                "Primary provider '%s' failed (%s): %s. Attempting fallback providers...",
+                self.provider.name,
+                type(exc).__name__,
+                exc,
+            )
+            fallback_providers = get_all_configured_providers(exclude=self.provider.name)
+            for fb in fallback_providers:
+                try:
+                    logger.info("Trying fallback provider '%s'...", fb.name)
+                    res = fb.complete(system, user, json_mode=json_mode)
+                    if res and res.strip():
+                        return res
+                except Exception as fb_exc:
+                    logger.warning("Fallback provider '%s' failed (%s): %s", fb.name, type(fb_exc).__name__, fb_exc)
+            raise exc
 
     def _generate_json(
         self,
@@ -379,7 +397,10 @@ class AIService:
                 "visually dynamic scenes for a 9:16 vertical video. Each scene is 3-8 "
                 "seconds long. Narrations are spoken voice-over ONLY — never include instructions, "
                 "JSON, or metadata. Image prompts must describe bold, close-up, vertically-framed compositions. "
-                "Both image_prompt and video_prompt MUST mention the 9:16 vertical aspect ratio."
+                "Both image_prompt and video_prompt MUST mention the 9:16 vertical aspect ratio. "
+                "For each scene, also suggest: "
+                "1. 'sound_effect': comma-separated sound effect keywords matching the visual action (e.g. 'whoosh, pop, cash register chime, server beep, glitch sound'). "
+                "2. 'transition': recommended visual transition to the next scene (choose from: crossfade, whip pan, zoom in, glitch, fade black, cut)."
             )
             max_scenes = count if count else 12
             user = (
@@ -392,18 +413,21 @@ class AIService:
                 "- Scenes 3-11: Short Explanation breakdown\n"
                 "- Final Scene: MANDATORY ENDING CTA: \"वीडियो पसंद आया हो तो Like, Share और Subscribe जरूर करें!\" (or target language equivalent).\n\n"
                 f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
-                'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
+                'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "...", "sound_effect": "...", "transition": "..."}]}'
             )
         else:
             system = (
                 "You are a video director. Break scripts into scenes as JSON. "
-                "Each scene has a 'narration', an 'image_prompt', and a 'video_prompt'. "
+                "Each scene has 'narration', 'image_prompt', 'video_prompt', 'sound_effect', and 'transition'. "
                 "Narrations are spoken voice-over text ONLY — never include instructions, "
                 "JSON, or any metadata in them. Keep each narration short (one or two "
                 "sentences). If a section of the script is long, split it into multiple scenes. "
                 "Write every narration in the requested language; image prompts stay in English. "
                 "Both the image_prompt and video_prompt MUST always mention the aspect ratio "
-                f"'{ratio}' so every scene stays consistent."
+                f"'{ratio}' so every scene stays consistent. "
+                "Video prompt must describe camera motion, visual action, lighting, and incorporate matching sound effect cues (e.g. 'Slow camera zoom into glowing database server with a WHOOSH motion and sound effect cue, cinematic lighting, 16:9 aspect ratio'). "
+                "For sound_effect: list 1-3 relevant sound effect keywords (e.g. 'whoosh, cash register ping, server beep, glitch'). "
+                "For transition: pick the best visual transition (e.g. 'crossfade', 'whip pan', 'zoom in', 'glitch', 'fade black', 'cut')."
             )
             count_text = (
                 f"Split the script into EXACTLY {count} scenes."
@@ -412,13 +436,13 @@ class AIService:
             )
             user = (
                 f"Break this script into scenes. Each scene needs narration, an image prompt, "
-                f"and a video prompt.\n\n"
+                f"a video prompt, sound effect keywords, and transition suggestion.\n\n"
                 f"Language: {language} ({lang_name})\n\n"
                 f"Aspect ratio: {ratio}\n\n"
                 f"Write all narrations in {lang_name}.\n\n"
                 f"{count_text}\n\n"
                 f"Hook: {hook}\n\nBody: {script_body}\n\nEnding: {ending}\n\n"
-                'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}'
+                'Return ONLY valid JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "...", "sound_effect": "...", "transition": "..."}]}'
             )
         return {"system": system, "user": user}
 
@@ -440,6 +464,8 @@ class AIService:
                 continue
             image_prompt = self._clean_narration(raw_scene.get("image_prompt") or "")
             video_prompt = self._clean_narration(raw_scene.get("video_prompt") or "")
+            sound_effect = self._clean_narration(raw_scene.get("sound_effect") or "")
+            transition = self._clean_narration(raw_scene.get("transition") or "crossfade")
             if image_prompt and ratio not in image_prompt:
                 image_prompt = f"{image_prompt}, {ratio} aspect ratio"
             if video_prompt and ratio not in video_prompt:
@@ -449,6 +475,8 @@ class AIService:
                     "narration": narration,
                     "image_prompt": image_prompt,
                     "video_prompt": video_prompt,
+                    "sound_effect": sound_effect,
+                    "transition": transition,
                 }
             )
 

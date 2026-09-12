@@ -1,22 +1,23 @@
+import { lazy, Suspense } from "react";
 import { api, mediaUrl } from "../../api/client";
 import { useProjectDetail } from "../../hooks/useProjectDetail";
 import type { TimelineData, TimelineClip } from "../../types";
 import "./StudioStepContent.css";
 
 import StepHeader from "./StepHeader";
-import IdeasStep from "../steps/IdeasStep";
-import ScriptStep from "../steps/ScriptStep";
-import ScenesStep from "../steps/ScenesStep";
-import ImagesStep from "../steps/ImagesStep";
-import GalleryStep from "../steps/GalleryStep";
-import VoiceStep from "../steps/VoiceStep";
-import MusicStep from "../steps/MusicStep";
-
 import type { TimelinePlaybackState } from "./TimelineVideoCanvas";
-import CaptionsStep from "../steps/CaptionsStep";
-import ThumbnailStep from "../steps/ThumbnailStep";
-import SeoStep from "../steps/SeoStep";
-import UploadStep from "../steps/UploadStep";
+
+const IdeasStep = lazy(() => import("../steps/IdeasStep"));
+const ScriptStep = lazy(() => import("../steps/ScriptStep"));
+const ScenesStep = lazy(() => import("../steps/ScenesStep"));
+const ImagesStep = lazy(() => import("../steps/ImagesStep"));
+const GalleryStep = lazy(() => import("../steps/GalleryStep"));
+const VoiceStep = lazy(() => import("../steps/VoiceStep"));
+const MusicStep = lazy(() => import("../steps/MusicStep"));
+const CaptionsStep = lazy(() => import("../steps/CaptionsStep"));
+const ThumbnailStep = lazy(() => import("../steps/ThumbnailStep"));
+const SeoStep = lazy(() => import("../steps/SeoStep"));
+const UploadStep = lazy(() => import("../steps/UploadStep"));
 
 interface Props {
   ctx: ReturnType<typeof useProjectDetail>;
@@ -63,24 +64,32 @@ export default function StudioStepContent({ ctx, playbackState, onCollapse }: Pr
 
   return (
     <div className="studio-main-content">
-      {activeTab === "ideas" && (
-        <IdeasStep
-          projectId={ctx.projectId}
-          projectLanguage={ctx.project?.language}
-          projectCategory={ctx.project?.category ?? undefined}
-          ideas={ctx.ideas}
-          actionLoading={ctx.actionLoading}
-          ideaTopic={ctx.ideaTopic}
-          onTopicChange={ctx.setIdeaTopic}
-          onGenerate={ctx.generateIdeas}
-          onSelect={ctx.selectIdea}
-          onDeleteIdea={ctx.deleteIdea}
-          onFreeAIResponse={ctx.importFreeIdeas}
-          recentVideos={ctx.recentVideos}
-          onOpenSettings={ctx.openSettings}
-          onCollapse={onCollapse}
-        />
-      )}
+      <Suspense
+        fallback={
+          <div className="loading" style={{ padding: "2rem", textAlign: "center" }}>
+            <span className="spinner" /> Loading step...
+          </div>
+        }
+      >
+        {activeTab === "ideas" && (
+          <IdeasStep
+            projectId={ctx.projectId}
+            projectLanguage={ctx.project?.language}
+            projectCategory={ctx.project?.category ?? undefined}
+            ideas={ctx.ideas}
+            actionLoading={ctx.actionLoading}
+            ideaTopic={ctx.ideaTopic}
+            onTopicChange={ctx.setIdeaTopic}
+            onGenerate={ctx.generateIdeas}
+            onSelect={ctx.selectIdea}
+            onDeleteIdea={ctx.deleteIdea}
+            onClearAllIdeas={ctx.clearAllIdeas}
+            onFreeAIResponse={ctx.importFreeIdeas}
+            recentVideos={ctx.recentVideos}
+            onOpenSettings={ctx.openSettings}
+            onCollapse={onCollapse}
+          />
+        )}
 
       {activeTab === "script" && (
         <ScriptStep
@@ -114,6 +123,7 @@ export default function StudioStepContent({ ctx, playbackState, onCollapse }: Pr
               ctx.setSuccess(replace ? "Script imported and made active!" : "Script imported as a new version.");
             });
           }}
+          onClearScript={ctx.clearScript}
           onCollapse={onCollapse}
         />
       )}
@@ -471,6 +481,7 @@ export default function StudioStepContent({ ctx, playbackState, onCollapse }: Pr
           onCollapse={onCollapse}
         />
       )}
+      </Suspense>
     </div>
   );
 }

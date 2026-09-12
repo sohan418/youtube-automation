@@ -30,16 +30,21 @@ class Settings(BaseSettings):
     # AI
     openai_api_key: str = ""
     gemini_api_key: str = ""
+    openrouter_api_key: str = ""
+    groq_api_key: str = ""
+    anthropic_api_key: str = ""
     # Voice providers — keys can be set here or entered in the UI (persisted to .env)
     sarvam_api_key: str = ""
     deepgram_api_key: str = ""
     elevenlabs_api_key: str = ""
-    ai_provider: str = "auto"  # auto | openai | ollama | openrouter | cli | mock
+    ai_provider: str = "auto"  # auto | openai | gemini | openrouter | groq | anthropic | ollama | cli | mock
     ai_model: str = ""
     openai_model: str = "gpt-4o-mini"
+    gemini_model: str = "gemini-3.6-flash"
+    groq_model: str = "llama-3.3-70b-versatile"
+    anthropic_model: str = "claude-3-5-sonnet-20241022"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
-    openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai"
     ai_provider_cli: str = ""  # e.g. 'claude -p "{prompt}"' or 'gemini -p "{prompt}"'
     cli_timeout_seconds: int = 120

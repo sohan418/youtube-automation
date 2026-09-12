@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Film, Check, Trash2, Upload } from "lucide-react";
 import type { VideoClip } from "../../types";
 import { api, mediaUrl } from "../../api/client";
+import Tabs from "../ui/Tabs";
 
 interface Props {
   isOpen: boolean;
@@ -201,50 +202,20 @@ export default function GalleryPickerModal({
         </div>
 
         {/* Category Filter Tabs */}
-        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-          <button
-            className={`gallery-cat-tab ${activeCat === "all" ? "active" : ""}`}
-            onClick={() => setActiveCat("all")}
-          >
-            All ({clips.length})
-          </button>
-          <button
-            className={`gallery-cat-tab ${activeCat === "videos" ? "active" : ""}`}
-            onClick={() => setActiveCat("videos")}
-          >
-            Videos ({clips.filter((c) => isVideoFile(c.filename)).length})
-          </button>
-          <button
-            className={`gallery-cat-tab ${activeCat === "images" ? "active" : ""}`}
-            onClick={() => setActiveCat("images")}
-          >
-            Images ({clips.filter((c) => isImageFile(c.filename)).length})
-          </button>
-          <button
-            className={`gallery-cat-tab ${activeCat === "hook" ? "active" : ""}`}
-            onClick={() => setActiveCat("hook")}
-          >
-            Hooks & Intros
-          </button>
-          <button
-            className={`gallery-cat-tab ${activeCat === "cta" ? "active" : ""}`}
-            onClick={() => setActiveCat("cta")}
-          >
-            Ending & CTAs
-          </button>
-          <button
-            className={`gallery-cat-tab ${activeCat === "background" ? "active" : ""}`}
-            onClick={() => setActiveCat("background")}
-          >
-            Backgrounds
-          </button>
-          <button
-            className={`gallery-cat-tab ${activeCat === "other" ? "active" : ""}`}
-            onClick={() => setActiveCat("other")}
-          >
-            Other
-          </button>
-        </div>
+        <Tabs
+          value={activeCat}
+          onChange={(val) => setActiveCat(val as CategoryTab)}
+          options={[
+            { label: "All", value: "all", count: clips.length },
+            { label: "Videos", value: "videos", count: clips.filter((c) => isVideoFile(c.filename)).length },
+            { label: "Images", value: "images", count: clips.filter((c) => isImageFile(c.filename)).length },
+            { label: "Hooks & Intros", value: "hook", count: clips.filter((c) => getClipCategory(c.filename) === "hook").length },
+            { label: "Ending & CTAs", value: "cta", count: clips.filter((c) => getClipCategory(c.filename) === "cta").length },
+            { label: "Backgrounds", value: "background", count: clips.filter((c) => getClipCategory(c.filename) === "background").length },
+            { label: "Other", value: "other", count: clips.filter((c) => getClipCategory(c.filename) === "other").length },
+          ]}
+          style={{ marginBottom: "0.8rem" }}
+        />
 
         {/* Clip Grid */}
         <div style={{ flex: 1, overflowY: "auto", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(145px, 1fr))", gap: "0.65rem", paddingRight: "4px" }}>

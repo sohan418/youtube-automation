@@ -84,6 +84,10 @@ export const api = {
     request<{ message: string; id: number }>(`/ideas/${ideaId}`, {
       method: "DELETE",
     }),
+  clearAllIdeas: (projectId: number) =>
+    request<{ message: string; count: number }>(`/ideas/project/${projectId}/clear`, {
+      method: "DELETE",
+    }),
   importIdeas: (
     projectId: number,
     ideas: { title: string; description?: string; category?: string; trending_score?: number }[],
@@ -188,6 +192,14 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  deleteScript: (scriptId: number) =>
+    request<{ message: string; id: number }>(`/scripts/${scriptId}`, {
+      method: "DELETE",
+    }),
+  clearProjectScripts: (projectId: number) =>
+    request<{ message: string; count: number }>(`/scripts/project/${projectId}/clear`, {
+      method: "DELETE",
+    }),
   exportScriptJson: async (scriptId: number, filename: string) => {
     const response = await fetch(`${API_BASE}/scripts/${scriptId}/export`);
     if (!response.ok) {
@@ -250,6 +262,8 @@ export const api = {
         narration: string;
         image_prompt?: string;
         video_prompt?: string;
+        sound_effect?: string;
+        transition?: string;
       }[];
       replace?: boolean;
     },
@@ -438,6 +452,11 @@ export const api = {
       `/video/clips/${encodeURIComponent(filename)}`,
       { method: "DELETE" },
     ),
+  renameGlobalClip: (filename: string, newName: string) =>
+    request<import("../types").VideoClip>(
+      `/video/clips/${encodeURIComponent(filename)}`,
+      { method: "PATCH", body: JSON.stringify({ new_name: newName }) },
+    ),
   saveSceneToGallery: (sceneId: number, data?: { category_prefix?: string; custom_name?: string }) =>
     request<import("../types").VideoClip>(`/video/clips/save-scene/${sceneId}`, {
       method: "POST",
@@ -457,6 +476,11 @@ export const api = {
     request<{ message: string }>(
       `/video/music/${encodeURIComponent(filename)}`,
       { method: "DELETE" },
+    ),
+  renameGlobalMusic: (filename: string, newName: string) =>
+    request<import("../types").MusicTrack>(
+      `/video/music/${encodeURIComponent(filename)}`,
+      { method: "PATCH", body: JSON.stringify({ new_name: newName }) },
     ),
   buildVideo: (
     projectId: number,
@@ -581,5 +605,94 @@ export const api = {
   resetAdminPrompts: () =>
     request<{ status: string; reset: number }>("/admin/prompts/reset", {
       method: "POST",
+    }),
+
+  startAutoProduce: (
+    projectId: number,
+    payload: { topic: string; category?: string; language?: string; duration_minutes?: number; hitl_mode?: boolean }
+  ) =>
+    request<{ message: string; project_id: number; hitl_mode: boolean }>(`/ai/projects/${projectId}/auto-produce`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  approveAutoProduceStep: (projectId: number, stage: string = "script") =>
+    request<{ status: string; next_stage: string }>(`/ai/projects/${projectId}/auto-produce/approve`, {
+      method: "POST",
+      body: JSON.stringify({ stage }),
+    }),
+
+  getAutoProduceStatus: (projectId: number) =>
+    request<{
+      project_id: number;
+      status: "idle" | "running" | "waiting_script_approval" | "waiting_visuals_approval" | "completed" | "failed";
+      stage: string;
+      progress: number;
+      logs: string[];
+      error: string | null;
+      video_url: string | null;
+      waiting_approval?: boolean;
+      approval_stage?: string | null;
+    }>(`/ai/projects/${projectId}/auto-produce/status`),
+
+  sendProjectChatMessage: (projectId: number, message: string) =>
+    request<{
+      reply: string;
+      history: { role: "user" | "assistant"; content: string }[];
+      state_modified: boolean;
+      action_taken: string | null;
+    }>(`/ai/projects/${projectId}/chat`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
+
+  getProjectChatHistory: (projectId: number) =>
+    request<{
+      history: { role: "user" | "assistant"; content: string }[];
+    }>(`/ai/projects/${projectId}/chat/history`),
+
+  clearProjectChatHistory: (projectId: number) =>
+    request<{
+      history: { role: "user" | "assistant"; content: string }[];
+    }>(`/ai/projects/${projectId}/chat/history`, {
+      method: "DELETE",
+    }),
+
+  getLLMKeys: () =>
+    request<{
+      ai_provider: string;
+      openai_api_key: string;
+      openai_api_key_masked: string;
+      gemini_api_key: string;
+      gemini_api_key_masked: string;
+      openrouter_api_key: string;
+      openrouter_api_key_masked: string;
+      groq_api_key: string;
+      groq_api_key_masked: string;
+      anthropic_api_key: string;
+      anthropic_api_key_masked: string;
+      ollama_base_url: string;
+      ollama_model: string;
+    }>("/admin/llm-keys"),
+
+  updateLLMKeys: (payload: {
+    ai_provider?: string;
+    openai_api_key?: string;
+    gemini_api_key?: string;
+    openrouter_api_key?: string;
+    groq_api_key?: string;
+    anthropic_api_key?: string;
+    ollama_base_url?: string;
+    ollama_model?: string;
+  }) =>
+    request<{ message: string; updated: string[] }>("/admin/llm-keys", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  testLLMKey: (provider: string, key?: string) =>
+    request<{ status: string; provider: string; response: string }>("/admin/llm-keys/test", {
+      method: "POST",
+      body: JSON.stringify({ provider, key }),
     }),
 };

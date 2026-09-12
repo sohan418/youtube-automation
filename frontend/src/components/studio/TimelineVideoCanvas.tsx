@@ -189,11 +189,35 @@ export default function TimelineVideoCanvas({
   const playing = playbackState?.playing ?? false;
   const time = playbackState?.time ?? 0;
 
-  // Determine media source
-  const rawVideoPath = activeVideo?.video_path || activeScene?.video_path || null;
-  const isImageVideoPath = rawVideoPath ? /\.(png|jpg|jpeg|webp)$/i.test(rawVideoPath) : false;
-  const videoPath = isImageVideoPath ? null : rawVideoPath;
-  const imagePath = activeVideo?.image_path || (isImageVideoPath ? rawVideoPath : null) || activeScene?.image_path || activeScene?.images?.[0]?.file_path || null;
+  // Determine media source directly from active clip under playhead
+  let videoPath: string | null = null;
+  let imagePath: string | null = null;
+
+  if (activeVideo) {
+    if (activeVideo.video_path) {
+      const isImg = /\.(png|jpg|jpeg|webp)$/i.test(activeVideo.video_path);
+      if (isImg) {
+        imagePath = activeVideo.video_path;
+      } else {
+        videoPath = activeVideo.video_path;
+      }
+    } else if (activeVideo.image_path) {
+      imagePath = activeVideo.image_path;
+    }
+  } else if (activeScene) {
+    if (activeScene.image_path) {
+      imagePath = activeScene.image_path;
+    } else if (activeScene.video_path) {
+      const isImg = /\.(png|jpg|jpeg|webp)$/i.test(activeScene.video_path);
+      if (isImg) {
+        imagePath = activeScene.video_path;
+      } else {
+        videoPath = activeScene.video_path;
+      }
+    } else if (activeScene.images && activeScene.images.length > 0) {
+      imagePath = activeScene.images[0].file_path;
+    }
+  }
 
   const videoSrc = videoPath ? mediaUrl(videoPath) : null;
   const imageSrc = imagePath ? mediaUrl(imagePath) : null;

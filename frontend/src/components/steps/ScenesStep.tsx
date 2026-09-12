@@ -7,6 +7,7 @@ import {
   Film,
   Image,
   Video,
+  Volume2,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -27,7 +28,7 @@ import "./ScenesStep.css";
 
 function parseImportedText(
   text: string,
-): { narration: string; image_prompt?: string; video_prompt?: string }[] {
+): { narration: string; image_prompt?: string; video_prompt?: string; sound_effect?: string; transition?: string }[] {
   text = text.trim();
   if (!text) return [];
 
@@ -37,9 +38,11 @@ function parseImportedText(
     if (Array.isArray(list) && list.length > 0) {
       return list
         .map((item: any) => ({
-          narration: String(item.narration || item.text || item.content || "").trim(),
-          image_prompt: item.image_prompt || item.prompt ? String(item.image_prompt || item.prompt).trim() : undefined,
-          video_prompt: item.video_prompt || item.videoPrompt ? String(item.video_prompt || item.videoPrompt).trim() : undefined,
+          narration: String(item.narration || "").trim(),
+          image_prompt: item.image_prompt ? String(item.image_prompt).trim() : undefined,
+          video_prompt: item.video_prompt ? String(item.video_prompt).trim() : undefined,
+          sound_effect: item.sound_effect ? String(item.sound_effect).trim() : undefined,
+          transition: item.transition ? String(item.transition).trim() : undefined,
         }))
         .filter((item) => item.narration.length > 0);
     }
@@ -48,15 +51,19 @@ function parseImportedText(
   const hasSeparators = /(?:^|\n)\s*(?:Scene\s+\d+[:\s]|---)/i.test(text);
   if (hasSeparators) {
     const blocks = text.split(/(?:^|\n)(?=Scene\s+\d+[:\s]|---)/i).filter((b) => b.trim().length > 0);
-    const result: { narration: string; image_prompt?: string; video_prompt?: string }[] = [];
+    const result: { narration: string; image_prompt?: string; video_prompt?: string; sound_effect?: string; transition?: string }[] = [];
     for (const block of blocks) {
-      const narrationMatch = block.match(/(?:Narration|Text):\s*(.*?)(?=\n(?:Prompt|Video Prompt|Image Prompt):|$)/is);
-      const promptMatch = block.match(/(?:Prompt|Image Prompt):\s*(.*?)(?=\n(?:Video Prompt|Scene\s+\d+|Narration):|$)/is);
-      const videoPromptMatch = block.match(/Video Prompt:\s*(.*?)(?=\n(?:Prompt|Image Prompt|Scene\s+\d+|Narration):|$)/is);
+      const narrationMatch = block.match(/(?:Narration|Text):\s*(.*?)(?=\n(?:Prompt|Video Prompt|Image Prompt|Sound Effect|Transition):|$)/is);
+      const promptMatch = block.match(/(?:Prompt|Image Prompt):\s*(.*?)(?=\n(?:Video Prompt|Sound Effect|Transition|Scene\s+\d+|Narration):|$)/is);
+      const videoPromptMatch = block.match(/Video Prompt:\s*(.*?)(?=\n(?:Prompt|Image Prompt|Sound Effect|Transition|Scene\s+\d+|Narration):|$)/is);
+      const soundEffectMatch = block.match(/Sound Effect:\s*(.*?)(?=\n(?:Prompt|Image Prompt|Video Prompt|Transition|Scene\s+\d+|Narration):|$)/is);
+      const transitionMatch = block.match(/Transition:\s*(.*?)(?=\n(?:Prompt|Image Prompt|Video Prompt|Sound Effect|Scene\s+\d+|Narration):|$)/is);
       const narration = narrationMatch ? narrationMatch[1].trim() : block.replace(/^Scene\s+\d+[:\s]*/i, "").trim();
       const image_prompt = promptMatch ? promptMatch[1].trim() : undefined;
       const video_prompt = videoPromptMatch ? videoPromptMatch[1].trim() : undefined;
-      if (narration) result.push({ narration, image_prompt, video_prompt });
+      const sound_effect = soundEffectMatch ? soundEffectMatch[1].trim() : undefined;
+      const transition = transitionMatch ? transitionMatch[1].trim() : undefined;
+      if (narration) result.push({ narration, image_prompt, video_prompt, sound_effect, transition });
     }
     if (result.length > 0) return result;
   }
@@ -85,8 +92,8 @@ interface Props {
   onAddBlank?: () => void;
   onCloseAdd: () => void;
   editingSceneId: number | null;
-  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null };
-  onEditFormChange: (patch: Partial<{ narration: string; image_prompt: string; video_prompt: string; motion_effect: string; duration_seconds: number | null }>) => void;
+  sceneEditForm: { narration: string; image_prompt: string; video_prompt: string; sound_effect?: string; transition?: string; motion_effect: string; duration_seconds: number | null };
+  onEditFormChange: (patch: Partial<{ narration: string; image_prompt: string; video_prompt: string; sound_effect?: string; transition?: string; motion_effect: string; duration_seconds: number | null }>) => void;
   onStartEdit: (scene: Scene) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: number) => void;
@@ -264,17 +271,17 @@ export default function ScenesStep({
               <button onClick={() => { navigator.clipboard.writeText(scenes.map((s, i) => `${i + 1}. ${s.image_prompt || s.narration}`).join("\n\n")); setCopiedAllType("prompts"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
                 <Copy size={12} /> {copiedAllType === "prompts" ? "Copied!" : "Copy All Prompts"}
               </button>
-              <button onClick={() => { navigator.clipboard.writeText(scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n")); setCopiedAllType("full"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
+              <button onClick={() => { navigator.clipboard.writeText(scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}${s.sound_effect ? `\nSound Effect: ${s.sound_effect}` : ""}${s.transition ? `\nTransition: ${s.transition}` : ""}`).join("\n\n---\n\n")); setCopiedAllType("full"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
                 <Copy size={12} /> {copiedAllType === "full" ? "Copied!" : "Copy All Text"}
               </button>
-              <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2)); setCopiedAllType("json"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
+              <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt, sound_effect: s.sound_effect, transition: s.transition })), null, 2)); setCopiedAllType("json"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
                 <Copy size={12} /> {copiedAllType === "json" ? "Copied!" : "Copy All JSON"}
               </button>
               <div className="scenes-menu-divider" />
-              <button onClick={() => { const j = JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2); downloadFile(j, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, "application/json"); setShowMenu(false); }} className="scenes-menu-item">
+              <button onClick={() => { const j = JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt, sound_effect: s.sound_effect, transition: s.transition })), null, 2); downloadFile(j, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, "application/json"); setShowMenu(false); }} className="scenes-menu-item">
                 <Download size={12} /> Export JSON
               </button>
-              <button onClick={() => { const t = scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n"); downloadFile(t, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, "text/plain"); setShowMenu(false); }} className="scenes-menu-item">
+              <button onClick={() => { const t = scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}${s.sound_effect ? `\nSound Effect: ${s.sound_effect}` : ""}${s.transition ? `\nTransition: ${s.transition}` : ""}`).join("\n\n---\n\n"); downloadFile(t, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, "text/plain"); setShowMenu(false); }} className="scenes-menu-item">
                 <Download size={12} /> Export Text
               </button>
 
@@ -290,21 +297,14 @@ export default function ScenesStep({
       {showFreeAI && (
         <FreeAIGuide
           title="Generate Scenes with Free AI"
-          prompt={dynamicPrompt ? undefined : `SYSTEM PROMPT:\nYou are a video director. Break scripts into scenes as JSON.\nEach scene has a "narration", an "image_prompt", and a "video_prompt".\n\nUSER PROMPT:\nBreak this script into scenes. Each scene needs narration, image prompt, and video prompt.\nReturn JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "..."}]}`}
+          prompt={dynamicPrompt ? undefined : `SYSTEM PROMPT:\nYou are a video director. Break scripts into scenes as JSON.\nEach scene has a "narration", an "image_prompt", a "video_prompt", a "sound_effect", and a "transition".\n\nUSER PROMPT:\nBreak this script into scenes. Each scene needs narration, image_prompt, video_prompt, sound_effect, and transition.\nReturn JSON: {"scenes": [{"narration": "...", "image_prompt": "...", "video_prompt": "...", "sound_effect": "...", "transition": "..."}]}`}
           promptPair={dynamicPrompt || undefined}
           responsePlaceholder='Paste AI response here...'
           onParseResponse={(text) => {
             if (!onImportScenes) return;
             try {
-              const jsonMatch = text.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                const sceneList = parsed.scenes || parsed;
-                if (Array.isArray(sceneList)) {
-                  const sc = sceneList.map((s: any) => ({ narration: s.narration || "", image_prompt: s.image_prompt || "", video_prompt: s.video_prompt || "" })).filter((s: any) => s.narration);
-                  if (sc.length > 0) onImportScenes(sc, false);
-                }
-              }
+              const sc = parseImportedText(text);
+              if (sc.length > 0) onImportScenes(sc, false);
             } catch {}
           }}
         />
@@ -355,7 +355,7 @@ export default function ScenesStep({
                   </p>
 
                   {/* Prompts summary if available */}
-                  {(scene.image_prompt || scene.video_prompt) && (
+                  {(scene.image_prompt || scene.video_prompt || scene.sound_effect || scene.transition) && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.74rem", color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", padding: "0.4rem 0.6rem", borderRadius: "5px" }}>
                       {scene.image_prompt && (
                         <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
@@ -367,6 +367,20 @@ export default function ScenesStep({
                         <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
                           <span style={{ color: "#818cf8", fontWeight: 600, flexShrink: 0 }}>🎬 Video:</span>
                           <span style={{ fontStyle: "italic" }}>{scene.video_prompt}</span>
+                        </div>
+                      )}
+                      {(scene.sound_effect || scene.transition) && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.2rem" }}>
+                          {scene.sound_effect && (
+                            <span style={{ fontSize: "0.7rem", color: "#f472b6", background: "rgba(244,114,182,0.12)", border: "1px solid rgba(244,114,182,0.3)", padding: "0.1rem 0.4rem", borderRadius: "10px", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                              🎵 {scene.sound_effect}
+                            </span>
+                          )}
+                          {scene.transition && (
+                            <span style={{ fontSize: "0.7rem", color: "#38bdf8", background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.3)", padding: "0.1rem 0.4rem", borderRadius: "10px", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                              🎬 {scene.transition}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -520,6 +534,37 @@ export default function ScenesStep({
                         <textarea className="scenes-prompt-textarea" value={sceneEditForm.video_prompt} onChange={(e) => onEditFormChange({ video_prompt: e.target.value })} rows={2} placeholder="Video motion prompt..." />
                       ) : (
                         <p className="scenes-prompt-text">{activeScene.video_prompt || "—"}</p>
+                      )}
+                    </div>
+
+                    {/* Sound Effect Keywords */}
+                    <div className="scenes-prompt-box">
+                      <div className="scenes-prompt-header">
+                        <span className="scenes-prompt-label"><Volume2 size={11} /> Sound Effect Keywords</span>
+                      </div>
+                      {editingSceneId === activeScene.id ? (
+                        <input className="scenes-prompt-textarea" value={sceneEditForm.sound_effect || ""} onChange={(e) => onEditFormChange({ sound_effect: e.target.value })} placeholder="e.g. whoosh, cash register ping, server beep..." style={{ minHeight: "34px", height: "34px", padding: "0.3rem 0.5rem" }} />
+                      ) : (
+                        <p className="scenes-prompt-text">{activeScene.sound_effect || "—"}</p>
+                      )}
+                    </div>
+
+                    {/* Transition Suggestion */}
+                    <div className="scenes-prompt-box">
+                      <div className="scenes-prompt-header">
+                        <span className="scenes-prompt-label"><Sparkles size={11} /> Transition Suggestion</span>
+                      </div>
+                      {editingSceneId === activeScene.id ? (
+                        <select className="scenes-prompt-textarea" value={sceneEditForm.transition || "crossfade"} onChange={(e) => onEditFormChange({ transition: e.target.value })} style={{ minHeight: "34px", height: "34px", padding: "0.3rem 0.5rem", background: "rgba(0,0,0,0.3)", color: "var(--text)" }}>
+                          <option value="crossfade">Crossfade (Default)</option>
+                          <option value="whip pan">Whip Pan</option>
+                          <option value="zoom in">Zoom In</option>
+                          <option value="glitch">Glitch</option>
+                          <option value="fade black">Fade Black</option>
+                          <option value="cut">Direct Cut</option>
+                        </select>
+                      ) : (
+                        <p className="scenes-prompt-text">{activeScene.transition || "crossfade"}</p>
                       )}
                     </div>
                   </div>

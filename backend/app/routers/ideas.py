@@ -162,3 +162,14 @@ def delete_idea(idea_id: int, db: Session = Depends(get_db)):
     db.delete(idea)
     db.commit()
     return {"message": "Idea deleted", "id": idea_id}
+
+
+@router.delete("/project/{project_id}/clear")
+def clear_project_ideas(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    count = db.query(Idea).filter(Idea.project_id == project_id).delete()
+    db.commit()
+    return {"message": "All ideas cleared", "count": count, "project_id": project_id}

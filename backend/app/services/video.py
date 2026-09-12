@@ -220,6 +220,47 @@ class VideoService:
             return True
         return False
 
+    def rename_global_music(self, filename: str, new_name: str, db=None) -> dict | None:
+        folder = self.global_music_dir()
+        old_file = (folder / filename).resolve()
+        if not (old_file.is_file() and str(old_file).startswith(str(folder.resolve()))):
+            return None
+
+        clean_stem = re.sub(r"[^\w.-]", "_", new_name).strip("_")
+        if not clean_stem:
+            clean_stem = f"track_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        new_filename = f"{clean_stem}{old_file.suffix}"
+        new_file = folder / new_filename
+
+        if old_file != new_file:
+            counter = 1
+            while new_file.exists():
+                new_filename = f"{clean_stem}_{counter}{old_file.suffix}"
+                new_file = folder / new_filename
+                counter += 1
+
+            old_file.rename(new_file)
+
+            if db is not None:
+                old_rel = f"assets/music/{filename}"
+                new_rel = f"assets/music/{new_file.name}"
+                from app.models import Timeline
+                timelines = db.query(Timeline).all()
+                for tl in timelines:
+                    if tl.data and old_rel in tl.data:
+                        tl.data = tl.data.replace(old_rel, new_rel)
+                db.commit()
+
+        duration = self._probe_audio_duration(new_file)
+        return {
+            "filename": new_file.name,
+            "name": new_file.stem.replace("_", " ").replace("-", " ").title(),
+            "file_path": f"assets/music/{new_file.name}",
+            "duration_seconds": duration,
+            "size_bytes": new_file.stat().st_size if new_file.exists() else 0,
+        }
+
     def global_clips_dir(self) -> Path:
         p = storage_service.assets_root / "clips"
         p.mkdir(parents=True, exist_ok=True)
@@ -272,6 +313,51 @@ class VideoService:
             target.unlink()
             return True
         return False
+
+    def rename_global_clip(self, filename: str, new_name: str, db=None) -> dict | None:
+        folder = self.global_clips_dir()
+        old_file = (folder / filename).resolve()
+        if not (old_file.is_file() and str(old_file).startswith(str(folder.resolve()))):
+            return None
+
+        clean_stem = re.sub(r"[^\w.-]", "_", new_name).strip("_")
+        if not clean_stem:
+            clean_stem = f"clip_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        new_filename = f"{clean_stem}{old_file.suffix}"
+        new_file = folder / new_filename
+
+        if old_file != new_file:
+            counter = 1
+            while new_file.exists():
+                new_filename = f"{clean_stem}_{counter}{old_file.suffix}"
+                new_file = folder / new_filename
+                counter += 1
+
+            old_file.rename(new_file)
+
+            if db is not None:
+                old_rel = f"assets/clips/{filename}"
+                new_rel = f"assets/clips/{new_file.name}"
+                from app.models import SceneImage, SceneVideo, Timeline
+                db.query(SceneImage).filter(SceneImage.file_path == old_rel).update({"file_path": new_rel}, synchronize_session=False)
+                db.query(SceneVideo).filter(SceneVideo.file_path == old_rel).update({"file_path": new_rel}, synchronize_session=False)
+                timelines = db.query(Timeline).all()
+                for tl in timelines:
+                    if tl.data and old_rel in tl.data:
+                        tl.data = tl.data.replace(old_rel, new_rel)
+                db.commit()
+
+        info = self._probe_video_info(new_file)
+        return {
+            "filename": new_file.name,
+            "name": new_file.stem.replace("_", " ").replace("-", " ").title(),
+            "file_path": f"assets/clips/{new_file.name}",
+            "duration_seconds": info["duration"] if info else None,
+            "width": info["width"] if info else None,
+            "height": info["height"] if info else None,
+            "size_bytes": new_file.stat().st_size if new_file.exists() else 0,
+        }
 
     @staticmethod
     def _parse_resolution(resolution: str) -> tuple[int, int]:

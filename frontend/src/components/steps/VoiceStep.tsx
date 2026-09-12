@@ -243,7 +243,7 @@ export default function VoiceStep({
             <Mic size={13} /> Voice Narration
           </span>
         }
-        subtitle="Generate AI narration or record audio for your scenes"
+        subtitle=""
         onCollapse={onCollapse}
       />
 

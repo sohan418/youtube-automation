@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Project, ProjectStatus, Scene, SceneImage, Script
@@ -59,6 +59,7 @@ def _renumber_scenes(db: Session, project_id: int) -> None:
 def list_scenes(project_id: int, db: Session = Depends(get_db)):
     return (
         db.query(Scene)
+        .options(joinedload(Scene.scene_images), joinedload(Scene.scene_videos))
         .filter(Scene.project_id == project_id)
         .order_by(Scene.order_index)
         .all()
@@ -116,6 +117,8 @@ def create_scene(
         narration=payload.narration,
         image_prompt=payload.image_prompt,
         video_prompt=payload.video_prompt,
+        sound_effect=payload.sound_effect,
+        transition=payload.transition or "crossfade",
     )
     db.add(scene)
     project.status = ProjectStatus.SCENES
@@ -165,6 +168,8 @@ def generate_scenes(
             narration=raw.get("narration", ""),
             image_prompt=raw.get("image_prompt"),
             video_prompt=raw.get("video_prompt"),
+            sound_effect=raw.get("sound_effect"),
+            transition=raw.get("transition", "crossfade"),
         )
         db.add(scene)
         scenes.append(scene)
@@ -293,6 +298,8 @@ def import_scenes(
             narration=item.narration.strip(),
             image_prompt=item.image_prompt.strip() if item.image_prompt else None,
             video_prompt=item.video_prompt.strip() if item.video_prompt else None,
+            sound_effect=item.sound_effect.strip() if item.sound_effect else None,
+            transition=item.transition.strip() if item.transition else "crossfade",
         )
         db.add(scene)
         imported_scenes.append(scene)

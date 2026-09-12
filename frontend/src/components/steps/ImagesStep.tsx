@@ -574,7 +574,15 @@ export default function ImagesStep({
                             <button
                               title="Remove video clip"
                               disabled={!!actionLoading}
-                              onClick={(e) => { e.stopPropagation(); onRemoveVideo(scene.id, tile.id); }}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (tile.id < 0) {
+                                  await api.updateScene(scene.id, { video_path: "" });
+                                  if (onRefreshScenes) await onRefreshScenes();
+                                } else {
+                                  onRemoveVideo(scene.id, tile.id);
+                                }
+                              }}
                               className="tile-action-btn tile-action-btn-danger images-tile-remove-btn"
                             >
                               <X size={13} />
@@ -627,16 +635,18 @@ export default function ImagesStep({
                               ) : tile.source}
                             </span>
                             <div className="images-tile-btns">
-                              <button
-                                title="Copy image"
-                                disabled={!!actionLoading}
-                                onClick={(e) => { e.stopPropagation(); onCopy(tile.id); }}
-                                className="tile-action-btn tile-action-btn-copy"
-                                style={tileActionBtn()}
-                              >
-                                <Copy size={12} />
-                              </button>
-                              {!tile.isPrimary && (
+                              {tile.id > 0 && (
+                                <button
+                                  title="Copy image"
+                                  disabled={!!actionLoading}
+                                  onClick={(e) => { e.stopPropagation(); onCopy(tile.id); }}
+                                  className="tile-action-btn tile-action-btn-copy"
+                                  style={tileActionBtn()}
+                                >
+                                  <Copy size={12} />
+                                </button>
+                              )}
+                              {tile.id > 0 && !tile.isPrimary && (
                                 <button
                                   title="Set as primary image"
                                   disabled={!!actionLoading}
@@ -650,7 +660,15 @@ export default function ImagesStep({
                               <button
                                 title="Remove image"
                                 disabled={!!actionLoading}
-                                onClick={(e) => { e.stopPropagation(); onRemove(tile.id); }}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (tile.id < 0) {
+                                    await api.updateScene(scene.id, { image_path: "" });
+                                    if (onRefreshScenes) await onRefreshScenes();
+                                  } else {
+                                    onRemove(tile.id);
+                                  }
+                                }}
                                 className="tile-action-btn tile-action-btn-danger"
                                 style={tileActionBtn("var(--danger)")}
                               >

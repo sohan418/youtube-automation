@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Settings, Clapperboard, Download, BadgeCheck, Upload, SlidersHorizontal, PlaySquare, RefreshCw, XCircle } from "lucide-react";
+import { Settings, Clapperboard, Download, BadgeCheck, Upload, SlidersHorizontal, PlaySquare, RefreshCw, XCircle, Key } from "lucide-react";
 import { getProgressPercent, getCompletedCount, type StepStatusData, STUDIO_STEPS } from "./studioSteps";
 import type { Project, VideoStatus, LogoConfig } from "../../types";
+import { LLMKeysSettingsModal } from "../editors/LLMKeysSettingsModal";
 import "./StudioHeader.css";
 
 const RATIOS = [
@@ -63,6 +64,7 @@ export default function StudioHeader({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const configBtnRef = useRef<HTMLButtonElement | null>(null);
   const [logoConfigOpen, setLogoConfigOpen] = useState(false);
+  const [llmKeysModalOpen, setLlmKeysModalOpen] = useState(false);
   const [popoverPos, setPopoverPos] = useState<{ top: number; right: number } | null>(null);
 
   const toggleLogoConfig = () => {
@@ -373,9 +375,15 @@ export default function StudioHeader({
 
         <span className="studio-header-gap">|</span>
 
+        <button className="btn-ghost studio-ghost-btn" title="LLM API Keys & Providers" onClick={() => setLlmKeysModalOpen(true)}>
+          <Key size={15} />
+        </button>
+
         <button className="btn-ghost studio-ghost-btn" title="Settings" onClick={openSettings}>
           <Settings size={15} />
         </button>
+
+        <LLMKeysSettingsModal isOpen={llmKeysModalOpen} onClose={() => setLlmKeysModalOpen(false)} />
       </div>
     </header>
   );

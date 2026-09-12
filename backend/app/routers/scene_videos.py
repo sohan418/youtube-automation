@@ -228,12 +228,19 @@ def delete_scene_video(
     if not video:
         raise HTTPException(status_code=404, detail="Video clip not found")
 
-    try:
-        path = storage_service.root.parent / video.file_path
-        if path.exists():
-            path.unlink()
-    except OSError:
-        pass
+    if not video.file_path.startswith("global_gallery/"):
+        other_refs = (
+            db.query(SceneVideo)
+            .filter(SceneVideo.file_path == video.file_path, SceneVideo.id != video.id)
+            .count()
+        )
+        if other_refs == 0:
+            try:
+                path = storage_service.root.parent / video.file_path
+                if path.exists():
+                    path.unlink()
+            except OSError:
+                pass
 
     db.delete(video)
     db.commit()

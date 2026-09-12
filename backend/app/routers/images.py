@@ -274,13 +274,20 @@ def delete_scene_image(image_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Scene not found")
 
     removed = False
-    try:
-        path = storage_service.root.parent / image.file_path
-        if path.exists():
-            path.unlink()
-            removed = True
-    except OSError:
-        pass
+    if not image.file_path.startswith("global_gallery/"):
+        other_refs = (
+            db.query(SceneImage)
+            .filter(SceneImage.file_path == image.file_path, SceneImage.id != image.id)
+            .count()
+        )
+        if other_refs == 0:
+            try:
+                path = storage_service.root.parent / image.file_path
+                if path.exists():
+                    path.unlink()
+                    removed = True
+            except OSError:
+                pass
 
     db.delete(image)
     db.flush()

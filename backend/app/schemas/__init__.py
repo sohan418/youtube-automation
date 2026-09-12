@@ -143,6 +143,8 @@ class SceneCreate(BaseModel):
     image_prompt: str | None = None
     video_prompt: str | None = None
     motion_effect: str | None = "none"
+    sound_effect: str | None = None
+    transition: str | None = "crossfade"
     script_id: int | None = None
     order_index: int | None = None
 
@@ -152,6 +154,8 @@ class SceneImportItem(BaseModel):
     image_prompt: str | None = None
     video_prompt: str | None = None
     motion_effect: str | None = "none"
+    sound_effect: str | None = None
+    transition: str | None = "crossfade"
 
 
 class SceneImportRequest(BaseModel):
@@ -164,6 +168,8 @@ class SceneUpdate(BaseModel):
     image_prompt: str | None = None
     video_prompt: str | None = None
     motion_effect: str | None = None
+    sound_effect: str | None = None
+    transition: str | None = None
     order_index: int | None = None
     duration_seconds: float | None = None
     image_path: str | None = None
@@ -203,6 +209,8 @@ class SceneResponse(BaseModel):
     image_prompt: str | None
     video_prompt: str | None
     motion_effect: str | None = "none"
+    sound_effect: str | None = None
+    transition: str | None = "crossfade"
     image_path: str | None
     video_path: str | None
     audio_path: str | None

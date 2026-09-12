@@ -103,7 +103,7 @@ export function useProjectDetail(projectId: number) {
   const [sceneCount, setSceneCount] = useState("");
   const [ideaTopic, setIdeaTopic] = useState("");
   const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
-  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "none", duration_seconds: null as number | null });
+  const [sceneEditForm, setSceneEditForm] = useState({ narration: "", image_prompt: "", video_prompt: "", sound_effect: "", transition: "crossfade", motion_effect: "none", duration_seconds: null as number | null });
   const [recordingSceneId, setRecordingSceneId] = useState<number | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordingPaused, setRecordingPaused] = useState(false);
@@ -502,6 +502,14 @@ export function useProjectDetail(projectId: number) {
     });
   };
 
+  const clearAllIdeas = async () => {
+    await runAction("clear-ideas", async () => {
+      await api.clearAllIdeas(projectId);
+      setIdeas([]);
+      setSuccess("All ideas deleted.");
+    });
+  };
+
   const importFreeIdeas = async (items: { title: string; description: string; category?: string; trending_score?: number }[]) => {
     await runAction("import-ideas", async () => {
       await api.importIdeas(projectId, items);
@@ -561,6 +569,18 @@ export function useProjectDetail(projectId: number) {
       setCreatingScript(false);
       setScriptForm({ title: "", hook: "", body: "", ending: "" });
       setSuccess("Script created from your content.");
+    });
+  };
+
+  const clearScript = async () => {
+    await runAction("script-clear", async () => {
+      await api.clearProjectScripts(projectId);
+      setScripts([]);
+      setScenes([]);
+      setEditingScript(false);
+      setCreatingScript(false);
+      setScriptForm({ title: "", hook: "", body: "", ending: "" });
+      setSuccess("Script cleared successfully.");
     });
   };
 
@@ -1071,6 +1091,8 @@ export function useProjectDetail(projectId: number) {
       narration: scene.narration,
       image_prompt: scene.image_prompt ?? "",
       video_prompt: scene.video_prompt ?? "",
+      sound_effect: scene.sound_effect ?? "",
+      transition: scene.transition ?? "crossfade",
       motion_effect: scene.motion_effect ?? "none",
       duration_seconds: scene.duration_seconds,
     });
@@ -1079,7 +1101,7 @@ export function useProjectDetail(projectId: number) {
 
   const cancelSceneEdit = () => {
     setEditingSceneId(null);
-    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "", motion_effect: "none", duration_seconds: null });
+    setSceneEditForm({ narration: "", image_prompt: "", video_prompt: "", sound_effect: "", transition: "crossfade", motion_effect: "none", duration_seconds: null });
   };
 
   const saveSceneEdit = async (sceneId: number) => {
@@ -1089,6 +1111,8 @@ export function useProjectDetail(projectId: number) {
         narration: sceneEditForm.narration.trim(),
         image_prompt: sceneEditForm.image_prompt.trim() || null,
         video_prompt: sceneEditForm.video_prompt.trim() || null,
+        sound_effect: sceneEditForm.sound_effect.trim() || null,
+        transition: sceneEditForm.transition || "crossfade",
         motion_effect: sceneEditForm.motion_effect,
       };
       if (sceneEditForm.duration_seconds != null && sceneEditForm.duration_seconds > 0) {
@@ -1415,8 +1439,8 @@ export function useProjectDetail(projectId: number) {
     setSelectedVoiceRate, setClipboardImageId,
     toggleSidebarCollapse,
     runAction, openSettings, saveSettings, saveCaptions, loadAll,
-    generateIdeas, selectIdea, deleteIdea, importFreeIdeas, generateScript, openScriptEdit,
-    saveScript, createScript, generateAllVoice, generateSceneVoice,
+    generateIdeas, selectIdea, deleteIdea, clearAllIdeas, importFreeIdeas, generateScript, openScriptEdit,
+    saveScript, createScript, clearScript, generateAllVoice, generateSceneVoice,
     addSceneImageUrl, handleImageFileSelected, applyImageCrop, generateSceneImage,
     handleVideoFileSelected, applyVideoUpload, removeSceneVideo, removeSceneImage,
     makePrimaryImage, reorderSceneMedia, copySceneImageTo,

@@ -121,6 +121,8 @@ export interface Scene {
   narration: string;
   image_prompt: string | null;
   video_prompt: string | null;
+  sound_effect?: string | null;
+  transition?: string | null;
   image_path: string | null;
   video_path: string | null;
   audio_path: string | null;

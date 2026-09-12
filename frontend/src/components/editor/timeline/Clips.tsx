@@ -211,6 +211,7 @@ export const VideoClipView = memo(function VideoClipView(
   const srcDur = useMediaDuration(probeUrl ?? null, "video");
   const label = clipLabel(clip, orderIndex);
   const isVideoUrl = thumbUrl ? /\.(mp4|webm|mov|mkv)(\?|$)/i.test(thumbUrl) : false;
+
   return (
     <Shell {...props}>
       {thumbUrl ? (
@@ -235,8 +236,8 @@ export const VideoClipView = memo(function VideoClipView(
               position: "absolute",
               inset: 0,
               backgroundImage: `url("${thumbUrl}")`,
-              backgroundSize: "auto 100%",
-              backgroundRepeat: "repeat-x",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
             }}
           />
         )

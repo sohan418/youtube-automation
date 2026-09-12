@@ -61,6 +61,10 @@ async def upload_global_music(file: UploadFile = File(...)):
     return track
 
 
+class RenameMediaRequest(BaseModel):
+    new_name: str
+
+
 @router.delete("/music/{filename}")
 def delete_global_music(filename: str):
     from app.services.video import video_service
@@ -69,6 +73,19 @@ def delete_global_music(filename: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Audio file not found")
     return {"message": f"Deleted '{filename}'"}
+
+
+@router.patch("/music/{filename}", response_model=MusicTrackResponse)
+def rename_global_music(filename: str, payload: RenameMediaRequest, db: Session = Depends(get_db)):
+    from app.services.video import video_service
+
+    if not payload.new_name or not payload.new_name.strip():
+        raise HTTPException(status_code=400, detail="New name cannot be empty")
+
+    updated = video_service.rename_global_music(filename, payload.new_name.strip(), db=db)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Music track not found")
+    return updated
 
 
 @router.get("/clips/library", response_model=list[VideoClipResponse])
@@ -108,6 +125,19 @@ def delete_global_clip(filename: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Video clip not found")
     return {"message": f"Deleted '{filename}'"}
+
+
+@router.patch("/clips/{filename}", response_model=VideoClipResponse)
+def rename_global_clip(filename: str, payload: RenameMediaRequest, db: Session = Depends(get_db)):
+    from app.services.video import video_service
+
+    if not payload.new_name or not payload.new_name.strip():
+        raise HTTPException(status_code=400, detail="New name cannot be empty")
+
+    updated = video_service.rename_global_clip(filename, payload.new_name.strip(), db=db)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Video clip not found")
+    return updated
 
 
 class SaveSceneToGalleryRequest(BaseModel):
@@ -320,6 +350,7 @@ def _run_build(
     track_states: dict | None = None,
     background_music: str | None = None,
     music_volume: float = 0.12,
+    logo_overlay: bool = False,
     logo_position: str = "bottom-right",
     logo_size: float = 12.0,
     logo_margin: int = 30,
@@ -345,7 +376,7 @@ def _run_build(
             force_rebuild=payload.force_rebuild,
             timeline_clips=timeline_clips,
             track_states=track_states,
-            logo_overlay=payload.logo_overlay if payload.logo_overlay else bool(project.logo_overlay),
+            logo_overlay=logo_overlay,
             logo_position=logo_position,
             logo_size=logo_size,
             logo_margin=logo_margin,
@@ -353,9 +384,9 @@ def _run_build(
         )
         db = SessionLocal()
         try:
-            project = db.query(Project).filter(Project.id == project_id).first()
-            if project:
-                project.status = ProjectStatus.VIDEO
+            proj = db.query(Project).filter(Project.id == project_id).first()
+            if proj:
+                proj.status = ProjectStatus.VIDEO
                 db.commit()
         finally:
             db.close()
@@ -460,6 +491,7 @@ def build_video(
     video_service.set_progress(
         project.slug, 0, "starting", "Starting video build..."
     )
+    logo_overlay = payload.logo_overlay if payload.logo_overlay is not None else bool(project.logo_overlay)
     logo_position = payload.logo_position or project.logo_position or "bottom-right"
     logo_size = payload.logo_size if payload.logo_size is not None else (
         project.logo_size if project.logo_size is not None else 12.0
@@ -472,7 +504,7 @@ def build_video(
     )
     thread = threading.Thread(
         target=_run_build,
-        args=(project_id, project.slug, scene_data, payload, timeline_clips, track_states, background_music, music_volume, logo_position, logo_size, logo_margin, logo_opacity),
+        args=(project_id, project.slug, scene_data, payload, timeline_clips, track_states, background_music, music_volume, logo_overlay, logo_position, logo_size, logo_margin, logo_opacity),
         daemon=True,
     )
     thread.start()

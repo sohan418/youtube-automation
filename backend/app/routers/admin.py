@@ -303,3 +303,89 @@ def reset_prompts(db: Session = Depends(get_db)):
         ))
     db.commit()
     return {"status": "ok", "reset": len(DEFAULT_PROMPTS)}
+
+
+# ── LLM API Keys Management ──────────────────────────────────────────
+
+def _mask_key(val: str) -> str:
+    if not val or len(val) < 6:
+        return ""
+    return f"{val[:3]}••••••••{val[-3:]}"
+
+
+class LLMKeysUpdatePayload(BaseModel):
+    ai_provider: str | None = None
+    openai_api_key: str | None = None
+    gemini_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    groq_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    ollama_base_url: str | None = None
+    ollama_model: str | None = None
+
+
+class LLMKeyTestRequest(BaseModel):
+    provider: str
+    key: str | None = None
+
+
+@router.get("/llm-keys")
+def get_llm_keys():
+    from app.config import settings
+
+    return {
+        "ai_provider": settings.ai_provider,
+        "openai_api_key": settings.openai_api_key,
+        "openai_api_key_masked": _mask_key(settings.openai_api_key),
+        "gemini_api_key": settings.gemini_api_key,
+        "gemini_api_key_masked": _mask_key(settings.gemini_api_key),
+        "openrouter_api_key": settings.openrouter_api_key,
+        "openrouter_api_key_masked": _mask_key(settings.openrouter_api_key),
+        "groq_api_key": settings.groq_api_key,
+        "groq_api_key_masked": _mask_key(settings.groq_api_key),
+        "anthropic_api_key": settings.anthropic_api_key,
+        "anthropic_api_key_masked": _mask_key(settings.anthropic_api_key),
+        "ollama_base_url": settings.ollama_base_url,
+        "ollama_model": settings.ollama_model,
+    }
+
+
+@router.post("/llm-keys")
+def update_llm_keys(payload: LLMKeysUpdatePayload):
+    from app.config import settings
+
+    updates: dict[str, str] = {}
+    for field, val in payload.model_dump(exclude_unset=True).items():
+        if val is not None:
+            updates[field] = val
+
+    settings.update_api_keys(updates)
+    return {"message": "LLM API keys updated successfully", "updated": list(updates.keys())}
+
+
+@router.post("/llm-keys/test")
+def test_llm_key(payload: LLMKeyTestRequest):
+    from app.services.providers import PROVIDERS, build_provider
+    from app.config import settings
+
+    provider_type = payload.provider.lower()
+    if provider_type not in PROVIDERS:
+        raise HTTPException(400, f"Unsupported provider '{payload.provider}'. Supported: {list(PROVIDERS)}")
+
+    # Temporarily set key if provided
+    key_field = f"{provider_type}_api_key"
+    if payload.key and hasattr(settings, key_field):
+        orig_val = getattr(settings, key_field)
+        setattr(settings, key_field, payload.key)
+
+    try:
+        provider_cls = PROVIDERS[provider_type]
+        provider = provider_cls()
+        output = provider.complete(
+            system="You are a helpful test assistant.",
+            prompt="Reply with 'Connection successful' if you can read this.",
+            json_mode=False
+        )
+        return {"status": "success", "provider": provider_type, "response": output.strip()}
+    except Exception as exc:
+        raise HTTPException(502, f"Provider test failed: {exc}") from exc

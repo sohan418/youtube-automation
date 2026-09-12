@@ -1,35 +1,39 @@
 import logging
 import httpx
-
 from app.config import settings
 from .base import TextProvider
 
 logger = logging.getLogger(__name__)
 
 
-class OpenAIProvider(TextProvider):
-    name = "openai"
+class GroqProvider(TextProvider):
+    name = "groq"
 
-    def __init__(self) -> None:
-        self.api_key = settings.openai_api_key.strip()
+    def __init__(self):
+        self.api_key = settings.groq_api_key
+        self.model = settings.groq_model or "llama-3.3-70b-versatile"
+
+    def complete(self, system: str, prompt: str, json_mode: bool = False) -> str:
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY is not configured")
-        self.model = settings.ai_model or settings.openai_model or "gpt-4o-mini"
+            raise ValueError("GROQ_API_KEY is not configured")
 
-    def complete(self, system: str, user: str, json_mode: bool = False) -> str:
-        url = "https://api.openai.com/v1/chat/completions"
+        url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
+
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ]
+
+        payload: dict = {
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.8,
+            "messages": messages,
+            "temperature": 0.7,
         }
+
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
@@ -41,4 +45,4 @@ class OpenAIProvider(TextProvider):
         try:
             return data["choices"][0]["message"]["content"]
         except (KeyError, IndexError) as exc:
-            raise ValueError(f"OpenAI API returned invalid structure: {data}") from exc
+            raise ValueError(f"Groq API returned invalid structure: {data}") from exc

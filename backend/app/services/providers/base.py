@@ -11,7 +11,7 @@ class TextProvider(ABC):
         """Return the model's text completion for the given system/user messages."""
 
     @staticmethod
-    def extract_json(content: str) -> dict:
+    def extract_json(content: str) -> dict | list:
         content = content.strip()
         if not content:
             raise ValueError(
@@ -23,8 +23,14 @@ class TextProvider(ABC):
         try:
             return json.loads(content, strict=False)
         except json.JSONDecodeError:
-            start = content.find("{")
-            end = content.rfind("}") + 1
+            first_brace = content.find("{")
+            first_bracket = content.find("[")
+            if first_bracket != -1 and (first_brace == -1 or first_bracket < first_brace):
+                start = first_bracket
+                end = content.rfind("]") + 1
+            else:
+                start = first_brace
+                end = content.rfind("}") + 1
             if start != -1 and end > start:
                 try:
                     return json.loads(content[start:end], strict=False)

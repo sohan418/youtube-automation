@@ -144,10 +144,37 @@ export const PreviewPanel = memo(function PreviewPanel({
         }}
       >
         {(() => {
-          const rawVideo = activeVideo?.video_path;
-          const isImgVid = rawVideo ? /\.(png|jpg|jpeg|webp)$/i.test(rawVideo) : false;
-          const videoSrc = isImgVid ? null : rawVideo;
-          const imageSrc = activeVideo?.image_path || (isImgVid ? rawVideo : null);
+          let videoPath: string | null = null;
+          let imagePath: string | null = null;
+
+          if (activeVideo) {
+            if (activeVideo.video_path) {
+              const isImg = /\.(png|jpg|jpeg|webp)$/i.test(activeVideo.video_path);
+              if (isImg) {
+                imagePath = activeVideo.video_path;
+              } else {
+                videoPath = activeVideo.video_path;
+              }
+            } else if (activeVideo.image_path) {
+              imagePath = activeVideo.image_path;
+            }
+          } else if (scene) {
+            if (scene.image_path) {
+              imagePath = scene.image_path;
+            } else if (scene.video_path) {
+              const isImg = /\.(png|jpg|jpeg|webp)$/i.test(scene.video_path);
+              if (isImg) {
+                imagePath = scene.video_path;
+              } else {
+                videoPath = scene.video_path;
+              }
+            } else if (scene.images && scene.images.length > 0) {
+              imagePath = scene.images[0].file_path;
+            }
+          }
+
+          const videoSrc = videoPath ? mediaUrl(videoPath) : null;
+          const imageSrc = imagePath ? mediaUrl(imagePath) : null;
 
           if (videoSrc) {
             return (

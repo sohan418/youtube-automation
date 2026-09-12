@@ -18,9 +18,14 @@ except ImportError:
 from typing import Any
 
 import httpx
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+try:
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+except ImportError:
+    Credentials = None
+    build = None
+    MediaFileUpload = None
 
 from app.config import BACKEND_DIR, settings
 from app.services.storage import storage_service
@@ -167,8 +172,31 @@ class YouTubeService:
             return None
 
     def _ensure_circular_logo(self, logo_path: Path):
-        """No-op: preserve original logo aspect ratio, transparency and quality."""
-        pass
+        """Crop logo to center square and apply smooth anti-aliased circular alpha mask."""
+        if not logo_path.exists() or logo_path.stat().st_size < 50:
+            return
+        try:
+            from PIL import Image, ImageDraw
+            img = Image.open(logo_path).convert("RGBA")
+            S = min(img.width, img.height)
+            if S <= 0:
+                return
+
+            left = (img.width - S) // 2
+            top = (img.height - S) // 2
+            cropped = img.crop((left, top, left + S, top + S))
+
+            mask = Image.new("L", (S * 2, S * 2), 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0, S * 2 - 1, S * 2 - 1), fill=255)
+            resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+            mask = mask.resize((S, S), resample_filter)
+
+            circular = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+            circular.paste(cropped, (0, 0), mask)
+            circular.save(logo_path, "PNG")
+        except Exception:
+            logger.exception("Failed to apply circular mask to logo at %s", logo_path)
 
     def _create_default_logo(self, logo_path: Path):
         """No-op: do not generate fake placeholder logo."""
@@ -193,6 +221,7 @@ class YouTubeService:
                 if len(resp.content) > 100:
                     branding_dir.mkdir(parents=True, exist_ok=True)
                     logo.write_bytes(resp.content)
+                    self._ensure_circular_logo(logo)
                     return logo
         except Exception:
             logger.exception(f"Failed to download YouTube channel logo for {project_slug}")
@@ -276,9 +305,6 @@ class YouTubeService:
             except Exception as ch_err:
                 logger.warning("Could not auto-fetch channel uploads playlist: %s", ch_err)
 
-        if not pid and not creds and not api_key:
-            return []
-
         # 1. Try OAuth playlistItems fetch if connected
         if creds and pid:
             try:
@@ -334,6 +360,26 @@ class YouTubeService:
             return videos
         except Exception:
             logger.exception("Failed to fetch YouTube playlist items via API key")
+
+        # 3. Fallback to existing database projects / scripts history if YouTube API is unavailable
+        try:
+            from app.database import SessionLocal
+            from app.models import Project, Script
+            db = SessionLocal()
+            db_videos: list[dict[str, Any]] = []
+            try:
+                db_projects = db.query(Project).order_by(Project.created_at.desc()).limit(max_results).all()
+                for p in db_projects:
+                    s = db.query(Script).filter(Script.project_id == p.id).first()
+                    db_videos.append({
+                        "title": s.title if s else p.name,
+                        "description": s.body[:120] if s and s.body else (p.description or ""),
+                    })
+            finally:
+                db.close()
+            return db_videos
+        except Exception as db_err:
+            logger.warning("DB fallback for recent videos failed: %s", db_err)
             return []
 
     def upload_video(

@@ -211,6 +211,7 @@ async def upload_project_logo(
         youtube_service._ensure_circular_logo(logo_path)
     except Exception:
         logo_path.write_bytes(content)
+        youtube_service._ensure_circular_logo(logo_path)
 
     rel_path = logo_path.relative_to(storage_service.root.parent)
     mtime = int(logo_path.stat().st_mtime)

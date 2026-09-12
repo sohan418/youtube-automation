@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Upload, Play, Trash2, X, Plus, Film, Check, LayoutGrid, List } from "lucide-react";
+import { Upload, Play, Trash2, X, Plus, Film, Check, LayoutGrid, List, Pencil } from "lucide-react";
 import type { VideoClip, Scene } from "../../types";
 import { api, mediaUrl } from "../../api/client";
 import StepHeader from "../studio/StepHeader";
-import Select from "../ui/Select";
+import Tabs from "../ui/Tabs";
 import "./GalleryStep.css";
 
 interface Props {
@@ -66,6 +66,8 @@ export default function GalleryStep({
   const [previewClip, setPreviewClip] = useState<VideoClip | null>(null);
   const [applyingClipName, setApplyingClipName] = useState<string | null>(null);
   const [appliedClipName, setAppliedClipName] = useState<string | null>(null);
+  const [editingFilename, setEditingFilename] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -119,6 +121,25 @@ export default function GalleryStep({
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       void processFiles(e.target.files);
+    }
+  };
+
+  const handleRename = async (clip: VideoClip, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === clip.name) {
+      setEditingFilename(null);
+      return;
+    }
+    try {
+      const updated = await api.renameGlobalClip(clip.filename, trimmed);
+      setClips((prev) => prev.map((c) => (c.filename === clip.filename ? updated : c)));
+      if (previewClip && previewClip.filename === clip.filename) {
+        setPreviewClip(updated);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to rename media file");
+    } finally {
+      setEditingFilename(null);
     }
   };
 
@@ -238,19 +259,18 @@ export default function GalleryStep({
 
       <div className="gallery-actions-bar">
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%" }}>
-          <Select
+          <Tabs
             value={activeCat}
             options={[
-              { label: `All Media (${clips.length})`, value: "all" },
-              { label: `Videos (${clips.filter((c) => isVideoFile(c.filename)).length})`, value: "videos" },
-              { label: `Images (${clips.filter((c) => isImageFile(c.filename)).length})`, value: "images" },
-              { label: `Hooks & Intros (${clips.filter((c) => getClipCategory(c.filename) === "hook").length})`, value: "hook" },
-              { label: `Ending & CTAs (${clips.filter((c) => getClipCategory(c.filename) === "cta").length})`, value: "cta" },
-              { label: `Backgrounds (${clips.filter((c) => getClipCategory(c.filename) === "background").length})`, value: "background" },
-              { label: `Other (${clips.filter((c) => getClipCategory(c.filename) === "other").length})`, value: "other" },
+              { label: "All Media", value: "all", count: clips.length },
+              { label: "Videos", value: "videos", count: clips.filter((c) => isVideoFile(c.filename)).length },
+              { label: "Images", value: "images", count: clips.filter((c) => isImageFile(c.filename)).length },
+              { label: "Hooks & Intros", value: "hook", count: clips.filter((c) => getClipCategory(c.filename) === "hook").length },
+              { label: "Ending & CTAs", value: "cta", count: clips.filter((c) => getClipCategory(c.filename) === "cta").length },
+              { label: "Backgrounds", value: "background", count: clips.filter((c) => getClipCategory(c.filename) === "background").length },
+              { label: "Other", value: "other", count: clips.filter((c) => getClipCategory(c.filename) === "other").length },
             ]}
             onChange={(val) => setActiveCat(val as CategoryTab)}
-            size="sm"
             style={{ width: "100%" }}
           />
 
@@ -352,9 +372,63 @@ export default function GalleryStep({
                   </div>
 
                   <div className="gallery-info">
-                    <div className="gallery-title" title={clip.name}>
-                      {clip.name}
-                    </div>
+                    {editingFilename === clip.filename ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px", margin: "2px 0" }}>
+                        <input
+                          type="text"
+                          value={editNameValue}
+                          onChange={(e) => setEditNameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleRename(clip, editNameValue);
+                            if (e.key === "Escape") setEditingFilename(null);
+                          }}
+                          autoFocus
+                          style={{
+                            flex: 1,
+                            fontSize: "0.75rem",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            background: "rgba(0,0,0,0.5)",
+                            border: "1px solid var(--primary)",
+                            color: "#fff",
+                            width: "100%",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRename(clip, editNameValue)}
+                          style={{ background: "none", border: "none", color: "var(--success)", cursor: "pointer", padding: "2px" }}
+                          title="Save Name"
+                        >
+                          <Check size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingFilename(null)}
+                          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "2px" }}
+                          title="Cancel"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+                        <div className="gallery-title" title={clip.name} style={{ flex: 1 }}>
+                          {clip.name}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingFilename(clip.filename);
+                            setEditNameValue(clip.name);
+                          }}
+                          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "2px", opacity: 0.7, flexShrink: 0 }}
+                          title="Rename file"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                      </div>
+                    )}
                     <div className="gallery-meta">
                       {clip.width && clip.height ? <span>{clip.width}x{clip.height}</span> : null}
                       <span>{formatBytes(clip.size_bytes)}</span>
@@ -431,7 +505,41 @@ export default function GalleryStep({
         <div className="gallery-modal-overlay" onClick={() => setPreviewClip(null)}>
           <div className="gallery-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="gallery-modal-header">
-              <div className="gallery-modal-title">{previewClip.name}</div>
+              {editingFilename === previewClip.filename ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
+                  <input
+                    type="text"
+                    value={editNameValue}
+                    onChange={(e) => setEditNameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRename(previewClip, editNameValue);
+                      if (e.key === "Escape") setEditingFilename(null);
+                    }}
+                    autoFocus
+                    style={{ flex: 1, fontSize: "0.85rem", padding: "3px 8px", borderRadius: "4px", background: "rgba(0,0,0,0.5)", border: "1px solid var(--primary)", color: "#fff" }}
+                  />
+                  <button onClick={() => handleRename(previewClip, editNameValue)} style={{ background: "none", border: "none", color: "var(--success)", cursor: "pointer" }}>
+                    <Check size={14} />
+                  </button>
+                  <button onClick={() => setEditingFilename(null)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="gallery-modal-title" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span>{previewClip.name}</span>
+                  <button
+                    onClick={() => {
+                      setEditingFilename(previewClip.filename);
+                      setEditNameValue(previewClip.name);
+                    }}
+                    style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "2px" }}
+                    title="Rename"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                </div>
+              )}
               <button onClick={() => setPreviewClip(null)} className="seo-icon-btn">
                 <X size={14} />
               </button>

@@ -238,16 +238,30 @@ def update_script(script_id: int, payload: ScriptUpdate, db: Session = Depends(g
     return script
 
 
-@router.post("/project/{project_id}/prompt")
-def build_script_prompt(project_id: int, payload: ScriptPromptRequest, db: Session = Depends(get_db)):
-    """Return the exact prompt that would be sent to the LLM for script generation."""
+@router.delete("/{script_id}")
+def delete_script(script_id: int, db: Session = Depends(get_db)):
+    script = db.query(Script).filter(Script.id == script_id).first()
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+
+    project_id = script.project_id
+    from app.models import Scene
+    db.query(Scene).filter(Scene.script_id == script_id).delete()
+    db.delete(script)
+    db.commit()
+
+    return {"message": "Script deleted", "id": script_id, "project_id": project_id}
+
+
+@router.delete("/project/{project_id}/clear")
+def clear_project_scripts(project_id: int, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    topic = payload.topic or project.name
-    return ai_service.build_script_prompt(
-        topic=topic,
-        language=payload.language or project.language,
-        target_duration_minutes=payload.target_duration_minutes,
-    )
+    from app.models import Scene
+    db.query(Scene).filter(Scene.project_id == project_id).delete()
+    count = db.query(Script).filter(Script.project_id == project_id).delete()
+    db.commit()
+
+    return {"message": "All scripts cleared", "count": count, "project_id": project_id}

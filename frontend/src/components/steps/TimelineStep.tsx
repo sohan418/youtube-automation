@@ -83,26 +83,73 @@ async function applyOriginalMediaLengths(
   return [...placed, ...loose].sort((a, b) => a.start - b.start);
 }
 
-function buildDefaultTimeline(scenes: Scene[]): TimelineData {
-  let t = 0;
+function buildSceneVideoClips(s: Scene, startT: number): TimelineClip[] {
+  const totalDuration = s.duration_seconds ?? 5;
+  const mediaItems: { image_path: string | null; video_path: string | null }[] = [];
+
+  const images = [...(s.images || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const videos = [...(s.videos || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+  for (const img of images) {
+    if (img.file_path) {
+      mediaItems.push({ image_path: img.file_path, video_path: null });
+    }
+  }
+  for (const vid of videos) {
+    if (vid.file_path) {
+      const isImg = /\.(png|jpg|jpeg|webp)$/i.test(vid.file_path);
+      mediaItems.push({
+        image_path: isImg ? vid.file_path : null,
+        video_path: isImg ? null : vid.file_path,
+      });
+    }
+  }
+
+  if (mediaItems.length === 0) {
+    mediaItems.push({
+      image_path: s.image_path || null,
+      video_path: s.video_path || null,
+    });
+  }
+
+  const subDuration = Math.max(0.2, totalDuration / mediaItems.length);
+  let curT = startT;
   const clips: TimelineClip[] = [];
-  for (const s of scenes) {
-    const duration = s.duration_seconds ?? 5;
-    const image = s.image_path || s.images?.[0]?.file_path || null;
+
+  mediaItems.forEach((m, idx) => {
+    const isLast = idx === mediaItems.length - 1;
+    const dur = isLast
+      ? Math.max(0.2, Math.round((startT + totalDuration - curT) * 100) / 100)
+      : Math.max(0.2, Math.round(subDuration * 100) / 100);
+
     clips.push({
-      id: `v-${s.id}-${t.toFixed(2)}`,
+      id: `v-${s.id}-${curT.toFixed(2)}-${idx}`,
       scene_id: s.id,
       track: "video",
-      start: t,
-      duration,
-      image_path: image,
-      video_path: s.video_path,
+      start: Math.round(curT * 100) / 100,
+      duration: dur,
+      image_path: m.image_path,
+      video_path: m.video_path,
       audio_path: null,
       audio_in: 0,
       audio_out: null,
       volume: 1,
       motion_effect: s.motion_effect || "none",
     });
+
+    curT += dur;
+  });
+
+  return clips;
+}
+
+function buildDefaultTimeline(scenes: Scene[]): TimelineData {
+  let t = 0;
+  const clips: TimelineClip[] = [];
+  for (const s of scenes) {
+    const duration = s.duration_seconds ?? 5;
+    const vClips = buildSceneVideoClips(s, t);
+    clips.push(...vClips);
     if (s.audio_path) {
       clips.push({
         id: `n-${s.id}-${t.toFixed(2)}`,
@@ -195,6 +242,35 @@ export default function TimelineStep({
       (c) => c.scene_id >= 0 && !existingSceneIds.has(c.scene_id),
     );
 
+    // Check if any scene's media item count has changed compared to video clips on timeline
+    const videoClipsByScene = new Map<number, TimelineClip[]>();
+    for (const c of timeline.clips) {
+      if (c.track === "video" && c.scene_id >= 0) {
+        const list = videoClipsByScene.get(c.scene_id) || [];
+        list.push(c);
+        videoClipsByScene.set(c.scene_id, list);
+      }
+    }
+
+    let mediaStructureChanged = false;
+    for (const s of scenes) {
+      const existingClips = videoClipsByScene.get(s.id) || [];
+      const imageCount = (s.images || []).length;
+      const videoCount = (s.videos || []).length;
+      const expectedCount = Math.max(1, imageCount + videoCount);
+      if (existingClips.length > 0 && existingClips.length !== expectedCount) {
+        mediaStructureChanged = true;
+        break;
+      }
+    }
+
+    if (mediaStructureChanged) {
+      const base = buildDefaultTimeline(scenes);
+      base.music = timeline.music;
+      onTimelineChange(base);
+      return;
+    }
+
     let mediaChanged = false;
     let updatedClips = timeline.clips
       .filter((c) => c.scene_id < 0 || existingSceneIds.has(c.scene_id))
@@ -202,18 +278,13 @@ export default function TimelineStep({
         if (c.scene_id >= 0) {
           const s = sceneByIdMap.get(c.scene_id);
           if (s) {
-            const expectedImage = s.image_path || s.images?.[0]?.file_path || null;
             const expectedVideo = s.video_path || null;
             const expectedAudio = s.audio_path || null;
             let changed = false;
             const patch: Partial<TimelineClip> = {};
             if (c.track === "video") {
-              if (c.video_path !== expectedVideo) {
+              if (!c.image_path && c.video_path !== expectedVideo) {
                 patch.video_path = expectedVideo;
-                changed = true;
-              }
-              if (c.image_path !== expectedImage) {
-                patch.image_path = expectedImage;
                 changed = true;
               }
             } else if (c.track === "narration") {
@@ -237,21 +308,8 @@ export default function TimelineStep({
       let t = updatedClips.reduce((max, c) => Math.max(max, c.start + c.duration), 0);
       for (const s of missingScenes) {
         const duration = s.duration_seconds ?? 5;
-        const image = s.image_path || s.images?.[0]?.file_path || null;
-        updatedClips.push({
-          id: `v-${s.id}-${t.toFixed(2)}`,
-          scene_id: s.id,
-          track: "video",
-          start: Math.round(t * 100) / 100,
-          duration,
-          image_path: image,
-          video_path: s.video_path,
-          audio_path: null,
-          audio_in: 0,
-          audio_out: null,
-          volume: 1,
-          motion_effect: s.motion_effect || "none",
-        });
+        const vClips = buildSceneVideoClips(s, t);
+        updatedClips.push(...vClips);
         if (s.audio_path) {
           updatedClips.push({
             id: `n-${s.id}-${t.toFixed(2)}`,
@@ -274,10 +332,10 @@ export default function TimelineStep({
     const maxT = updatedClips.reduce((max, c) => Math.max(max, c.start + c.duration), 0);
     onTimelineChange({
       ...timeline,
-      clips: updatedClips,
       duration: Math.round(maxT * 100) / 100,
+      clips: updatedClips,
     });
-  }, [timeline, scenes]);
+  }, [scenes, timeline, onTimelineChange]);
 
   const handleChange = (tl: TimelineData) => {
     setSaved(false);

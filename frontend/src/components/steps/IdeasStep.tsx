@@ -17,6 +17,7 @@ interface Props {
   onGenerate: () => void;
   onSelect: (id: number) => void;
   onDeleteIdea?: (id: number) => void;
+  onClearAllIdeas?: () => Promise<void>;
   onFreeAIResponse?: (ideas: { title: string; description: string; category?: string; trending_score?: number }[]) => void;
   recentVideos?: YouTubeVideo[];
   onOpenSettings?: () => void;
@@ -72,7 +73,7 @@ function parseFreeAIResponse(text: string): { title: string; description: string
 
 const CATEGORIES = ["Trending", "AI", "Education", "Comedy", "Facts", "Gaming", "Technology", "Science"];
 
-export default function IdeasStep({ projectId, projectLanguage, projectCategory, ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onDeleteIdea, onFreeAIResponse, recentVideos, onOpenSettings, onCollapse }: Props) {
+export default function IdeasStep({ projectId, projectLanguage, projectCategory, ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onDeleteIdea, onClearAllIdeas, onFreeAIResponse, recentVideos, onOpenSettings, onCollapse }: Props) {
   const [showFreeAI, setShowFreeAI] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
@@ -141,7 +142,7 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
     <div className="ideas-step">
       <StepHeader
         title="Video Ideas"
-        subtitle="Find your next video idea"
+        subtitle=""
         onCollapse={onCollapse}
       />
 
@@ -180,6 +181,18 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
               </button>
               <button className="btn-secondary ideas-action-btn-flex" onClick={() => downloadFile(ideas.map((i, idx) => `${idx + 1}. ${i.title}${i.trending_score ? ` (Score: ${i.trending_score})` : ""}\n${i.description || ""}`).join("\n\n"), "ideas.txt", "text/plain")}>
                 <Download size={11} /> Text
+              </button>
+              <button
+                className="btn-secondary ideas-action-btn-flex"
+                style={{ color: "var(--danger)" }}
+                disabled={!!actionLoading}
+                onClick={async () => {
+                  if (window.confirm("Are you sure you want to delete all ideas for this project?")) {
+                    if (onClearAllIdeas) await onClearAllIdeas();
+                  }
+                }}
+              >
+                <Trash2 size={11} /> Clear All
               </button>
             </>
           )}

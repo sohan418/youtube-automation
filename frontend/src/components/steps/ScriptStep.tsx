@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Sparkles, Download, Upload, FileText, X, Pencil } from "lucide-react";
+import { Sparkles, Download, Upload, FileText, X, Pencil, Trash2 } from "lucide-react";
 import type { Idea, Script } from "../../types";
 import { api } from "../../api/client";
 import StepHeader from "../studio/StepHeader";
@@ -25,6 +25,7 @@ interface Props {
   form: { title: string; hook: string; body: string; ending: string };
   onFormChange: (patch: Partial<{ title: string; hook: string; body: string; ending: string }>) => void;
   onImportScript?: (imported: { title?: string; hook?: string; body: string; ending?: string; language?: string }, replace: boolean) => Promise<void>;
+  onClearScript?: () => void;
   onCollapse?: () => void;
 }
 
@@ -110,6 +111,7 @@ export default function ScriptStep({
   form,
   onFormChange,
   onImportScript,
+  onClearScript,
   onCollapse,
 }: Props) {
   const activeScript = scripts.find((s) => s.is_active) || null;
@@ -237,6 +239,21 @@ export default function ScriptStep({
           >
             <Upload size={12} /> Import
           </button>
+          {activeScript && onClearScript && (
+            <button
+              className="btn-secondary script-btn-clear"
+              disabled={!!actionLoading}
+              onClick={() => {
+                if (window.confirm("Are you sure you want to clear this script and its scenes?")) {
+                  onClearScript();
+                }
+              }}
+              title="Clear active script"
+              style={{ color: "#f87171", borderColor: "#f8717133" }}
+            >
+              <Trash2 size={12} /> Clear
+            </button>
+          )}
         </div>
       </div>
 
