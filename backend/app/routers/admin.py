@@ -136,7 +136,7 @@ DEFAULT_PROMPTS = {
         "user": (
             "Generate SEO metadata for a YouTube video.\nTitle: {title}\n"
             "Script excerpt: {script_excerpt}\nLanguage: {language}\n"
-            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}'
+            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "...", "timestamps": "..."}'
         ),
     },
     "seo_shorts": {
@@ -150,7 +150,7 @@ DEFAULT_PROMPTS = {
             "Generate SEO metadata for a YouTube Short.\nTitle: {title}\n"
             "Script excerpt: {script_excerpt}\nLanguage: {language}\n"
             "Keep title under 50 characters. Focus on trending Shorts hashtags. "
-            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}'
+            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "...", "timestamps": "..."}'
         ),
     },
     "thumbnail": {

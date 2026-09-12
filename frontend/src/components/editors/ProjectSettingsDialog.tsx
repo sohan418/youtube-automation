@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Key, Play } from "lucide-react";
-import type { Project, SEOCategory, VoiceConfig } from "../../types";
+import type { Project, SEOCategory, VoiceConfig, YouTubeConfig } from "../../types";
 import Select from "../ui/Select";
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   project: Project;
   categories: SEOCategory[];
   voiceConfig: VoiceConfig | null;
-  youtubeConfig: { youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean } | null;
+  youtubeConfig: YouTubeConfig | null;
   actionLoading: string;
   onClose: () => void;
   onSave: (
@@ -605,10 +605,23 @@ export default function ProjectSettingsDialog({
             </label>
 
             <label>
-              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Client Secret</span>
+              <span
+                style={{
+                  fontSize: "0.7rem",
+                  color: "var(--text-muted)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>Client Secret</span>
+                {youtubeConfig?.youtube_client_secret_configured && (
+                  <span style={{ color: "var(--success)", fontSize: "0.65rem" }}>✓ Configured</span>
+                )}
+              </span>
               <input
                 type="password"
-                placeholder="Google OAuth Client Secret"
+                placeholder={youtubeConfig?.youtube_client_secret_configured ? "••••••••••••••••" : "Google OAuth Client Secret"}
                 value={youtubeKeys.youtube_client_secret}
                 onChange={(e) => setYoutubeKeys((prev) => ({ ...prev, youtube_client_secret: e.target.value }))}
                 style={{ width: "100%", padding: "0.38rem 0.6rem", marginTop: "2px" }}

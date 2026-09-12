@@ -4,7 +4,6 @@ import {
   FileText,
   X,
   Pencil,
-  Search,
   Film,
   Image,
   Video,
@@ -18,9 +17,11 @@ import {
   Trash2,
   MoreHorizontal,
   Clock,
+  LayoutGrid,
 } from "lucide-react";
 import type { Scene, Script } from "../../types";
-import { api, mediaUrl } from "../../api/client";
+import { api } from "../../api/client";
+import StepHeader from "../studio/StepHeader";
 import FreeAIGuide from "../editors/FreeAIGuide";
 import "./ScenesStep.css";
 
@@ -92,6 +93,7 @@ interface Props {
   onRemove: (id: number) => void;
   onImportScenes?: (importedList: { narration: string; image_prompt?: string; video_prompt?: string }[], replace: boolean) => void;
   projectName?: string;
+  onCollapse?: () => void;
 }
 
 export default function ScenesStep({
@@ -100,7 +102,7 @@ export default function ScenesStep({
   onGenerate, onClearAll, addingScene, addSceneAt, newSceneNarration,
   onNewSceneNarration, onAddScene, onOpenAdd, onAddBlank, onCloseAdd, editingSceneId,
   sceneEditForm, onEditFormChange, onStartEdit, onCancelEdit, onSaveEdit,
-  onRemove, onImportScenes, projectName = "project",
+  onRemove, onImportScenes, projectName = "project", onCollapse,
 }: Props) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [copiedImageId, setCopiedImageId] = useState<number | null>(null);
@@ -113,7 +115,7 @@ export default function ScenesStep({
   const [importReplace, setImportReplace] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"single" | "grid">("single");
   const menuRef = useRef<HTMLDivElement>(null);
   const [dynamicPrompt, setDynamicPrompt] = useState<{ system: string; user: string } | null>(null);
 
@@ -168,21 +170,7 @@ export default function ScenesStep({
   };
 
   const activeScene = scenes[activeIdx];
-  const filteredScenes = scenes.filter((s) => s.narration.toLowerCase().includes(searchQuery.toLowerCase()));
   const getDuration = (scene: Scene) => scene.duration_seconds;
-  const fmtDuration = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
-
-  const currentEffect = activeScene
-    ? editingSceneId === activeScene.id ? sceneEditForm.motion_effect : (activeScene.motion_effect || "none")
-    : "none";
-  const animationStyle =
-    currentEffect === "zoom_in" ? "scene-zoom-in 10s ease-in-out infinite alternate"
-    : currentEffect === "zoom_out" ? "scene-zoom-out 10s ease-in-out infinite alternate"
-    : currentEffect === "pan_right" ? "scene-pan-right 12s ease-in-out infinite alternate"
-    : currentEffect === "pan_left" ? "scene-pan-left 12s ease-in-out infinite alternate"
-    : currentEffect === "pan_up" ? "scene-pan-up 12s ease-in-out infinite alternate"
-    : currentEffect === "pan_down" ? "scene-pan-down 12s ease-in-out infinite alternate"
-    : "none";
 
   const sceneForm = (position: number | null) => {
     if (!addingScene || addSceneAt !== position) return null;
@@ -203,57 +191,99 @@ export default function ScenesStep({
 
   return (
     <div className="scenes-root">
-      {/* ── Header ── */}
-      <div className="scenes-header">
-        <h2 className="scenes-title">Scenes ({scenes.length})</h2>
-        <div className="scenes-header-actions">
-          <button className="btn-primary scenes-generate-btn" disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
-            {actionLoading === "scenes" ? "Generating..." : <><Sparkles size={12} /> Generate</>}
-          </button>
-          <input type="number" min={1} max={30} value={sceneCount} onChange={(e) => onSceneCountChange(e.target.value)} placeholder="Auto" title="Scene count" className="scenes-count-input" />
-          <button className="btn-accent scenes-add-btn" disabled={!!actionLoading} onClick={() => onOpenAdd(null)}>
-            <Plus size={12} /> Add
-          </button>
-          <button className="btn-secondary scenes-add-btn" disabled={!!actionLoading} onClick={() => onAddBlank?.()} title="Add a blank scene (fill in later)">
-            <Plus size={12} /> Blank
-          </button>
-          <button className="btn-secondary scenes-add-btn" onClick={() => setShowFreeAI(!showFreeAI)}>
-            {showFreeAI ? "Hide Free AI" : "Free AI"}
-          </button>
-          <button className="btn-secondary scenes-add-btn scenes-import-btn" onClick={() => setShowImportModal(true)}>
-            <Upload size={12} /> Import
-          </button>
+      <StepHeader title="Scenes" count={scenes.length} onCollapse={onCollapse} />
 
-          <div ref={menuRef} className="scenes-menu-wrap">
-            <button className="btn-secondary scenes-menu-btn" disabled={scenes.length === 0} onClick={() => setShowMenu(!showMenu)}>
-              <MoreHorizontal size={14} />
-            </button>
-            {showMenu && (
-              <div className="scenes-menu">
-                <button onClick={() => { navigator.clipboard.writeText(scenes.map((s, i) => `${i + 1}. ${s.image_prompt || s.narration}`).join("\n\n")); setCopiedAllType("prompts"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
-                  <Copy size={12} /> {copiedAllType === "prompts" ? "Copied!" : "Copy All Prompts"}
-                </button>
-                <button onClick={() => { navigator.clipboard.writeText(scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n")); setCopiedAllType("full"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
-                  <Copy size={12} /> {copiedAllType === "full" ? "Copied!" : "Copy All Text"}
-                </button>
-                <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2)); setCopiedAllType("json"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
-                  <Copy size={12} /> {copiedAllType === "json" ? "Copied!" : "Copy All JSON"}
-                </button>
-                <div className="scenes-menu-divider" />
-                <button onClick={() => { const j = JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2); downloadFile(j, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, "application/json"); setShowMenu(false); }} className="scenes-menu-item">
-                  <Download size={12} /> Export JSON
-                </button>
-                <button onClick={() => { const t = scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n"); downloadFile(t, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, "text/plain"); setShowMenu(false); }} className="scenes-menu-item">
-                  <Download size={12} /> Export Text
-                </button>
+      <div className="scenes-header-actions">
+        {/* View Mode Toggle: Single Scene Focus vs All Scenes Grid */}
+        <div style={{ display: "flex", gap: "2px", background: "var(--surface-light, rgba(255,255,255,0.05))", padding: "2px", borderRadius: "6px", border: "1px solid var(--border)" }}>
+          <button
+            type="button"
+            onClick={() => setViewMode("single")}
+            title="Single Scene Focus View"
+            style={{
+              padding: "3px 7px",
+              borderRadius: "4px",
+              border: "none",
+              background: viewMode === "single" ? "var(--primary)" : "transparent",
+              color: viewMode === "single" ? "#fff" : "var(--text-muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "0.7rem",
+              fontWeight: viewMode === "single" ? 600 : 400,
+            }}
+          >
+            <Film size={12} /> Single
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            title="All Scenes Grid View"
+            style={{
+              padding: "3px 7px",
+              borderRadius: "4px",
+              border: "none",
+              background: viewMode === "grid" ? "var(--primary)" : "transparent",
+              color: viewMode === "grid" ? "#fff" : "var(--text-muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "0.7rem",
+              fontWeight: viewMode === "grid" ? 600 : 400,
+            }}
+          >
+            <LayoutGrid size={12} /> All Grid
+          </button>
+        </div>
 
-                <div className="scenes-menu-divider" />
-                <button disabled={!!actionLoading} onClick={() => { onClearAll(); setShowMenu(false); }} className="scenes-menu-item scenes-menu-item-danger">
-                  <Trash2 size={12} /> Clear All
-                </button>
-              </div>
-            )}
-          </div>
+        <button className="btn-primary scenes-generate-btn" disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
+          {actionLoading === "scenes" ? "Generating..." : <><Sparkles size={12} /> Generate</>}
+        </button>
+        <input type="number" min={1} max={30} value={sceneCount} onChange={(e) => onSceneCountChange(e.target.value)} placeholder="Auto" title="Scene count" className="scenes-count-input" />
+        <button className="btn-accent scenes-add-btn" disabled={!!actionLoading} onClick={() => onOpenAdd(null)}>
+          <Plus size={12} /> Add
+        </button>
+        <button className="btn-secondary scenes-add-btn" disabled={!!actionLoading} onClick={() => onAddBlank?.()} title="Add a blank scene (fill in later)">
+          <Plus size={12} /> Blank
+        </button>
+        <button className="btn-secondary scenes-add-btn" onClick={() => setShowFreeAI(!showFreeAI)}>
+          {showFreeAI ? "Hide Free AI" : "Free AI"}
+        </button>
+        <button className="btn-secondary scenes-add-btn scenes-import-btn" onClick={() => setShowImportModal(true)}>
+          <Upload size={12} /> Import
+        </button>
+
+        <div ref={menuRef} className="scenes-menu-wrap">
+          <button className="btn-secondary scenes-menu-btn" disabled={scenes.length === 0} onClick={() => setShowMenu(!showMenu)}>
+            <MoreHorizontal size={14} />
+          </button>
+          {showMenu && (
+            <div className="scenes-menu">
+              <button onClick={() => { navigator.clipboard.writeText(scenes.map((s, i) => `${i + 1}. ${s.image_prompt || s.narration}`).join("\n\n")); setCopiedAllType("prompts"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
+                <Copy size={12} /> {copiedAllType === "prompts" ? "Copied!" : "Copy All Prompts"}
+              </button>
+              <button onClick={() => { navigator.clipboard.writeText(scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n")); setCopiedAllType("full"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
+                <Copy size={12} /> {copiedAllType === "full" ? "Copied!" : "Copy All Text"}
+              </button>
+              <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2)); setCopiedAllType("json"); setShowMenu(false); setTimeout(() => setCopiedAllType(null), 2000); }} className="scenes-menu-item">
+                <Copy size={12} /> {copiedAllType === "json" ? "Copied!" : "Copy All JSON"}
+              </button>
+              <div className="scenes-menu-divider" />
+              <button onClick={() => { const j = JSON.stringify(scenes.map((s) => ({ order_index: s.order_index, narration: s.narration, image_prompt: s.image_prompt, video_prompt: s.video_prompt })), null, 2); downloadFile(j, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`, "application/json"); setShowMenu(false); }} className="scenes-menu-item">
+                <Download size={12} /> Export JSON
+              </button>
+              <button onClick={() => { const t = scenes.map((s) => `Scene ${s.order_index}:\nNarration: ${s.narration}${s.image_prompt ? `\nPrompt: ${s.image_prompt}` : ""}${s.video_prompt ? `\nVideo: ${s.video_prompt}` : ""}`).join("\n\n---\n\n"); downloadFile(t, `scenes-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, "text/plain"); setShowMenu(false); }} className="scenes-menu-item">
+                <Download size={12} /> Export Text
+              </button>
+
+              <div className="scenes-menu-divider" />
+              <button disabled={!!actionLoading} onClick={() => { onClearAll(); setShowMenu(false); }} className="scenes-menu-item scenes-menu-item-danger">
+                <Trash2 size={12} /> Clear All
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -290,207 +320,252 @@ export default function ScenesStep({
         </div>
       ) : (
         <div className="scenes-main">
-          {/* ── Left: Sidebar ── */}
-          <div className="scenes-side-panel">
-            <div className="scenes-search-bar">
-              <Search size={12} color="var(--text-muted)" />
-              <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="scenes-search-input" />
-              {searchQuery && <button onClick={() => setSearchQuery("")} className="scenes-search-clear"><X size={11} color="var(--text-muted)" /></button>}
-            </div>
-            <div className="scenes-search-list">
-              {filteredScenes.map((scene) => {
-                const idx = scenes.findIndex((s) => s.id === scene.id);
-                const active = idx === activeIdx;
-                return (
-                  <button key={scene.id} onClick={() => setActiveIdx(idx)} style={{
-                    display: "flex", alignItems: "center", gap: "0.4rem", width: "100%",
-                    background: active ? "rgba(62, 166, 255, 0.08)" : "transparent",
-                    border: "none", borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
-                    padding: "0.4rem 0.5rem", textAlign: "left", cursor: "pointer", transition: "all 0.1s",
-                    borderBottom: "1px solid var(--border)",
-                  }}>
-                    <span style={{
-                      width: 18, height: 18, borderRadius: "50%", fontSize: "0.65rem", fontWeight: 700, flexShrink: 0,
-                      background: active ? "var(--accent)" : "rgba(255,255,255,0.06)", color: active ? "#000" : "var(--text-muted)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>{idx + 1}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: "0.72rem", margin: 0, color: "var(--text)", fontWeight: active ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {scene.narration}
-                      </p>
-                    </div>
-                    <span style={{ fontSize: "0.6rem", color: "var(--text-muted)", flexShrink: 0 }}>{getDuration(scene) != null ? fmtDuration(getDuration(scene)!) : "—"}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <button onClick={() => onOpenAdd(null)} disabled={!!actionLoading} className="scenes-add-scene-btn">
-              <Plus size={12} /> Add Scene
-            </button>
-          </div>
-
-          {/* ── Right: Editor ── */}
-          <div className="scenes-editor">
-            <div className="scenes-editor-toolbar">
-              <span className="scenes-counter">Scene {activeIdx + 1} / {scenes.length}</span>
-              
-              {/* Toolbar Actions */}
-              {activeScene && (
-                <div className="scenes-toolbar-actions">
-                  {editingSceneId === activeScene.id ? (
-                    <>
+          {viewMode === "grid" ? (
+            <div className="scenes-grid-container" style={{ display: "flex", flexDirection: "column", gap: "0.75rem", overflowY: "auto", flex: 1, paddingRight: "2px" }}>
+              {scenes.map((scene, idx) => (
+                <div key={scene.id} className="card scenes-grid-card" style={{ padding: "0.85rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "0.35rem", borderBottom: "1px solid var(--border)" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--primary)" }}>
+                      Scene #{scene.order_index ?? idx + 1}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                        ⏱ {scene.duration_seconds ? `${scene.duration_seconds.toFixed(1)}s` : "—"}
+                      </span>
                       <button
-                        className="btn-primary scenes-toolbar-btn"
-                        disabled={!!actionLoading || !sceneEditForm.narration.trim()}
-                        onClick={() => onSaveEdit(activeScene.id)}
-                      >
-                        <Check size={11} /> Save
-                      </button>
-                      <button
-                        className="btn-secondary scenes-toolbar-btn"
-                        onClick={onCancelEdit}
-                      >
-                        <X size={11} /> Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        className="btn-secondary scenes-toolbar-btn"
-                        onClick={() => onStartEdit(activeScene)}
-                        disabled={!!actionLoading}
+                        className="btn-secondary"
+                        style={{ fontSize: "0.7rem", padding: "0.2rem 0.45rem", display: "flex", alignItems: "center", gap: "3px" }}
+                        onClick={() => { setActiveIdx(idx); onStartEdit(scene); setViewMode("single"); }}
                       >
                         <Pencil size={11} /> Edit
                       </button>
                       <button
-                        className="btn-secondary scenes-toolbar-btn scenes-toolbar-delete-btn"
-                        onClick={() => { if (window.confirm(`Delete Scene #${activeIdx + 1}?`)) onRemove(activeScene.id); }}
-                        disabled={!!actionLoading}
+                        className="btn-secondary"
+                        style={{ fontSize: "0.7rem", padding: "0.2rem 0.45rem", color: "var(--danger)" }}
+                        onClick={() => { if (window.confirm(`Delete Scene #${idx + 1}?`)) onRemove(scene.id); }}
                       >
-                        <Trash2 size={11} /> Delete
+                        <Trash2 size={11} />
                       </button>
-                    </>
-                  )}
+                    </div>
+                  </div>
 
-                  <span className="scenes-separator">|</span>
-                  
-                  <div className="scenes-nav-wrap">
-                    <button className="btn-secondary scenes-nav-btn" disabled={activeIdx <= 0} onClick={() => setActiveIdx(activeIdx - 1)}><ChevronLeft size={12} /></button>
-                    <button className="btn-secondary scenes-nav-btn" disabled={activeIdx >= scenes.length - 1} onClick={() => setActiveIdx(activeIdx + 1)}><ChevronRight size={12} /></button>
+                  {/* Narration */}
+                  <p style={{ fontSize: "0.8rem", color: "var(--text)", margin: 0, lineHeight: 1.45, fontWeight: 500 }}>
+                    {scene.narration}
+                  </p>
+
+                  {/* Prompts summary if available */}
+                  {(scene.image_prompt || scene.video_prompt) && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.74rem", color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", padding: "0.4rem 0.6rem", borderRadius: "5px" }}>
+                      {scene.image_prompt && (
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                          <span style={{ color: "#a5b4fc", fontWeight: 600, flexShrink: 0 }}>📷 Image:</span>
+                          <span style={{ fontStyle: "italic" }}>{scene.image_prompt}</span>
+                        </div>
+                      )}
+                      {scene.video_prompt && (
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                          <span style={{ color: "#818cf8", fontWeight: 600, flexShrink: 0 }}>🎬 Video:</span>
+                          <span style={{ fontStyle: "italic" }}>{scene.video_prompt}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => onOpenAdd(null)}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  border: "2px dashed var(--border)",
+                  background: "rgba(255,255,255,0.02)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={16} /> Add New Scene
+              </button>
+            </div>
+          ) : (
+            /* Single Focus View */
+            <div className="scenes-editor">
+              <div className="scenes-editor-toolbar">
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={activeIdx <= 0}
+                    onClick={() => setActiveIdx(activeIdx - 1)}
+                    style={{ padding: "0.25rem 0.45rem", fontSize: "0.72rem" }}
+                    title="Previous scene"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+
+                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text)" }}>
+                    Scene {activeIdx + 1} of {scenes.length}
+                  </span>
+
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={activeIdx >= scenes.length - 1}
+                    onClick={() => setActiveIdx(activeIdx + 1)}
+                    style={{ padding: "0.25rem 0.45rem", fontSize: "0.72rem" }}
+                    title="Next scene"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+                
+                {/* Toolbar Actions */}
+                {activeScene && (
+                  <div className="scenes-toolbar-actions">
+                    {editingSceneId === activeScene.id ? (
+                      <>
+                        <button
+                          className="btn-primary scenes-toolbar-btn"
+                          disabled={!!actionLoading || !sceneEditForm.narration.trim()}
+                          onClick={() => onSaveEdit(activeScene.id)}
+                        >
+                          <Check size={11} /> Save
+                        </button>
+                        <button
+                          className="btn-secondary scenes-toolbar-btn"
+                          onClick={onCancelEdit}
+                        >
+                          <X size={11} /> Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="btn-secondary scenes-toolbar-btn"
+                          onClick={() => onStartEdit(activeScene)}
+                          disabled={!!actionLoading}
+                        >
+                          <Pencil size={11} /> Edit
+                        </button>
+                        <button
+                          className="btn-secondary scenes-toolbar-btn scenes-toolbar-delete-btn"
+                          onClick={() => { if (window.confirm(`Delete Scene #${activeIdx + 1}?`)) onRemove(activeScene.id); }}
+                          disabled={!!actionLoading}
+                        >
+                          <Trash2 size={11} /> Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {sceneForm(null)}
+
+              {activeScene && (
+                <div className="scenes-active-body">
+                  {/* Left: Content */}
+                  <div className="scenes-content">
+                    {/* Narration */}
+                    <div className="scenes-box">
+                      <div className="scenes-box-header">
+                        <span className="scenes-box-label">Narration</span>
+                        <div className="scenes-box-actions">
+                          <button onClick={() => copy(activeScene.id, activeScene.narration, setCopiedId)} className="scenes-copy-btn" style={{ color: copiedId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
+                            <Copy size={10} /> {copiedId === activeScene.id ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+                      {editingSceneId === activeScene.id ? (
+                        <textarea className="scenes-narration-textarea" value={sceneEditForm.narration} onChange={(e) => onEditFormChange({ narration: e.target.value })} rows={3} />
+                      ) : (
+                        <p className="scenes-narration-text">{activeScene.narration}</p>
+                      )}
+                    </div>
+
+                    {/* Image Prompt */}
+                    <div className="scenes-prompt-box">
+                      <div className="scenes-prompt-header">
+                        <span className="scenes-prompt-label"><Image size={11} /> Image Prompt</span>
+                        <button onClick={() => copy(activeScene.id, activeScene.image_prompt || "", setCopiedImageId)} disabled={!activeScene.image_prompt} className="scenes-copy-btn" style={{ color: copiedImageId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
+                          <Copy size={10} /> {copiedImageId === activeScene.id ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      {editingSceneId === activeScene.id ? (
+                        <textarea className="scenes-prompt-textarea" value={sceneEditForm.image_prompt} onChange={(e) => onEditFormChange({ image_prompt: e.target.value })} rows={2} placeholder="Image prompt..." />
+                      ) : (
+                        <p className="scenes-prompt-text">{activeScene.image_prompt || "—"}</p>
+                      )}
+                    </div>
+
+                    {/* Video Prompt */}
+                    <div className="scenes-prompt-box">
+                      <div className="scenes-prompt-header">
+                        <span className="scenes-prompt-label"><Video size={11} /> Video Prompt</span>
+                        <button onClick={() => copy(activeScene.id, activeScene.video_prompt || "", setCopiedVideoId)} disabled={!activeScene.video_prompt} className="scenes-copy-btn" style={{ color: copiedVideoId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
+                          <Copy size={10} /> {copiedVideoId === activeScene.id ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      {editingSceneId === activeScene.id ? (
+                        <textarea className="scenes-prompt-textarea" value={sceneEditForm.video_prompt} onChange={(e) => onEditFormChange({ video_prompt: e.target.value })} rows={2} placeholder="Video motion prompt..." />
+                      ) : (
+                        <p className="scenes-prompt-text">{activeScene.video_prompt || "—"}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Actions */}
+                  <div className="scenes-preview-col" style={{ width: "auto" }}>
+                    {/* Duration badge — editable */}
+                    <div className="scenes-duration-wrap">
+                      <label
+                        title="Scene duration in seconds — you control this; the renderer fades voice out if narration is longer"
+                        className="scenes-duration-label"
+                      >
+                        <Clock size={10} />
+                        <input
+                          type="number"
+                          min={0.5}
+                          step={0.1}
+                          value={
+                            editingSceneId === activeScene.id
+                              ? sceneEditForm.duration_seconds ?? ""
+                              : getDuration(activeScene) ?? ""
+                          }
+                          placeholder="—"
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const v = raw === "" ? null : Number(raw);
+                            if (editingSceneId !== activeScene.id) onStartEdit(activeScene);
+                            onEditFormChange({ duration_seconds: v });
+                          }}
+                          onBlur={() => {
+                            if (editingSceneId === activeScene.id && sceneEditForm.duration_seconds != null)
+                              onSaveEdit(activeScene.id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          }}
+                          className="scenes-duration-input"
+                        />
+                        s
+                      </label>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-
-            {sceneForm(null)}
-
-            {activeScene && (
-              <div className="scenes-active-body">
-                {/* Left: Content */}
-                <div className="scenes-content">
-                  {/* Narration */}
-                  <div className="scenes-box">
-                    <div className="scenes-box-header">
-                      <span className="scenes-box-label">Narration</span>
-                      <div className="scenes-box-actions">
-                        <button onClick={() => copy(activeScene.id, activeScene.narration, setCopiedId)} className="scenes-copy-btn" style={{ color: copiedId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
-                          <Copy size={10} /> {copiedId === activeScene.id ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                    </div>
-                    {editingSceneId === activeScene.id ? (
-                      <textarea className="scenes-narration-textarea" value={sceneEditForm.narration} onChange={(e) => onEditFormChange({ narration: e.target.value })} rows={3} />
-                    ) : (
-                      <p className="scenes-narration-text">{activeScene.narration}</p>
-                    )}
-                  </div>
-
-                  {/* Image Prompt */}
-                  <div className="scenes-prompt-box">
-                    <div className="scenes-prompt-header">
-                      <span className="scenes-prompt-label"><Image size={11} /> Image Prompt</span>
-                      <button onClick={() => copy(activeScene.id, activeScene.image_prompt || "", setCopiedImageId)} disabled={!activeScene.image_prompt} className="scenes-copy-btn" style={{ color: copiedImageId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
-                        <Copy size={10} /> {copiedImageId === activeScene.id ? "Copied" : "Copy"}
-                      </button>
-                    </div>
-                    {editingSceneId === activeScene.id ? (
-                      <textarea className="scenes-prompt-textarea" value={sceneEditForm.image_prompt} onChange={(e) => onEditFormChange({ image_prompt: e.target.value })} rows={2} placeholder="Image prompt..." />
-                    ) : (
-                      <p className="scenes-prompt-text">{activeScene.image_prompt || "—"}</p>
-                    )}
-                  </div>
-
-                  {/* Video Prompt */}
-                  <div className="scenes-prompt-box">
-                    <div className="scenes-prompt-header">
-                      <span className="scenes-prompt-label"><Video size={11} /> Video Prompt</span>
-                      <button onClick={() => copy(activeScene.id, activeScene.video_prompt || "", setCopiedVideoId)} disabled={!activeScene.video_prompt} className="scenes-copy-btn" style={{ color: copiedVideoId === activeScene.id ? "var(--success)" : "var(--text-muted)" }}>
-                        <Copy size={10} /> {copiedVideoId === activeScene.id ? "Copied" : "Copy"}
-                      </button>
-                    </div>
-                    {editingSceneId === activeScene.id ? (
-                      <textarea className="scenes-prompt-textarea" value={sceneEditForm.video_prompt} onChange={(e) => onEditFormChange({ video_prompt: e.target.value })} rows={2} placeholder="Video motion prompt..." />
-                    ) : (
-                      <p className="scenes-prompt-text">{activeScene.video_prompt || "—"}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right: Preview & Actions */}
-                <div className="scenes-preview-col">
-                  {/* Preview */}
-                  <div className="scenes-preview">
-                    {activeScene.image_path ? (
-                      <img src={mediaUrl(activeScene.image_path)} alt={`Scene ${activeIdx + 1}`} className="scenes-preview-img" style={{ animation: animationStyle }} />
-                    ) : (
-                      <div className="scenes-no-media">
-                        <Image size={20} className="scenes-no-media-icon" />
-                        <span className="scenes-no-media-text">No media yet</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Duration badge — editable */}
-                  <div className="scenes-duration-wrap">
-                    <label
-                      title="Scene duration in seconds — you control this; the renderer fades voice out if narration is longer"
-                      className="scenes-duration-label"
-                    >
-                      <Clock size={10} />
-                      <input
-                        type="number"
-                        min={0.5}
-                        step={0.1}
-                        value={
-                          editingSceneId === activeScene.id
-                            ? sceneEditForm.duration_seconds ?? ""
-                            : getDuration(activeScene) ?? ""
-                        }
-                        placeholder="—"
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const v = raw === "" ? null : Number(raw);
-                          if (editingSceneId !== activeScene.id) onStartEdit(activeScene);
-                          onEditFormChange({ duration_seconds: v });
-                        }}
-                        onBlur={() => {
-                          if (editingSceneId === activeScene.id && sceneEditForm.duration_seconds != null)
-                            onSaveEdit(activeScene.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                        }}
-                        className="scenes-duration-input"
-                      />
-                      s
-                    </label>
-                  </div>
-
-
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
 

@@ -14,7 +14,7 @@ import { api, mediaUrl } from "../api/client";
 import TimelineStep from "../components/steps/TimelineStep";
 import TimelineVideoCanvas, { type TimelinePlaybackState } from "../components/studio/TimelineVideoCanvas";
 import StudioRightInspector from "../components/studio/StudioRightInspector";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftOpen } from "lucide-react";
 import "./ProjectDetail.css";
 
 export default function ProjectDetail() {
@@ -22,7 +22,7 @@ export default function ProjectDetail() {
   const projectId = Number(id);
   const h = useProjectDetail(projectId);
 
-  const [timelineHeight, setTimelineHeight] = useState(280);
+  const [timelineHeight, setTimelineHeight] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [playbackState, setPlaybackState] = useState<TimelinePlaybackState | null>(null);
@@ -155,8 +155,9 @@ export default function ProjectDetail() {
       const result = await api.exportProject(projectId);
       h.setExportInfo(result);
       h.setSuccess(`${result.message} (${result.files.length} files)`);
-      if (result.files.includes("video/final.mp4")) {
-        const downloadUrl = mediaUrl(`${result.export_path}/video/final.mp4`);
+      const targetVideo = result.files.find((f) => f.startsWith("video/") && f.endsWith(".mp4")) || "video/final.mp4";
+      if (targetVideo) {
+        const downloadUrl = mediaUrl(`${result.export_path}/${targetVideo}`);
         const link = document.createElement("a");
         link.href = downloadUrl;
         link.setAttribute("download", "final_video.mp4");
@@ -189,6 +190,7 @@ export default function ProjectDetail() {
         actionLoading={h.actionLoading}
         videoStatus={h.videoStatus}
         onBuildVideo={handleBuildVideo}
+        onCancelBuild={h.cancelVideoBuild}
         onExportVideo={handleExportVideo}
         onImportVideo={h.importVideo}
         logoOverlay={h.logoOverlay}
@@ -198,6 +200,7 @@ export default function ProjectDetail() {
         onTogglePreview={() => setPreviewModalOpen((v) => !v)}
         previewActive={previewModalOpen}
         onRefreshLogo={() => handleFetchLogo(true)}
+        onUploadLogo={(file) => void h.uploadLogo(file)}
       />
 
       {/* Dialogs */}
@@ -325,17 +328,11 @@ export default function ProjectDetail() {
 
         {/* Column 2: Tool Step Control Panel (Stretches 100% height, full vertical space) */}
         <div className={`tool-panel ${toolPanelCollapsed ? "is-collapsed" : ""}`}>
-          <div className="tool-panel-top-actions">
-            <button
-              className="tool-panel-collapse-btn"
-              onClick={() => setToolPanelCollapsed(true)}
-              title="Collapse Tool Panel (Give 100% Full Screen Width to Video Preview & Timeline)"
-            >
-              <PanelLeftClose size={14} />
-              <span>Collapse</span>
-            </button>
-          </div>
-          <StudioStepContent ctx={h} />
+          <StudioStepContent
+            ctx={h}
+            playbackState={playbackState}
+            onCollapse={() => setToolPanelCollapsed(true)}
+          />
         </div>
 
         {/* Column 3: Player + Timeline Column (Spans the rest of the screen width, divided vertically) */}
@@ -348,7 +345,6 @@ export default function ProjectDetail() {
                 title="Expand Tool Panel"
               >
                 <PanelLeftOpen size={14} />
-                <span>Show Panel ({h.activeTab.toUpperCase()})</span>
               </button>
             </div>
           )}

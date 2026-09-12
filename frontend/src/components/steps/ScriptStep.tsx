@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Sparkles, Download, Upload, FileText, X, Pencil } from "lucide-react";
 import type { Idea, Script } from "../../types";
 import { api } from "../../api/client";
+import StepHeader from "../studio/StepHeader";
 import FreeAIGuide from "../editors/FreeAIGuide";
 import "./ScriptStep.css";
 
@@ -24,6 +25,7 @@ interface Props {
   form: { title: string; hook: string; body: string; ending: string };
   onFormChange: (patch: Partial<{ title: string; hook: string; body: string; ending: string }>) => void;
   onImportScript?: (imported: { title?: string; hook?: string; body: string; ending?: string; language?: string }, replace: boolean) => Promise<void>;
+  onCollapse?: () => void;
 }
 
 interface ImportedScript {
@@ -108,6 +110,7 @@ export default function ScriptStep({
   form,
   onFormChange,
   onImportScript,
+  onCollapse,
 }: Props) {
   const activeScript = scripts.find((s) => s.is_active) || null;
   const [showFreeAI, setShowFreeAI] = useState(false);
@@ -182,11 +185,11 @@ export default function ScriptStep({
 
   return (
     <div className="script-step">
-      {/* Header */}
-      <div>
-        <h2 className="script-header-title">Script</h2>
-        <p className="script-subtitle">Write or generate your script</p>
-      </div>
+      <StepHeader
+        title="Script"
+        subtitle="Write or generate your script"
+        onCollapse={onCollapse}
+      />
 
       {/* Topic + Action buttons */}
       <div className="card script-topic-card">

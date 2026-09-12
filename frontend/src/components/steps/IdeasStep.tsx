@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Sparkles, Download, Upload, X, ArrowRight, Lightbulb, Play, ChevronDown, ChevronUp, Copy, Check, Trash2 } from "lucide-react";
 import type { Idea, YouTubeVideo } from "../../types";
 import { api } from "../../api/client";
+import StepHeader from "../studio/StepHeader";
 import FreeAIGuide from "../editors/FreeAIGuide";
 import "./IdeasStep.css";
 
@@ -19,6 +20,7 @@ interface Props {
   onFreeAIResponse?: (ideas: { title: string; description: string; category?: string; trending_score?: number }[]) => void;
   recentVideos?: YouTubeVideo[];
   onOpenSettings?: () => void;
+  onCollapse?: () => void;
 }
 
 function extractJsonArray(text: string): any[] | null {
@@ -70,7 +72,7 @@ function parseFreeAIResponse(text: string): { title: string; description: string
 
 const CATEGORIES = ["Trending", "AI", "Education", "Comedy", "Facts", "Gaming", "Technology", "Science"];
 
-export default function IdeasStep({ projectId, projectLanguage, projectCategory, ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onDeleteIdea, onFreeAIResponse, recentVideos, onOpenSettings }: Props) {
+export default function IdeasStep({ projectId, projectLanguage, projectCategory, ideas, actionLoading, ideaTopic, onTopicChange, onGenerate, onSelect, onDeleteIdea, onFreeAIResponse, recentVideos, onOpenSettings, onCollapse }: Props) {
   const [showFreeAI, setShowFreeAI] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
@@ -137,11 +139,11 @@ export default function IdeasStep({ projectId, projectLanguage, projectCategory,
 
   return (
     <div className="ideas-step">
-      {/* Header */}
-      <div className="ideas-header">
-        <h2>Video Ideas</h2>
-        <p>Find your next video idea</p>
-      </div>
+      <StepHeader
+        title="Video Ideas"
+        subtitle="Find your next video idea"
+        onCollapse={onCollapse}
+      />
 
       {/* Input card */}
       <div className="card ideas-input-card">

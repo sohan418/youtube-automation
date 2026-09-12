@@ -49,6 +49,8 @@ interface EngineActions {
   redo: () => void;
   deleteSelected: (ripple: boolean) => void;
   duplicateSelected: () => void;
+  copySelected: () => void;
+  pasteCopied: () => void;
   step: (frames: number) => void;
   goHome: () => void;
   goEnd: () => void;
@@ -193,6 +195,7 @@ export function useTimelineEngine(
 
   const srcCapOf = useCallback(
     (c: TimelineClip): number => {
+      if (c.track === "video") return Infinity;
       const url = c.audio_path ?? c.video_path;
       if (!url) return Infinity;
       const kind = c.audio_path ? "audio" : "video";
@@ -332,6 +335,32 @@ export function useTimelineEngine(
     },
     [buildNext, commit],
   );
+
+  const copiedClipRef = useRef<TimelineClip | null>(null);
+  const [hasCopiedClip, setHasCopiedClip] = useState(false);
+
+  const copyClip = useCallback((clip: TimelineClip) => {
+    copiedClipRef.current = { ...clip };
+    setHasCopiedClip(true);
+  }, []);
+
+  const copySelected = useCallback(() => {
+    const c = selectedId ? clipMap.get(selectedId) : null;
+    if (c) copyClip(c);
+  }, [selectedId, clipMap, copyClip]);
+
+  const pasteCopied = useCallback(() => {
+    const copied = copiedClipRef.current;
+    if (!copied) return;
+    const targetStart = round2(Math.max(0, timeRef.current));
+    const pasted: TimelineClip = {
+      ...copied,
+      id: freshId("cp"),
+      start: targetStart,
+    };
+    commit(buildNext([...clipsRef.current, pasted]));
+    setSelectedId(pasted.id);
+  }, [buildNext, commit]);
 
   const deleteClipOp = useCallback(
     (clip: TimelineClip, ripple: boolean) => {
@@ -542,36 +571,21 @@ export function useTimelineEngine(
       const pool = audioPool.current;
       const want = new Map<
         string,
-        { src: string; vol: number; offset: number }
+        { src: string; vol: number; offset: number; speed: number }
       >();
       for (const c of clipsRef.current) {
-        if (!c.audio_path || c.track === "video" || c.track === "text")
-          continue;
+        if (c.track === "text") continue;
+        const srcFile = c.audio_path ?? (c.track === "video" ? c.video_path : null);
+        if (!srcFile) continue;
         if (!(t >= c.start && t < c.start + c.duration)) continue;
         const rs = rowStateOf(c.track);
-        if (rs.muted || c.muted) continue;
+        if (rs.muted || c.muted || (c.volume ?? 1) <= 0.001) continue;
         want.set(c.id, {
-          src: mediaUrl(c.audio_path),
-          vol: clamp(c.volume * fadeGain(c, t - c.start), 0, 1),
+          src: mediaUrl(srcFile),
+          vol: clamp((c.volume ?? 1) * fadeGain(c, t - c.start), 0, 1),
           offset: Math.max(0, (c.audio_in ?? 0) + (t - c.start)),
           speed: c.speed || 1.0,
         });
-      }
-      if (want.size === 0) {
-        for (const c of clipsRef.current) {
-          if (c.track !== "video") continue;
-          const srcFile = c.audio_path ?? c.video_path;
-          if (!srcFile) continue;
-          if (!(t >= c.start && t < c.start + c.duration)) continue;
-          if (c.muted || rowStateOf("video").muted) continue;
-          want.set(c.id, {
-            src: mediaUrl(srcFile),
-            vol: clamp(c.volume * fadeGain(c, t - c.start), 0, 1),
-            offset: Math.max(0, (c.audio_in ?? 0) + (t - c.start)),
-            speed: c.speed || 1.0,
-          });
-          break;
-        }
       }
       for (const [id, el] of pool) {
         if (!want.has(id)) {
@@ -595,7 +609,7 @@ export function useTimelineEngine(
           }
         }
         el.volume = cfg.vol;
-        el.playbackRate = (cfg as any).speed || 1.0;
+        el.playbackRate = cfg.speed || 1.0;
         if (playingRef.current) {
           if (Math.abs(el.currentTime - cfg.offset) > 0.35) {
             try {
@@ -979,6 +993,8 @@ export function useTimelineEngine(
       const c = selectedId ? clipMap.get(selectedId) : null;
       if (c) duplicateClip(c);
     },
+    copySelected,
+    pasteCopied,
     step: (frames: number) => {
       pausePlayback();
       setTime(timeRef.current + frames / fps);
@@ -1018,6 +1034,12 @@ export function useTimelineEngine(
       } else if (mod && e.key.toLowerCase() === "y") {
         e.preventDefault();
         A.redo();
+      } else if (mod && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        A.copySelected();
+      } else if (mod && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        A.pasteCopied();
       } else if (mod && e.key.toLowerCase() === "d") {
         e.preventDefault();
         A.duplicateSelected();
@@ -1149,6 +1171,10 @@ export function useTimelineEngine(
     splitClipAt,
     splitAtPlayhead,
     duplicateClip,
+    copyClip,
+    copySelected,
+    pasteCopied,
+    hasCopiedClip,
     deleteClipOp,
     removeSilentEdges,
     extendToSource,

@@ -30,10 +30,6 @@ export default function StudioSidebar({ activeTab, steps, done, onSelect }: Prop
                 {step.label}
               </span>
 
-              {isDone && (
-                <div className="sidebar-step-dot" />
-              )}
-
               {isActive && (
                 <div className="sidebar-step-active-line" />
               )}

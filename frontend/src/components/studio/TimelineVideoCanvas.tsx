@@ -190,8 +190,10 @@ export default function TimelineVideoCanvas({
   const time = playbackState?.time ?? 0;
 
   // Determine media source
-  const videoPath = activeVideo?.video_path || activeScene?.video_path || null;
-  const imagePath = activeVideo?.image_path || activeScene?.image_path || activeScene?.images?.[0]?.file_path || null;
+  const rawVideoPath = activeVideo?.video_path || activeScene?.video_path || null;
+  const isImageVideoPath = rawVideoPath ? /\.(png|jpg|jpeg|webp)$/i.test(rawVideoPath) : false;
+  const videoPath = isImageVideoPath ? null : rawVideoPath;
+  const imagePath = activeVideo?.image_path || (isImageVideoPath ? rawVideoPath : null) || activeScene?.image_path || activeScene?.images?.[0]?.file_path || null;
 
   const videoSrc = videoPath ? mediaUrl(videoPath) : null;
   const imageSrc = imagePath ? mediaUrl(imagePath) : null;

@@ -143,6 +143,9 @@ export default function Dashboard() {
                     ) : (
                       <Clapperboard size={40} className="dashboard-thumb-icon" />
                     )}
+                    <span className="dashboard-ratio-badge">
+                      {project.ratio || "16:9"}
+                    </span>
                   </div>
                   <div className="dashboard-card-body">
                     <div className="dashboard-card-top">
@@ -157,7 +160,7 @@ export default function Dashboard() {
                       </p>
                     )}
                     <p className="dashboard-card-meta">
-                      {project.category || "Uncategorized"} · {project.language.toUpperCase()} · Updated {new Date(project.updated_at).toLocaleDateString()}
+                      {project.category || "Uncategorized"} · {project.language.toUpperCase()} · {project.ratio || "16:9"} · Updated {new Date(project.updated_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>

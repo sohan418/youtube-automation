@@ -1,5 +1,6 @@
 import { Type, Eye, Zap, Film, Feather, AlignCenter } from "lucide-react";
 import type { Scene } from "../../types";
+import StepHeader from "../studio/StepHeader";
 import "./CaptionsStep.css";
 
 interface Props {
@@ -20,6 +21,7 @@ interface Props {
   subtitleFontSize: number | null;
   setSubtitleFontSize: (v: number | null) => void;
   onSave?: (patch: Record<string, unknown>) => Promise<void>;
+  onCollapse?: () => void;
 }
 
 const STYLES = [
@@ -88,6 +90,7 @@ export default function CaptionsStep({
   subtitleFontSize,
   setSubtitleFontSize,
   onSave,
+  onCollapse,
 }: Props) {
   const totalWords = scenes.reduce((sum, s) => sum + (s.narration?.split(/\s+/).length || 0), 0);
   const hasNarration = scenes.some((s) => s.narration);
@@ -100,29 +103,25 @@ export default function CaptionsStep({
 
   return (
     <div className="captions-root">
-      {/* Header */}
-      <div className="card captions-header">
-        <div className="captions-header-row">
-          <Type size={15} color="var(--primary)" />
-          <h3 className="captions-header-title">Captions</h3>
-          <span className="captions-header-stats">
-            <span>
-              <strong className="captions-stat">{scenes.length}</strong> scenes
-            </span>
-            <span>
-              <strong className="captions-stat">{totalWords}</strong> words
-            </span>
-            {activeStyle.value === "word_by_word" && totalWords > 0 && (
-              <span>
-                ~<strong className="captions-stat">{Math.ceil(totalWords / 4)}</strong> blocks
-              </span>
-            )}
+      <StepHeader
+        title="Captions"
+        subtitle="Configure how narration text appears on screen. Applied when building the final video."
+        onCollapse={onCollapse}
+      >
+        <span className="captions-header-stats">
+          <span>
+            <strong className="captions-stat">{scenes.length}</strong> scenes
           </span>
-        </div>
-        <p className="captions-header-desc">
-          Configure how narration text appears on screen. Applied when building the final video.
-        </p>
-      </div>
+          <span>
+            <strong className="captions-stat">{totalWords}</strong> words
+          </span>
+          {activeStyle.value === "word_by_word" && totalWords > 0 && (
+            <span>
+              ~<strong className="captions-stat">{Math.ceil(totalWords / 4)}</strong> blocks
+            </span>
+          )}
+        </span>
+      </StepHeader>
 
       {/* Enable / Disable Toggle */}
       <div className="card captions-toggle">

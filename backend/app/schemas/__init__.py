@@ -9,8 +9,8 @@ from app.models import ProjectStatus
 class ProjectBase(BaseModel):
     name: str
     description: str | None = None
-    category: str | None = None
-    language: str = "en"
+    category: str | None = "Education"
+    language: str = "hi"
 
 
 class ProjectCreate(ProjectBase):
@@ -166,6 +166,8 @@ class SceneUpdate(BaseModel):
     motion_effect: str | None = None
     order_index: int | None = None
     duration_seconds: float | None = None
+    image_path: str | None = None
+    video_path: str | None = None
 
 
 class SceneImageResponse(BaseModel):
@@ -392,6 +394,7 @@ class SEOUpdate(BaseModel):
     description: str | None = None
     tags: str | None = None
     hashtags: str | None = None
+    timestamps: str | None = None
 
 
 class SEOResponse(BaseModel):
@@ -403,6 +406,7 @@ class SEOResponse(BaseModel):
     description: str | None
     tags: str | None
     hashtags: str | None
+    timestamps: str | None = None
     category: str | None
     category_id: int | None
     created_at: datetime

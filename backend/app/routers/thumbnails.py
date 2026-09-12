@@ -120,12 +120,14 @@ def upload_thumbnail(
     filename = f"thumbnail_upload_{count + 1}.{ext}"
     file_path = storage_service.save_binary(project.slug, "thumbnail", filename, data)
 
-    first = count == 0
+    # Automatically select newly uploaded thumbnail
+    db.query(Thumbnail).filter(Thumbnail.project_id == project_id).update({"is_selected": False})
+
     thumb = Thumbnail(
         project_id=project_id,
         file_path=file_path,
         prompt=None,
-        is_selected=first,
+        is_selected=True,
     )
     db.add(thumb)
     project.status = ProjectStatus.THUMBNAIL

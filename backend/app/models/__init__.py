@@ -148,6 +148,10 @@ class Scene(Base):
             return self.scene_videos[0].file_path
         return None
 
+    @video_path.setter
+    def video_path(self, val: str | None) -> None:
+        pass
+
 
 class SceneImage(Base):
     __tablename__ = "scene_images"
@@ -212,6 +216,7 @@ class SEOMetadata(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
     hashtags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    timestamps: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

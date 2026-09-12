@@ -4,11 +4,17 @@ import json
 import hashlib
 import base64
 import logging
+from pathlib import Path
 import secrets
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
+try:
+    from PIL import Image, ImageDraw, ImageOps
+except ImportError:
+    Image = None  # type: ignore
+    ImageDraw = None  # type: ignore
+    ImageOps = None  # type: ignore
 from typing import Any
 
 import httpx
@@ -33,6 +39,28 @@ REDIRECT_URI = "http://localhost:8000/api/youtube/auth/callback"
 _upload_progress: dict[str, dict[str, Any]] = {}
 # PKCE code verifier storage (temporary, per-instance)
 _auth_code_verifier: str | None = None
+
+
+def normalize_playlist_id(val: str | None) -> str | None:
+    if not val:
+        return None
+    val = val.strip()
+    if not val:
+        return None
+    if "youtube.com" in val or "youtu.be" in val:
+        if "list=" in val:
+            import urllib.parse
+            parsed = urllib.parse.urlparse(val)
+            query = urllib.parse.parse_qs(parsed.query)
+            if "list" in query and query["list"]:
+                val = query["list"][0]
+        elif "/channel/" in val:
+            val = val.split("/channel/")[-1].split("/")[0].split("?")[0]
+
+    if val.startswith("UC") and len(val) == 24:
+        val = "UU" + val[2:]
+
+    return val
 
 
 class YouTubeService:
@@ -138,56 +166,24 @@ class YouTubeService:
             logger.exception("Failed to get YouTube channel info")
             return None
 
-    def _ensure_circular_logo(self, logo_path: Path) -> None:
-        """Ensure the cached logo image is circular with transparency and smooth anti-aliased edges."""
-        try:
-            from PIL import Image, ImageDraw
-            img = Image.open(logo_path).convert("RGBA")
-            
-            # Create a 4x supersampled mask for smooth anti-aliasing
-            scale_factor = 4
-            mask_size = (img.size[0] * scale_factor, img.size[1] * scale_factor)
-            mask = Image.new("L", mask_size, 0)
-            draw = ImageDraw.Draw(mask)
-            draw.ellipse((0, 0, mask_size[0] - 1, mask_size[1] - 1), fill=255)
-            
-            # Downscale mask to original size using high-quality LANCZOS resampler
-            mask = mask.resize(img.size, resample=Image.Resampling.LANCZOS)
-            
-            circular_img = Image.new("RGBA", img.size, (0, 0, 0, 0))
-            circular_img.paste(img, (0, 0), mask=mask)
-            circular_img.save(logo_path, "PNG")
-        except Exception as e:
-            logger.error(f"Failed to make logo circular: {e}")
+    def _ensure_circular_logo(self, logo_path: Path):
+        """No-op: preserve original logo aspect ratio, transparency and quality."""
+        pass
 
     def _create_default_logo(self, logo_path: Path):
-        """Generates a stylish circular default channel logo PNG if avatar download fails or offline."""
-        try:
-            logo_path.parent.mkdir(parents=True, exist_ok=True)
-            size = (200, 200)
-            img = Image.new("RGBA", size, (0, 0, 0, 0))
-            draw = ImageDraw.Draw(img)
-
-            # Red circular background
-            draw.ellipse((4, 4, 195, 195), fill=(225, 29, 72, 245), outline=(255, 255, 255, 230), width=5)
-
-            # White play icon triangle
-            play_points = [(82, 65), (82, 135), (135, 100)]
-            draw.polygon(play_points, fill=(255, 255, 255, 255))
-
-            img.save(logo_path, "PNG")
-        except Exception as e:
-            logger.error(f"Failed to create default logo: {e}")
+        """No-op: do not generate fake placeholder logo."""
+        pass
 
     def get_channel_logo_path(self, project_slug: str, force_refresh: bool = False) -> Path | None:
-        """Download & cache the connected channel's logo into the project folder."""
+        """Download & cache the connected channel's logo or use uploaded project logo."""
         branding_dir = storage_service.get_project_path(project_slug) / "branding"
         logo = branding_dir / "logo.png"
 
-        if not force_refresh and logo.exists() and logo.stat().st_size > 300:
-            self._ensure_circular_logo(logo)
+        # 1. Use existing custom project logo if present
+        if logo.exists() and logo.stat().st_size > 100:
             return logo
 
+        # 2. Try fetching from YouTube channel avatar if connected
         try:
             info = self.get_channel_info()
             avatar = (info or {}).get("avatar", "")
@@ -197,26 +193,20 @@ class YouTubeService:
                 if len(resp.content) > 100:
                     branding_dir.mkdir(parents=True, exist_ok=True)
                     logo.write_bytes(resp.content)
-                    self._ensure_circular_logo(logo)
                     return logo
         except Exception:
             logger.exception(f"Failed to download YouTube channel logo for {project_slug}")
-
-        # Fallback: Create default circular logo if avatar download fails or not connected
-        if not logo.exists() or logo.stat().st_size < 100:
-            self._create_default_logo(logo)
-
-        if logo.exists():
-            return logo
 
         return None
 
     def get_auth_url(self) -> str:
         global _auth_code_verifier
-        # Generate PKCE code verifier and challenge
-        _auth_code_verifier = secrets.token_urlsafe(64)[:128]
-        digest = hashlib.sha256(_auth_code_verifier.encode("ascii")).digest()
-        code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+        code_verifier = secrets.token_urlsafe(64)
+        _auth_code_verifier = code_verifier
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode()).digest()
+        ).decode().rstrip("=")
+
         params = {
             "client_id": settings.youtube_client_id,
             "redirect_uri": REDIRECT_URI,
@@ -227,30 +217,27 @@ class YouTubeService:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-        qs = "&".join(f"{k}={v}" for k, v in params.items())
-        return f"https://accounts.google.com/o/oauth2/auth?{qs}"
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
 
     def handle_callback(self, code: str) -> bool:
         global _auth_code_verifier
+        if not _auth_code_verifier:
+            logger.error("No code verifier found for OAuth callback")
+            return False
         try:
-            token_data = {
-                "code": code,
-                "client_id": settings.youtube_client_id,
-                "client_secret": settings.youtube_client_secret,
-                "redirect_uri": REDIRECT_URI,
-                "grant_type": "authorization_code",
-            }
-            if _auth_code_verifier:
-                token_data["code_verifier"] = _auth_code_verifier
-                _auth_code_verifier = None
-            logger.info("OAuth callback: client_id=%s..., redirect_uri=%s, has_verifier=%s", settings.youtube_client_id[:10], REDIRECT_URI, bool(token_data.get("code_verifier")))
-            resp = httpx.Client(timeout=30).post(
+            resp = self._client.post(
                 "https://oauth2.googleapis.com/token",
-                data=token_data,
+                data={
+                    "client_id": settings.youtube_client_id,
+                    "client_secret": settings.youtube_client_secret,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": REDIRECT_URI,
+                    "code_verifier": _auth_code_verifier,
+                },
             )
-            if resp.status_code != 200:
-                logger.error("Token exchange failed: %s %s", resp.status_code, resp.text)
-                return False
+            resp.raise_for_status()
             data = resp.json()
             settings.update_api_key("youtube_access_token", data.get("access_token", ""))
             settings.update_api_key("youtube_refresh_token", data.get("refresh_token", ""))
@@ -263,9 +250,14 @@ class YouTubeService:
             logger.exception("YouTube OAuth callback failed")
             return False
 
+    handle_auth_callback = handle_callback
+
     def fetch_recent_videos(self, playlist_id: str | None = None, max_results: int = 10) -> list[dict[str, Any]]:
         api_key = settings.youtube_api_key
-        pid = playlist_id or settings.youtube_playlist_id
+        raw_pid = playlist_id or settings.youtube_playlist_id
+        pid = normalize_playlist_id(raw_pid)
+        if pid and pid != settings.youtube_playlist_id:
+            settings.update_api_key("youtube_playlist_id", pid)
 
         creds = self._get_credentials()
 
@@ -278,6 +270,7 @@ class YouTubeService:
                 items = ch_resp.get("items", [])
                 if items:
                     pid = items[0].get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
+                    pid = normalize_playlist_id(pid)
                     if pid:
                         settings.update_api_key("youtube_playlist_id", pid)
             except Exception as ch_err:
@@ -353,6 +346,7 @@ class YouTubeService:
         category_id: str,
         privacy_status: str = "private",
         thumbnail_path: str | None = None,
+        publish_at: str | None = None,
     ) -> None:
         """Upload video in a background thread. Tracks progress in _upload_progress."""
         key = project_slug
@@ -377,6 +371,13 @@ class YouTubeService:
 
                 youtube = build("youtube", "v3", credentials=creds)
 
+                status_dict: dict[str, Any] = {
+                    "privacyStatus": "private" if publish_at else privacy_status,
+                    "selfDeclaredMadeForKids": False,
+                }
+                if publish_at:
+                    status_dict["publishAt"] = publish_at
+
                 body = {
                     "snippet": {
                         "title": title[:100],
@@ -384,10 +385,7 @@ class YouTubeService:
                         "tags": tags[:30] if tags else [],
                         "categoryId": str(category_id) if category_id else "22",
                     },
-                    "status": {
-                        "privacyStatus": privacy_status,
-                        "selfDeclaredMadeForKids": False,
-                    },
+                    "status": status_dict,
                 }
 
                 abs_path = str(Path(video_path).resolve()) if not Path(video_path).is_absolute() else video_path
@@ -433,23 +431,35 @@ class YouTubeService:
                     except Exception as prep_err:
                         logger.warning(f"Thumbnail prep note: {prep_err}")
 
-                    # Retry loop (3 attempts) allowing YouTube server to register video_id
+                    upload_mimetype = (
+                        "image/jpeg"
+                        if str(upload_thumb_path).lower().endswith((".jpg", ".jpeg"))
+                        else "image/png"
+                    )
+
+                    # Retry loop (5 attempts) allowing YouTube server to register video_id
                     thumb_uploaded = False
-                    for attempt in range(1, 4):
-                        time.sleep(2.5)
+                    last_thumb_err = ""
+                    for attempt in range(1, 6):
+                        wait_sec = attempt * 2.5
+                        time.sleep(wait_sec)
                         try:
                             youtube.thumbnails().set(
                                 videoId=video_id,
-                                media_body=MediaFileUpload(str(upload_thumb_path), mimetype="image/jpeg"),
+                                media_body=MediaFileUpload(str(upload_thumb_path), mimetype=upload_mimetype),
                             ).execute()
                             logger.info(f"Successfully uploaded thumbnail for video {video_id} on attempt {attempt}")
                             thumb_uploaded = True
                             break
                         except Exception as e:
+                            last_thumb_err = str(e)
                             logger.warning(f"Thumbnail upload attempt {attempt} failed for video {video_id}: {e}")
+                            if "customThumbnailsNotAllowed" in last_thumb_err or "403" in last_thumb_err:
+                                logger.error("YouTube channel is not verified for custom thumbnails. Verify at youtube.com/verify")
+                                break  # Stop retrying if channel is not enabled for custom thumbnails
 
                     if not thumb_uploaded:
-                        logger.error(f"Failed to upload thumbnail for video {video_id} after 3 attempts.")
+                        logger.error(f"Failed to upload thumbnail for video {video_id}: {last_thumb_err}")
 
                 # Auto-upload SRT captions track if available for project
                 try:

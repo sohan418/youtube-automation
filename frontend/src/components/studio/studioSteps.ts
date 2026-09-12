@@ -4,6 +4,7 @@ import {
   Clapperboard,
   FileText,
   Image as ImageIcon,
+  Library,
   Lightbulb,
   Mic,
   Music,
@@ -19,6 +20,7 @@ export type StudioStep =
   | "script"
   | "scenes"
   | "images"
+  | "gallery"
   | "voice"
   | "music"
   | "captions"
@@ -43,8 +45,9 @@ export const STUDIO_STEPS: StepDef[] = [
   { key: "ideas", label: "Ideas", icon: Lightbulb, hint: "Brainstorm video topics", group: "plan" },
   { key: "script", label: "Script", icon: FileText, hint: "Generate or write the script", group: "plan" },
   { key: "scenes", label: "Scenes", icon: Clapperboard, hint: "Split the script into scenes", group: "plan" },
-  { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene", group: "create" },
   { key: "voice", label: "Voice", icon: Mic, hint: "Add narration (AI or recorded)", group: "create" },
+  { key: "images", label: "Media", icon: ImageIcon, hint: "Create visuals for each scene", group: "create" },
+  { key: "gallery", label: "Gallery", icon: Library, hint: "Reusable video clips, images & hooks", group: "create" },
   { key: "music", label: "Music", icon: Music, hint: "Background music library", group: "create" },
   { key: "captions", label: "Captions", icon: Subtitles, hint: "Subtitle and caption settings", group: "create" },
   { key: "timeline", label: "Timeline", icon: Scissors, hint: "Arrange, trim and edit clips", group: "create" },
@@ -78,6 +81,7 @@ export function getDoneMap(d: StepStatusData): Record<StudioStep, boolean> {
     script: !!d.activeScript,
     scenes: scenesReady,
     images: scenesReady && d.scenes.every((s) => !!s.image_path || ((s.images?.length ?? 0) > 0) || ((s.videos?.length ?? 0) > 0)),
+    gallery: true,
     voice: scenesReady && d.scenes.every((s) => !!s.audio_path),
     music: true,
     captions: true,

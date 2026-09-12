@@ -4,8 +4,8 @@ import {
   ChevronUp,
   ChevronsRight,
   Copy,
-  Eye,
-  EyeOff,
+  Clipboard,
+  CopyPlus,
   Lock,
   Magnet,
   Maximize,
@@ -24,7 +24,6 @@ import {
   Waves,
   ZoomIn,
   ZoomOut,
-  AlertTriangle,
   RotateCcw,
   Save,
   Check,
@@ -51,7 +50,6 @@ import {
   TRACK_ROWS,
 } from "./timeline/constants";
 import { ContextMenu, type MenuItem } from "./timeline/ContextMenu";
-import { PreviewPanel } from "./timeline/PreviewPanel";
 import { Ruler } from "./timeline/Ruler";
 import { fmtTime, freshId, round2 } from "./timeline/utils";
 import { useTimelineEngine } from "./timeline/useEngine";
@@ -75,7 +73,6 @@ interface Props {
   scenes: Scene[];
   mediaUrl: (path: string | null | undefined) => string;
   previewRatio?: VideoRatio;
-  showPreview?: boolean;
   projectId?: number;
   onAddScene?: () => Promise<Scene | null>;
   onChange: (tl: TimelineData) => void;
@@ -101,7 +98,6 @@ export default function TimelineEditor({
   scenes,
   mediaUrl,
   previewRatio: _previewRatio,
-  showPreview = false,
   projectId,
   onAddScene,
   onChange,
@@ -112,11 +108,9 @@ export default function TimelineEditor({
   saving,
   onActiveSceneChange,
   onPlaybackStateChange,
-  voiceOverruns,
   onSelectedClipInfoChange,
 }: Props) {
   const E = useTimelineEngine(timeline, scenes, mediaUrl, onChange);
-  const [showPreviewState, setShowPreviewState] = useState(showPreview);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -247,6 +241,9 @@ export default function TimelineEditor({
         onTrimStart: () => ERef.current.trimSelectedEdge("start"),
         onTrimEnd: () => ERef.current.trimSelectedEdge("end"),
         onCleanSilence: sel.audio_path ? () => void ERef.current.removeSilentEdges(sel.id) : undefined,
+        onCopy: () => ERef.current.copyClip(sel),
+        onPaste: () => ERef.current.pasteCopied(),
+        canPaste: ERef.current.hasCopiedClip,
         onDuplicate: () => ERef.current.duplicateClip(sel),
         onDelete: () => ERef.current.deleteClipOp(sel, ERef.current.rippleOn),
         onMoveRow: (dir: -1 | 1) => ERef.current.moveClipRow(sel, dir),
@@ -367,8 +364,21 @@ export default function TimelineEditor({
         onSelect: () => E.splitClipAt(clip, t),
       },
       {
-        label: "Duplicate",
+        label: "Copy",
         icon: <Copy size={13} />,
+        shortcut: "Ctrl+C",
+        onSelect: () => E.copyClip(clip),
+      },
+      {
+        label: "Paste",
+        icon: <Clipboard size={13} />,
+        shortcut: "Ctrl+V",
+        disabled: !E.hasCopiedClip,
+        onSelect: () => E.pasteCopied(),
+      },
+      {
+        label: "Duplicate",
+        icon: <CopyPlus size={13} />,
         shortcut: "Ctrl+D",
         onSelect: () => E.duplicateClip(clip),
       },
@@ -486,7 +496,7 @@ export default function TimelineEditor({
           selected={isSel}
           dragging={dragging}
           orderIndex={orderIndex}
-          thumbUrl={c.image_path ? mediaUrl(c.image_path) : null}
+          thumbUrl={c.image_path ? mediaUrl(c.image_path) : (c.video_path ? mediaUrl(c.video_path) : null)}
           probeUrl={c.video_path ? mediaUrl(c.video_path) : null}
           onExtendToSource={() => void E.extendToSource(c.id)}
         />
@@ -659,6 +669,11 @@ export default function TimelineEditor({
 
         <span style={{ width: 1, height: 18, background: THEME.separator }} />
 
+        {btn("Undo (Ctrl+Z)", <Undo2 size={14} />, E.undo, { disabled: !E.canUndo })}
+        {btn("Redo (Ctrl+Y)", <Redo2 size={14} />, E.redo, { disabled: !E.canRedo })}
+
+        <span style={{ width: 1, height: 18, background: THEME.separator }} />
+
         {btn("Split at playhead (S)", <Scissors size={14} />, E.splitAtPlayhead)}
         {btn(
           "Delete (Del)",
@@ -669,26 +684,7 @@ export default function TimelineEditor({
 
         <span style={{ width: 1, height: 18, background: THEME.separator }} />
 
-        {voiceOverruns && voiceOverruns.length > 0 && (
-          <span
-            className="badge"
-            title={`Scenes ${voiceOverruns.join(", ")}: narration is longer than the visuals.`}
-            style={{
-              background: "rgba(239, 68, 68, 0.15)",
-              border: "1px solid rgba(239, 68, 68, 0.25)",
-              color: "#ff6b78",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.2rem",
-              fontSize: "11px",
-              padding: "3px 6px",
-              borderRadius: "4px"
-            }}
-          >
-            <AlertTriangle size={11} />
-            {voiceOverruns.length} Overruns
-          </span>
-        )}
+
         {dirty && (
           <span
             style={{
@@ -935,7 +931,6 @@ export default function TimelineEditor({
         />
         {btn("Zoom in (+)", <ZoomIn size={14} />, () => E.zoomAt(1.3))}
         {btn("Fit timeline", <Maximize size={14} />, E.fitTimeline)}
-        {btn(showPreviewState ? "Hide Timeline Preview" : "Show Timeline Preview", showPreviewState ? <EyeOff size={14} /> : <Eye size={14} />, () => setShowPreviewState((v) => !v))}
         <span
           style={{
             fontSize: 10.5,
@@ -948,29 +943,6 @@ export default function TimelineEditor({
           {Math.round((px / 60) * 100)}%
         </span>
       </div>
-
-     
-      {showPreviewState && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            minHeight: 0,
-          }}
-        >
-          <PreviewPanel
-            ratio={_previewRatio}
-            activeVideo={activeVideo}
-            activeCaption={activeCaption}
-            scene={activeScene}
-            time={E.time}
-            totalDuration={E.totalDuration}
-            playing={E.playing}
-            onTogglePlay={E.togglePlay}
-            mediaUrl={mediaUrl}
-          />
-        </div>
-      )}
 
       <div
         style={{
@@ -987,7 +959,8 @@ export default function TimelineEditor({
             className="vtl-scroll"
             style={{
               maxHeight: 340,
-              overflow: "auto",
+              overflowX: "auto",
+              overflowY: "hidden",
               overscrollBehavior: "contain",
               position: "relative",
             }}
@@ -1220,90 +1193,88 @@ export default function TimelineEditor({
                 />
               )}
 
-              <div
-                style={{
-                  position: "absolute",
-                  left: GUTTER_W + t * px - 4.5,
-                  top: 0,
-                  bottom: 0,
-                  width: 9,
-                  zIndex: 31,
-                  cursor: "ew-resize",
-                  touchAction: "none",
-                }}
-                onPointerDown={(e) => {
-                  if (e.button !== 0) return;
-                  e.preventDefault();
-                  E.handleScrub(e.clientX);
-                  const move = (ev: PointerEvent) => E.handleScrub(ev.clientX);
-                  const up = () => {
-                    window.removeEventListener("pointermove", move);
-                    window.removeEventListener("pointerup", up);
-                  };
-                  window.addEventListener("pointermove", move);
-                  window.addEventListener("pointerup", up);
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    top: RULER_H,
-                    bottom: 0,
-                    left: 4,
-                    width: 2,
-                    background: THEME.playhead,
-                    boxShadow: "0 0 8px rgba(255,71,87,0.65)",
-                    pointerEvents: "none",
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 1,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    background: THEME.playhead,
-                    color: "#fff",
-                    fontFamily: MONO,
-                    fontSize: 9.5,
-                    fontWeight: 800,
-                    padding: "2px 6px",
-                    borderRadius: 999,
-                    whiteSpace: "nowrap",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.55)",
-                    pointerEvents: "none",
-                  }}
-                >
-                  {fmtTime(t)}
-                </div>
-                <div
-                  style={{
-                    position: "absolute",
-                    top: RULER_H - 26,
-                    left: "-5px",
-                    width: 18,
-                    height: 24,
-                    borderRadius: 9,
-                    background: THEME.playhead,
-                    border: "2px solid #ffffff",
-                    boxShadow:
-                      "0 3px 10px rgba(0,0,0,0.55), 0 0 12px rgba(255,71,87,0.45)",
-                    pointerEvents: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
+              {(() => {
+                const totalTracksHeight = TRACK_ROWS.reduce((sum, r) => sum + E.rowHeight(r.id), 0);
+                return (
                   <div
                     style={{
-                      width: 2.5,
-                      height: 10,
-                      borderRadius: 2,
-                      background: "rgba(255,255,255,0.9)",
+                      position: "absolute",
+                      left: GUTTER_W + t * px - 4.5,
+                      top: 0,
+                      height: RULER_H + totalTracksHeight,
+                      width: 9,
+                      zIndex: 60,
+                      cursor: "ew-resize",
+                      touchAction: "none",
                     }}
-                  />
-                </div>
-              </div>
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.preventDefault();
+                      E.handleScrub(e.clientX);
+                      const move = (ev: PointerEvent) => E.handleScrub(ev.clientX);
+                      const up = () => {
+                        window.removeEventListener("pointermove", move);
+                        window.removeEventListener("pointerup", up);
+                      };
+                      window.addEventListener("pointermove", move);
+                      window.addEventListener("pointerup", up);
+                    }}
+                  >
+                    {/* Vertical Needle Line constrained to track height */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: RULER_H,
+                        height: totalTracksHeight,
+                        left: 4,
+                        width: 2,
+                        background: THEME.playhead,
+                        boxShadow: "0 0 8px rgba(255,71,87,0.65)",
+                        pointerEvents: "none",
+                      }}
+                    />
+
+                    {/* Integrated Playhead Timestamp Badge with Pointer Tip */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 2,
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        background: THEME.playhead,
+                        color: "#ffffff",
+                        fontFamily: MONO,
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        padding: "2px 7px",
+                        borderRadius: 4,
+                        whiteSpace: "nowrap",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.5), 0 0 8px rgba(255,71,87,0.4)",
+                        pointerEvents: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {fmtTime(t)}
+                      {/* Downward Pointer Triangle */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: -5,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          width: 0,
+                          height: 0,
+                          borderLeft: "5px solid transparent",
+                          borderRight: "5px solid transparent",
+                          borderTop: `5px solid ${THEME.playhead}`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
 
               {E.clips.length === 0 && (
                 <div

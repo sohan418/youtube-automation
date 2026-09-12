@@ -202,10 +202,31 @@ def update_scene(scene_id: int, payload: SceneUpdate, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Scene not found")
 
     data = payload.model_dump(exclude_unset=True)
+    video_path_val = data.pop("video_path", None)
+
     for field, value in data.items():
         setattr(scene, field, value)
     if data.get("duration_seconds") is not None:
         scene.duration_manual = True
+
+    if "image_path" in data and data["image_path"]:
+        val = data["image_path"]
+        from app.models import SceneImage
+        existing = db.query(SceneImage).filter(SceneImage.scene_id == scene.id, SceneImage.file_path == val).first()
+        if not existing:
+            count = db.query(SceneImage).filter(SceneImage.scene_id == scene.id).count()
+            si = SceneImage(scene_id=scene.id, file_path=val, source="gallery", position=count)
+            db.add(si)
+            db.flush()
+
+    if video_path_val:
+        from app.models import SceneVideo
+        existing = db.query(SceneVideo).filter(SceneVideo.scene_id == scene.id, SceneVideo.file_path == video_path_val).first()
+        if not existing:
+            count = db.query(SceneVideo).filter(SceneVideo.scene_id == scene.id).count()
+            sv = SceneVideo(scene_id=scene.id, file_path=video_path_val, source="gallery", position=count)
+            db.add(sv)
+            db.flush()
 
     db.commit()
     db.refresh(scene)

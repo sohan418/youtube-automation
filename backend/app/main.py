@@ -55,6 +55,13 @@ async def lifespan(app: FastAPI):
             ],
             "projects",
         )
+        _migrate_columns(
+            conn,
+            [
+                ("timestamps", "TEXT NULL"),
+            ],
+            "seo_metadata",
+        )
 
     _seed_default_prompts()
     yield

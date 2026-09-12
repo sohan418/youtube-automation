@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -20,6 +22,7 @@ class YouTubeConfigUpdate(BaseModel):
 
 class YouTubeUploadRequest(BaseModel):
     privacy_status: str = "private"
+    publish_at: str | None = None
 
 
 class YouTubeVideoResponse(BaseModel):
@@ -36,6 +39,7 @@ def get_youtube_config():
         "youtube_api_key_configured": bool(settings.youtube_api_key),
         "youtube_playlist_id": settings.youtube_playlist_id,
         "youtube_client_id_configured": bool(settings.youtube_client_id),
+        "youtube_client_secret_configured": bool(settings.youtube_client_secret),
         "youtube_connected": youtube_service.is_connected(),
     }
 
@@ -43,14 +47,18 @@ def get_youtube_config():
 @router.post("/config")
 def update_youtube_config(payload: YouTubeConfigUpdate):
     to_update: dict[str, str] = {}
-    if payload.youtube_api_key is not None:
-        to_update["youtube_api_key"] = payload.youtube_api_key
+    if payload.youtube_api_key is not None and payload.youtube_api_key.strip():
+        to_update["youtube_api_key"] = payload.youtube_api_key.strip()
     if payload.youtube_playlist_id is not None:
-        to_update["youtube_playlist_id"] = payload.youtube_playlist_id
-    if payload.youtube_client_id is not None:
-        to_update["youtube_client_id"] = payload.youtube_client_id
-    if payload.youtube_client_secret is not None:
-        to_update["youtube_client_secret"] = payload.youtube_client_secret
+        from app.services.youtube import normalize_playlist_id
+
+        to_update["youtube_playlist_id"] = (
+            normalize_playlist_id(payload.youtube_playlist_id) or ""
+        )
+    if payload.youtube_client_id is not None and payload.youtube_client_id.strip():
+        to_update["youtube_client_id"] = payload.youtube_client_id.strip()
+    if payload.youtube_client_secret is not None and payload.youtube_client_secret.strip():
+        to_update["youtube_client_secret"] = payload.youtube_client_secret.strip()
     if to_update:
         settings.update_api_keys(to_update)
     return get_youtube_config()
@@ -127,10 +135,26 @@ def upload_video(project_id: int, payload: YouTubeUploadRequest):
     if not youtube_service.verify_connection():
         raise HTTPException(status_code=400, detail="YouTube not connected. Please authenticate first.")
 
-    # Find final video
+    # Find final video dynamically
     video_dir = storage_service.get_project_path(project.slug) / "video"
     final_video = video_dir / "final.mp4"
-    if not final_video.exists():
+    if not final_video.exists() or final_video.stat().st_size <= 1024:
+        for alt_name in ("final_post.mp4", "final_narr.mp4", "final_watermarked.mp4", "final_subtitled.mp4"):
+            alt = video_dir / alt_name
+            if alt.exists() and alt.stat().st_size > 1024:
+                final_video = alt
+                break
+
+    if not final_video.exists() or final_video.stat().st_size <= 1024:
+        mp4s = sorted(
+            [f for f in video_dir.glob("*.mp4") if f.stat().st_size > 1024],
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        if mp4s:
+            final_video = mp4s[0]
+
+    if not final_video.exists() or final_video.stat().st_size <= 1024:
         raise HTTPException(status_code=400, detail="Video not built yet. Please build the video first.")
 
     # Get SEO metadata
@@ -150,16 +174,28 @@ def upload_video(project_id: int, payload: YouTubeUploadRequest):
     )
     thumbnail_path = None
     if selected and selected.file_path:
-        candidate = storage_service.root.parent / selected.file_path
-        if candidate.exists():
-            thumbnail_path = str(candidate)
+        p_str = selected.file_path
+        p_path = Path(p_str)
+        if p_path.is_absolute() and p_path.exists():
+            thumbnail_path = str(p_path)
+        else:
+            c1 = storage_service.root.parent / p_str
+            c2 = storage_service.root / p_str
+            if c1.exists():
+                thumbnail_path = str(c1)
+            elif c2.exists():
+                thumbnail_path = str(c2)
+
     if not thumbnail_path:
         thumb_dir = storage_service.get_project_path(project.slug) / "thumbnail"
         if thumb_dir.exists():
-            for f in sorted(thumb_dir.iterdir()):
-                if f.suffix.lower() in (".jpg", ".jpeg", ".png"):
-                    thumbnail_path = str(f)
-                    break
+            files = sorted(
+                [f for f in thumb_dir.iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")],
+                key=lambda f: f.stat().st_mtime,
+                reverse=True,
+            )
+            if files:
+                thumbnail_path = str(files[0])
 
     youtube_service.upload_video(
         project_slug=project.slug,
@@ -169,6 +205,7 @@ def upload_video(project_id: int, payload: YouTubeUploadRequest):
         tags=tags,
         category_id=category_id,
         privacy_status=payload.privacy_status,
+        publish_at=payload.publish_at,
         thumbnail_path=thumbnail_path,
     )
 

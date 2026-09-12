@@ -77,16 +77,6 @@
   font-weight: 700;
 }
 
-.sidebar-step-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--success);
-}
-
 .sidebar-step-active-line {
   position: absolute;
   left: 0;

@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clapperboard,
   Copy,
+  Library,
   Mic,
   Plus,
   Sparkles,
@@ -16,9 +17,12 @@ import {
   Image,
   Video,
   Film,
+  LayoutGrid,
 } from "lucide-react";
 import type { Scene } from "../../types";
 import { api } from "../../api/client";
+import StepHeader from "../studio/StepHeader";
+import GalleryPickerModal from "../editors/GalleryPickerModal";
 import FreeAIGuide from "../editors/FreeAIGuide";
 import "./ImagesStep.css";
 
@@ -47,14 +51,38 @@ export function buildMediaStrip(scene: Scene): MediaTile[] {
     source: img.source,
     isPrimary: img.file_path === scene.image_path,
   }));
+
+  if (scene.image_path && !images.some((img) => img.file_path === scene.image_path)) {
+    images.push({
+      kind: "image",
+      id: -1,
+      position: -1,
+      file_path: scene.image_path,
+      source: "gallery",
+      isPrimary: true,
+    });
+  }
+
   const videos: MediaTile[] = (scene.videos || []).map((vid) => ({
     kind: "video",
     id: vid.id,
     position: vid.position,
     file_path: vid.file_path,
     source: vid.source,
-    isPrimary: false,
+    isPrimary: vid.file_path === scene.video_path,
   }));
+
+  if (scene.video_path && !videos.some((vid) => vid.file_path === scene.video_path)) {
+    videos.push({
+      kind: "video",
+      id: -2,
+      position: -1,
+      file_path: scene.video_path,
+      source: "gallery",
+      isPrimary: true,
+    });
+  }
+
   return [...images, ...videos].sort((a, b) => a.position - b.position);
 }
 
@@ -91,6 +119,10 @@ interface Props {
   handleSceneDrop: (e: React.DragEvent, sceneId: number) => void;
   handleUploadTileDrop: (e: React.DragEvent, sceneId: number) => void;
   onUpdateSceneEffect?: (sceneId: number, effect: string) => void;
+  onUpdateSceneMedia?: (sceneId: number, mediaPath: string, isVideo?: boolean) => Promise<void>;
+  onRefreshScenes?: () => Promise<void>;
+  onQuickAddScene?: (atTime?: number) => Promise<Scene | null>;
+  onCollapse?: () => void;
 }
 
 export default function ImagesStep({
@@ -123,13 +155,19 @@ export default function ImagesStep({
   handleTileDrop,
   handleSceneDrop,
   handleUploadTileDrop,
+  onUpdateSceneMedia,
+  onRefreshScenes,
+  onQuickAddScene,
+  onCollapse,
 }: Props) {
+  const [viewMode, setViewMode] = useState<"single" | "grid">("single");
   // Task #6: active prompt tab per scene
   const [promptTab, setPromptTab] = useState<"image" | "video">("image");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedBoth, setCopiedBoth] = useState(false);
   const [videoDurations, setVideoDurations] = useState<Record<number, number>>({});
   const [dynamicImagePrompt, setDynamicImagePrompt] = useState<{ system: string; user: string } | null>(null);
+  const [galleryPickerSceneId, setGalleryPickerSceneId] = useState<number | null>(null);
 
   useEffect(() => {
     api.buildImagePrompt({
@@ -187,15 +225,14 @@ export default function ImagesStep({
 
   return (
     <div className="images-root">
-      {/* ── Compact Header Toolbar ─────────────────────────────────────── */}
-      <div className="images-header">
-        {/* Left Side: Title */}
-        <div className="images-header-title">
-          <Film size={14} color="var(--primary)" className="images-header-title-icon" />
-          <span className="images-header-title-text">Scene Media Strip</span>
-        </div>
-
-        {/* Right Side: Generate All Button */}
+      <StepHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <Film size={14} color="var(--primary)" /> Media Strip ({scenes.length})
+          </span>
+        }
+        onCollapse={onCollapse}
+      >
         <button
           className="btn-secondary images-generate-btn"
           disabled={!!actionLoading || scenes.length === 0}
@@ -209,6 +246,64 @@ export default function ImagesStep({
             </>
           )}
         </button>
+      </StepHeader>
+
+      {/* Toolbar row: View mode switcher & Add Scene button */}
+      <div className="images-actions-bar">
+        <div style={{ display: "flex", gap: "2px", background: "var(--surface-light, rgba(255,255,255,0.05))", padding: "2px", borderRadius: "6px", border: "1px solid var(--border)" }}>
+          <button
+            type="button"
+            onClick={() => setViewMode("single")}
+            title="Single Scene Focus View"
+            style={{
+              padding: "3px 8px",
+              borderRadius: "4px",
+              border: "none",
+              background: viewMode === "single" ? "var(--primary)" : "transparent",
+              color: viewMode === "single" ? "#fff" : "var(--text-muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "0.72rem",
+              fontWeight: viewMode === "single" ? 600 : 400,
+            }}
+          >
+            <Film size={12} /> Single
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            title="All Scenes Grid View"
+            style={{
+              padding: "3px 8px",
+              borderRadius: "4px",
+              border: "none",
+              background: viewMode === "grid" ? "var(--primary)" : "transparent",
+              color: viewMode === "grid" ? "#fff" : "var(--text-muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "0.72rem",
+              fontWeight: viewMode === "grid" ? 600 : 400,
+            }}
+          >
+            <LayoutGrid size={12} /> All Grid
+          </button>
+        </div>
+
+        {onQuickAddScene && (
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => onQuickAddScene()}
+            style={{ fontSize: "0.74rem", padding: "0.3rem 0.65rem", display: "flex", alignItems: "center", gap: "4px" }}
+            title="Add new scene to project"
+          >
+            <Plus size={13} /> Add Scene
+          </button>
+        )}
       </div>
 
       <div className="images-column">
@@ -228,30 +323,32 @@ export default function ImagesStep({
         ) : (
           <div className="images-scene-list">
 
-            {/* ── Pager ─────────────────────────────────────────────────── */}
-            <div className="images-pager">
-              <button
-                className="btn-secondary images-pager-btn"
-                disabled={activeIdx <= 0}
-                onClick={() => setActiveIdx(activeIdx - 1)}
-              >
-                <ChevronLeft size={14} /> Prev
-              </button>
-              <span className="images-pager-text">
-                Scene {scenes[activeIdx]?.order_index ?? activeIdx + 1} of {scenes.length}
-              </span>
-              <button
-                className="btn-secondary images-pager-btn"
-                disabled={activeIdx >= scenes.length - 1}
-                onClick={() => setActiveIdx(activeIdx + 1)}
-              >
-                Next <ChevronRight size={14} />
-              </button>
-            </div>
+            {/* ── Pager (Single mode only) ─────────────────────────────── */}
+            {viewMode === "single" && (
+              <div className="images-pager">
+                <button
+                  className="btn-secondary images-pager-btn"
+                  disabled={activeIdx <= 0}
+                  onClick={() => setActiveIdx(activeIdx - 1)}
+                >
+                  <ChevronLeft size={14} /> Prev
+                </button>
+                <span className="images-pager-text">
+                  Scene {scenes[activeIdx]?.order_index ?? activeIdx + 1} of {scenes.length}
+                </span>
+                <button
+                  className="btn-secondary images-pager-btn"
+                  disabled={activeIdx >= scenes.length - 1}
+                  onClick={() => setActiveIdx(activeIdx + 1)}
+                >
+                  Next <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
 
             {/* ── Active scene card ──────────────────────────────────────── */}
             {scenes.map((scene, idx) => {
-              if (idx !== activeIdx) return null;
+              if (viewMode === "single" && idx !== activeIdx) return null;
 
               const strip = buildMediaStrip(scene);
               const narrationDur = scene.duration_seconds;
@@ -285,6 +382,19 @@ export default function ImagesStep({
                     borderStyle: draggingOverScene === scene.id ? "dashed" : undefined,
                   }}
                 >
+                  {/* Grid View Scene Badge Header */}
+                  {viewMode === "grid" && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem", paddingBottom: "0.3rem", borderBottom: "1px solid var(--border)" }}>
+                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--primary)" }}>
+                        Scene #{scene.order_index ?? idx + 1}
+                      </span>
+                      {scene.duration_seconds && (
+                        <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                          ⏱ {scene.duration_seconds.toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {/* ── Task #3: Scene narration (2-line truncated) ──────── */}
                   {scene.narration && (
                     <p className="images-narration">
@@ -602,6 +712,17 @@ export default function ImagesStep({
                         className="images-hidden-input"
                       />
                     </label>
+
+                    <button
+                      type="button"
+                      title="Pick reusable media from Gallery"
+                      className="images-upload-tile"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setGalleryPickerSceneId(scene.id)}
+                    >
+                      <Library size={20} />
+                      <span className="images-upload-tile-text">From Gallery</span>
+                    </button>
                   </div>
 
                   {/* ── URL bar — Task #2: Upload button removed ─────────── */}
@@ -622,14 +743,94 @@ export default function ImagesStep({
                     >
                       Add URL
                     </button>
+                    <button
+                      className="btn-secondary images-url-btn"
+                      style={{ gap: "0.25rem" }}
+                      title="Save this scene's media to global Gallery for reuse"
+                      onClick={async () => {
+                        try {
+                          await api.saveSceneToGallery(scene.id);
+                          alert("Saved media clip to global Gallery!");
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : "Failed to save media to gallery");
+                        }
+                      }}
+                    >
+                      <Library size={12} /> Save to Gallery
+                    </button>
                     {/* Duplicate Upload button removed (#2) */}
                   </div>
                 </div>
               );
             })}
+
+            {/* Add Scene Card in Grid Mode */}
+            {viewMode === "grid" && onQuickAddScene && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => onQuickAddScene()}
+                style={{
+                  width: "100%",
+                  padding: "0.85rem",
+                  borderRadius: "8px",
+                  border: "2px dashed var(--border)",
+                  background: "rgba(255,255,255,0.02)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  marginTop: "0.25rem",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--primary)";
+                  e.currentTarget.style.color = "var(--primary)";
+                  e.currentTarget.style.background = "rgba(99,102,241,0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                  e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                }}
+              >
+                <Plus size={16} /> Add New Scene
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {galleryPickerSceneId != null && (
+        <GalleryPickerModal
+          isOpen={true}
+          sceneId={galleryPickerSceneId}
+          onClose={() => setGalleryPickerSceneId(null)}
+          onSelectClip={async (clip) => {
+            const targetId = galleryPickerSceneId;
+            setGalleryPickerSceneId(null);
+            try {
+              const isImg = /\.(png|jpg|jpeg|webp)$/i.test(clip.filename);
+              if (onUpdateSceneMedia) {
+                await onUpdateSceneMedia(targetId, clip.file_path, !isImg);
+              } else if (isImg) {
+                await api.updateScene(targetId, { image_path: clip.file_path, video_path: "" });
+              } else {
+                await api.updateScene(targetId, { video_path: clip.file_path, image_path: "" });
+              }
+              if (onRefreshScenes) {
+                await onRefreshScenes();
+              }
+            } catch (err) {
+              console.error("Failed to assign clip to scene:", err);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

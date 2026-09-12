@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from "react";
-import { Film, Image as ImageIcon, Mic, Music2, Type, VolumeX, Lock } from "lucide-react";
+import { Film, Image as ImageIcon, Mic, Music2, Type, VolumeX, Volume2, Lock } from "lucide-react";
 import type { TimelineClip } from "../../../types";
 import { TRACK_BY_ID } from "./constants";
 import type { PeaksData } from "./peaks";
@@ -152,7 +152,15 @@ function TopRow({
             ⚡{clip.speed}x
           </span>
         )}
-        {clip.muted && <VolumeX size={10} color="#ffb4b4" />}
+        {clip.muted ? (
+          <span title="Audio Muted" style={{ fontSize: 9, fontWeight: 700, background: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "1px 3px", borderRadius: 3, border: "1px solid rgba(239,68,68,0.4)", display: "inline-flex", alignItems: "center", gap: 2 }}>
+            <VolumeX size={9} color="#ffb4b4" /> Muted
+          </span>
+        ) : clip.track === "video" ? (
+          <span title={`Video Sound: ${Math.round((clip.volume ?? 1) * 100)}%`} style={{ fontSize: 9, fontWeight: 700, background: "rgba(34,197,94,0.25)", color: "#86efac", padding: "1px 3px", borderRadius: 3, border: "1px solid rgba(34,197,94,0.4)", display: "inline-flex", alignItems: "center", gap: 2 }}>
+            <Volume2 size={9} color="#86efac" /> {Math.round((clip.volume ?? 1) * 100)}%
+          </span>
+        ) : null}
         {clip.locked && <Lock size={10} color="#ffd166" />}
         <Chip>{clip.duration.toFixed(1)}s</Chip>
         {srcDur != null && (
@@ -202,18 +210,36 @@ export const VideoClipView = memo(function VideoClipView(
   const hasVideo = !!clip.video_path;
   const srcDur = useMediaDuration(probeUrl ?? null, "video");
   const label = clipLabel(clip, orderIndex);
+  const isVideoUrl = thumbUrl ? /\.(mp4|webm|mov|mkv)(\?|$)/i.test(thumbUrl) : false;
   return (
     <Shell {...props}>
       {thumbUrl ? (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage: `url("${thumbUrl}")`,
-            backgroundSize: "auto 100%",
-            backgroundRepeat: "repeat-x",
-          }}
-        />
+        isVideoUrl ? (
+          <video
+            src={thumbUrl}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              opacity: 0.7,
+              pointerEvents: "none",
+            }}
+            preload="metadata"
+            muted
+          />
+        ) : (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage: `url("${thumbUrl}")`,
+              backgroundSize: "auto 100%",
+              backgroundRepeat: "repeat-x",
+            }}
+          />
+        )
       ) : (
         <div
           style={{

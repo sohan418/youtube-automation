@@ -10,14 +10,17 @@ import {
   Scissors,
   Trash2,
   Copy,
+  Clipboard,
+  CopyPlus,
   Waves,
   Clock,
   Sparkles,
-  SlidersHorizontal,
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
 import type { TimelineClip } from "../../types";
+import { mediaUrl } from "../../api/client";
+import { getCachedMediaDuration } from "../editor/timeline/mediaMeta";
 
 const ZOOM_OPTIONS = [
   { value: "none", label: "None" },
@@ -44,6 +47,9 @@ interface Props {
     onTrimStart: () => void;
     onTrimEnd: () => void;
     onCleanSilence?: () => void;
+    onCopy?: () => void;
+    onPaste?: () => void;
+    canPaste?: boolean;
     onDuplicate: () => void;
     onDelete: () => void;
     onMoveRow: (dir: -1 | 1) => void;
@@ -52,15 +58,18 @@ interface Props {
 
 export default function StudioRightInspector({ clipInfo }: Props) {
   const [activeTab, setActiveTab] = useState<"audio" | "motion" | "timing" | "text">("audio");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
-  // Auto-switch tab based on selected clip type (default to Audio first!)
+  // Auto-switch tab & expand when clip is selected, collapse when clip is unselected
   useEffect(() => {
-    if (!clipInfo) return;
-    const track = clipInfo.clip.track;
-    if (track === "text") setActiveTab("text");
-    else setActiveTab("audio");
-    setCollapsed(false);
+    if (clipInfo) {
+      const track = clipInfo.clip.track;
+      if (track === "text") setActiveTab("text");
+      else setActiveTab("audio");
+      setCollapsed(false);
+    } else {
+      setCollapsed(true);
+    }
   }, [clipInfo?.clip.id, clipInfo?.clip.track]);
 
   const handleTabClick = (tab: "audio" | "motion" | "timing" | "text") => {
@@ -73,32 +82,7 @@ export default function StudioRightInspector({ clipInfo }: Props) {
   };
 
   if (!clipInfo) {
-    return (
-      <aside className={`studio-right-inspector ${collapsed ? "is-collapsed" : ""}`}>
-        {/* Full-Height Empty Content Drawer on Left */}
-        {!collapsed && (
-          <div className="right-inspector-empty">
-            <SlidersHorizontal size={28} color="var(--primary)" />
-            <h4>Clip Inspector</h4>
-            <p>
-              Select any video, audio, or caption clip on the timeline to edit its properties like Clipchamp.
-            </p>
-          </div>
-        )}
-
-        {/* Clipchamp-style Right Dock Icon Tabs on Absolute Far-Right Edge */}
-        <div className="right-dock-tabs">
-          <button
-            className={`dock-tab-btn ${activeTab === "audio" ? "is-active" : ""}`}
-            onClick={() => setCollapsed(!collapsed)}
-            title="Clip Inspector"
-          >
-            <SlidersHorizontal size={16} />
-            <span>Clip</span>
-          </button>
-        </div>
-      </aside>
-    );
+    return null;
   }
 
   const {
@@ -115,6 +99,9 @@ export default function StudioRightInspector({ clipInfo }: Props) {
     onTrimStart,
     onTrimEnd,
     onCleanSilence,
+    onCopy,
+    onPaste,
+    canPaste,
     onDuplicate,
     onDelete,
     onMoveRow,
@@ -170,11 +157,20 @@ export default function StudioRightInspector({ clipInfo }: Props) {
               >
                 ▼
               </button>
-              <button className="btn-secondary right-mini-btn" onClick={onDuplicate} title="Duplicate (Ctrl+D)">
+              <button className="btn-secondary right-mini-btn" onClick={onCopy} title="Copy (Ctrl+C)">
                 <Copy size={12} />
+              </button>
+              <button className="btn-secondary right-mini-btn" onClick={onPaste} disabled={!canPaste} title="Paste (Ctrl+V)">
+                <Clipboard size={12} />
+              </button>
+              <button className="btn-secondary right-mini-btn" onClick={onDuplicate} title="Duplicate (Ctrl+D)">
+                <CopyPlus size={12} />
               </button>
               <button className="btn-danger right-mini-btn" onClick={onDelete} title="Delete (Del)">
                 <Trash2 size={12} />
+              </button>
+              <button className="btn-secondary right-mini-btn" onClick={() => setCollapsed(true)} title="Close Inspector">
+                <PanelRightClose size={12} />
               </button>
             </div>
           </div>
@@ -226,16 +222,72 @@ export default function StudioRightInspector({ clipInfo }: Props) {
               {clip.track === "video" && (
                 <div className="card-group-field" style={{ marginTop: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <label className="field-label">Playback Speed ({(clip.speed ?? 1).toFixed(2)}x)</label>
-                    {(clip.speed ?? 1) !== 1 && (
-                      <button
-                        type="button"
-                        onClick={() => onPatch({ speed: 1.0 }, `sp:${clip.id}`)}
-                        style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.7rem", cursor: "pointer" }}
-                      >
-                        Reset 1x
-                      </button>
-                    )}
+                    <label className="field-label">Playback Speed</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={4.0}
+                        step={0.01}
+                        value={Number((clip.speed ?? 1.0).toFixed(2))}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v) && v > 0) {
+                            onPatch({ speed: Math.min(4.0, Math.max(0.1, v)) }, `sp:${clip.id}`);
+                          }
+                        }}
+                        style={{
+                          width: 56,
+                          padding: "2px 4px",
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          borderRadius: "4px",
+                          border: "1px solid var(--border)",
+                          background: "rgba(255, 255, 255, 0.08)",
+                          color: "#fff",
+                          textAlign: "center",
+                        }}
+                      />
+                      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 600 }}>x</span>
+                      {(() => {
+                        const srcPath = clip.video_path || clip.audio_path || "";
+                        const srcDur = srcPath ? getCachedMediaDuration(mediaUrl(srcPath), clip.audio_path ? "audio" : "video") : null;
+                        const autoSpeed = srcDur && srcDur > 0 ? parseFloat((srcDur / clip.duration).toFixed(2)) : null;
+                        return (
+                          <>
+                            {autoSpeed != null && autoSpeed > 0 && Math.abs(autoSpeed - (clip.speed ?? 1.0)) > 0.02 && (
+                              <button
+                                type="button"
+                                title={`Auto-fit speed to ${autoSpeed}x so video length matches scene duration`}
+                                onClick={() => onPatch({ speed: Math.min(4.0, Math.max(0.1, autoSpeed)) }, `sp:${clip.id}`)}
+                                style={{
+                                  background: "rgba(99, 102, 241, 0.25)",
+                                  border: "1px solid rgba(99, 102, 241, 0.5)",
+                                  color: "#a5b4fc",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  padding: "1px 5px",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                  marginLeft: 2,
+                                }}
+                              >
+                                ⚡ Auto-Fit ({autoSpeed}x)
+                              </button>
+                            )}
+                            {(clip.speed ?? 1) !== 1 && (
+                              <button
+                                type="button"
+                                onClick={() => onPatch({ speed: 1.0 }, `sp:${clip.id}`)}
+                                style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.7rem", cursor: "pointer", marginLeft: 4 }}
+                              >
+                                Reset 1x
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: "0.25rem", margin: "4px 0" }}>
                     {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (

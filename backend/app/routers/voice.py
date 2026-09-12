@@ -174,12 +174,12 @@ def get_voice_config():
 @router.post("/config")
 def update_voice_config(payload: VoiceConfigUpdate):
     to_update: dict[str, str] = {}
-    if payload.sarvam_api_key is not None:
-        to_update["sarvam_api_key"] = payload.sarvam_api_key
-    if payload.deepgram_api_key is not None:
-        to_update["deepgram_api_key"] = payload.deepgram_api_key
-    if payload.elevenlabs_api_key is not None:
-        to_update["elevenlabs_api_key"] = payload.elevenlabs_api_key
+    if payload.sarvam_api_key is not None and payload.sarvam_api_key.strip():
+        to_update["sarvam_api_key"] = payload.sarvam_api_key.strip()
+    if payload.deepgram_api_key is not None and payload.deepgram_api_key.strip():
+        to_update["deepgram_api_key"] = payload.deepgram_api_key.strip()
+    if payload.elevenlabs_api_key is not None and payload.elevenlabs_api_key.strip():
+        to_update["elevenlabs_api_key"] = payload.elevenlabs_api_key.strip()
     if to_update:
         settings.update_api_keys(to_update)
     return get_voice_config()

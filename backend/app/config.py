@@ -64,7 +64,9 @@ class Settings(BaseSettings):
     ffmpeg_path: str = "ffmpeg"
     ffmpeg_max_workers: int = 1
     ffmpeg_timeout_seconds: int = 300
-    default_language: str = "en"
+    default_language: str = "hi"
+    default_category: str = "Education"
+    default_category_id: int = 27
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     @model_validator(mode="after")

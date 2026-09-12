@@ -12,6 +12,8 @@ import {
   VolumeX,
 } from "lucide-react";
 import type { TimelineClip } from "../../../types";
+import { mediaUrl } from "../../../api/client";
+import { getCachedMediaDuration } from "./mediaMeta";
 import { THEME, TRACK_BY_ID } from "./constants";
 
 const MONO =
@@ -204,18 +206,74 @@ export function Inspector({
         {/* Playback Speed Section */}
         {clip.track === "video" && (
           <div className="inspector-section">
-            <div className="inspector-section-header">
-              <label className="inspector-section-label">Playback Speed ({(clip.speed ?? 1).toFixed(2)}x)</label>
-              {(clip.speed ?? 1) !== 1 && (
-                <button
-                  type="button"
-                  title="Reset speed to 1x"
-                  onClick={() => onPatch({ speed: 1.0 }, `sp:${clip.id}`)}
-                  style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.7rem", cursor: "pointer" }}
-                >
-                  Reset 1x
-                </button>
-              )}
+            <div className="inspector-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label className="inspector-section-label">Playback Speed</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <input
+                  type="number"
+                  min={0.1}
+                  max={4.0}
+                  step={0.01}
+                  value={Number((clip.speed ?? 1.0).toFixed(2))}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v) && v > 0) {
+                      onPatch({ speed: Math.min(4.0, Math.max(0.1, v)) }, `sp:${clip.id}`);
+                    }
+                  }}
+                  style={{
+                    width: 56,
+                    padding: "2px 4px",
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    borderRadius: "4px",
+                    border: "1px solid var(--border)",
+                    background: "rgba(255, 255, 255, 0.08)",
+                    color: "#fff",
+                    textAlign: "center",
+                  }}
+                />
+                <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 600 }}>x</span>
+                {(() => {
+                  const srcPath = clip.video_path || clip.audio_path || "";
+                  const srcDur = srcPath ? getCachedMediaDuration(mediaUrl(srcPath), clip.audio_path ? "audio" : "video") : null;
+                  const autoSpeed = srcDur && srcDur > 0 ? parseFloat((srcDur / clip.duration).toFixed(2)) : null;
+                  return (
+                    <>
+                      {autoSpeed != null && autoSpeed > 0 && Math.abs(autoSpeed - (clip.speed ?? 1.0)) > 0.02 && (
+                        <button
+                          type="button"
+                          title={`Auto-fit speed to ${autoSpeed}x so video length matches scene duration`}
+                          onClick={() => onPatch({ speed: Math.min(4.0, Math.max(0.1, autoSpeed)) }, `sp:${clip.id}`)}
+                          style={{
+                            background: "rgba(99, 102, 241, 0.25)",
+                            border: "1px solid rgba(99, 102, 241, 0.5)",
+                            color: "#a5b4fc",
+                            fontSize: "0.68rem",
+                            fontWeight: 700,
+                            padding: "1px 5px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            marginLeft: 2,
+                          }}
+                        >
+                          ⚡ Auto-Fit ({autoSpeed}x)
+                        </button>
+                      )}
+                      {(clip.speed ?? 1) !== 1 && (
+                        <button
+                          type="button"
+                          title="Reset speed to 1x"
+                          onClick={() => onPatch({ speed: 1.0 }, `sp:${clip.id}`)}
+                          style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: "0.7rem", cursor: "pointer", marginLeft: 4 }}
+                        >
+                          Reset 1x
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
             </div>
             <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.4rem" }}>
               {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (

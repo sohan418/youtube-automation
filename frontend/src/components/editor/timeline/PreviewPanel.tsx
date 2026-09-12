@@ -143,55 +143,67 @@ export const PreviewPanel = memo(function PreviewPanel({
           boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
         }}
       >
-        {activeVideo?.video_path ? (
-          <video
-            ref={videoRef}
-            key={mediaUrl(activeVideo.video_path)}
-            src={mediaUrl(activeVideo.video_path)}
-            muted
-            playsInline
-            preload="auto"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              transform,
-              willChange: "transform",
-            }}
-          />
-        ) : activeVideo?.image_path ? (
-          <img
-            src={mediaUrl(activeVideo.image_path)}
-            alt=""
-            draggable={false}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              transform,
-              willChange: "transform",
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              color: "#5b5b66",
-              fontSize: 11,
-            }}
-          >
-            <Film size={15} /> No clip at playhead
-          </div>
-        )}
+        {(() => {
+          const rawVideo = activeVideo?.video_path;
+          const isImgVid = rawVideo ? /\.(png|jpg|jpeg|webp)$/i.test(rawVideo) : false;
+          const videoSrc = isImgVid ? null : rawVideo;
+          const imageSrc = activeVideo?.image_path || (isImgVid ? rawVideo : null);
+
+          if (videoSrc) {
+            return (
+              <video
+                ref={videoRef}
+                key={mediaUrl(videoSrc)}
+                src={mediaUrl(videoSrc)}
+                muted
+                playsInline
+                preload="auto"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  transform,
+                  willChange: "transform",
+                }}
+              />
+            );
+          }
+          if (imageSrc) {
+            return (
+              <img
+                src={mediaUrl(imageSrc)}
+                alt=""
+                draggable={false}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  transform,
+                  willChange: "transform",
+                }}
+              />
+            );
+          }
+          return (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#6b7280",
+                fontSize: 12,
+              }}
+            >
+              No media preview
+            </div>
+          );
+        })()}
 
         {badge && (
           <span

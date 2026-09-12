@@ -227,3 +227,170 @@
   background: #ff0000;
   border: none;
 }
+
+.upload-mode-toggle-group {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.upload-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-mode-btn.active {
+  background: var(--surface, #1e1e2d);
+  color: var(--primary, #7c5cff);
+  border-color: var(--border, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.upload-schedule-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.upload-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.schedule-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.schedule-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.schedule-option-btn {
+  padding: 0.6rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.schedule-option-btn:hover {
+  border-color: var(--primary);
+}
+
+.schedule-option-btn.active {
+  border: 2px solid var(--primary, #7c5cff);
+  background: rgba(124, 92, 255, 0.08);
+  color: var(--primary, #7c5cff);
+  font-weight: 600;
+}
+
+.schedule-option-btn.slot-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.schedule-option-btn.slot-btn small {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.schedule-option-btn.slot-btn.active small {
+  color: var(--primary);
+}
+
+.schedule-datetime-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.schedule-datetime-input:focus {
+  border-color: var(--primary);
+}
+
+.schedule-summary-card {
+  padding: 0.85rem;
+  border-radius: 8px;
+  background: rgba(124, 92, 255, 0.05);
+  border: 1px solid rgba(124, 92, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.schedule-summary-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.slot-btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.schedule-summary-time {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--primary, #7c5cff);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.schedule-summary-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.schedule-warning {
+  font-size: 0.78rem;
+  color: #f59e0b;
+  font-weight: 600;
+  margin-top: 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}

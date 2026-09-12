@@ -234,6 +234,7 @@ def update_seo(
             description=payload.description or "",
             tags=payload.tags or "",
             hashtags=payload.hashtags or "",
+            timestamps=payload.timestamps or "",
         )
         db.add(seo)
     else:
@@ -245,6 +246,8 @@ def update_seo(
             seo.tags = payload.tags
         if payload.hashtags is not None:
             seo.hashtags = payload.hashtags
+        if payload.timestamps is not None:
+            seo.timestamps = payload.timestamps
 
     db.commit()
     db.refresh(seo)
@@ -293,7 +296,21 @@ def generate_seo(
 
     # Build description with timestamps + disclaimer appended
     base_description = raw.get("description") or ""
-    timestamps_block = _build_timestamps(scenes, project.slug)
+    ai_ts = raw.get("timestamps")
+    if isinstance(ai_ts, list):
+        timestamps_block = "\n".join(
+            f"{item.get('time', item.get('timestamp', item.get('ts', '')))} - {item.get('title', item.get('label', item.get('name', '')))}".strip(" -")
+            if isinstance(item, dict) else str(item)
+            for item in ai_ts
+        ).strip()
+    elif isinstance(ai_ts, dict):
+        timestamps_block = "\n".join(f"{k} - {v}" for k, v in ai_ts.items()).strip()
+    elif isinstance(ai_ts, str) and ai_ts.strip():
+        timestamps_block = ai_ts.strip()
+    else:
+        timestamps_block = _build_timestamps(scenes, project.slug)
+
+    seo.timestamps = timestamps_block
     full_description = base_description
     if timestamps_block:
         full_description += f"\n\n{timestamps_block}"
@@ -323,6 +340,7 @@ def generate_seo(
                 "description": seo.description,
                 "tags": seo.tags,
                 "hashtags": seo.hashtags,
+                "timestamps": seo.timestamps,
                 "category": seo.category,
                 "category_id": seo.category_id,
             },

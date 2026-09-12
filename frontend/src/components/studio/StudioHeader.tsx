@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Home, HelpCircle, Settings, Clapperboard, Download, BadgeCheck, Upload, SlidersHorizontal, PlaySquare, RefreshCw } from "lucide-react";
+import { Settings, Clapperboard, Download, BadgeCheck, Upload, SlidersHorizontal, PlaySquare, RefreshCw, XCircle } from "lucide-react";
 import { getProgressPercent, getCompletedCount, type StepStatusData, STUDIO_STEPS } from "./studioSteps";
 import type { Project, VideoStatus, LogoConfig } from "../../types";
 import "./StudioHeader.css";
@@ -19,6 +19,7 @@ interface Props {
   actionLoading: string;
   videoStatus: VideoStatus | null;
   onBuildVideo: () => void;
+  onCancelBuild?: () => void;
   onExportVideo: () => void;
   onImportVideo: (file: File) => void;
   logoOverlay: boolean;
@@ -28,6 +29,7 @@ interface Props {
   onTogglePreview?: () => void;
   previewActive?: boolean;
   onRefreshLogo?: () => void;
+  onUploadLogo?: (file: File) => void;
 }
 
 export default function StudioHeader({
@@ -39,6 +41,7 @@ export default function StudioHeader({
   actionLoading,
   videoStatus,
   onBuildVideo,
+  onCancelBuild,
   onExportVideo,
   onImportVideo,
   logoOverlay,
@@ -48,7 +51,9 @@ export default function StudioHeader({
   onTogglePreview,
   previewActive,
   onRefreshLogo,
+  onUploadLogo,
 }: Props) {
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const pct = getProgressPercent(statusData);
   const completed = getCompletedCount(statusData);
   const total = STUDIO_STEPS.length;
@@ -228,13 +233,50 @@ export default function StudioHeader({
                   Settings are saved to this project and applied on the next video build.
                 </p>
 
+                {onUploadLogo && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => logoInputRef.current?.click()}
+                      style={{
+                        width: "100%",
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--primary)",
+                        background: "rgba(99, 102, 241, 0.15)",
+                        color: "#a5b4fc",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <Upload size={13} /> Upload Custom Logo
+                    </button>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file && onUploadLogo) onUploadLogo(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                )}
+
                 {onRefreshLogo && (
                   <button
                     type="button"
                     onClick={onRefreshLogo}
                     style={{
                       width: "100%",
-                      marginTop: "0.5rem",
+                      marginTop: "0.4rem",
                       padding: "6px 10px",
                       borderRadius: "6px",
                       border: "1px solid var(--border)",
@@ -267,9 +309,26 @@ export default function StudioHeader({
           </button>
         )}
         {building ? (
-          <button className="btn-primary studio-header-action-btn" disabled>
-            Building ({videoStatus?.progress ?? 0}%)
-          </button>
+          <>
+            <button className="btn-primary studio-header-action-btn" disabled>
+              Building ({videoStatus?.progress ?? 0}%)
+            </button>
+            {onCancelBuild && (
+              <button
+                className="btn-secondary studio-header-action-btn"
+                onClick={onCancelBuild}
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  color: "#ff6b78",
+                  fontWeight: 600
+                }}
+                title="Cancel ongoing video build"
+              >
+                <XCircle size={13} /> Cancel
+              </button>
+            )}
+          </>
         ) : (
           <button
             className="btn-secondary studio-header-action-btn"
@@ -314,12 +373,6 @@ export default function StudioHeader({
 
         <span className="studio-header-gap">|</span>
 
-        <Link to="/" className="btn-ghost studio-export-link">
-          <Home size={14} />
-        </Link>
-        <button className="btn-ghost studio-ghost-btn" title="Help">
-          <HelpCircle size={15} />
-        </button>
         <button className="btn-ghost studio-ghost-btn" title="Settings" onClick={openSettings}>
           <Settings size={15} />
         </button>

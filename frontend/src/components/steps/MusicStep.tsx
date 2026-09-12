@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Music, Upload, Trash2, Play, Pause, Clock, HardDrive, Plus } from "lucide-react";
+import { Music, Upload, Trash2, Play, Pause, Clock, HardDrive, Plus, Check } from "lucide-react";
 import type { MusicTrack } from "../../types";
 import { api, mediaUrl } from "../../api/client";
+import StepHeader from "../studio/StepHeader";
 import "./MusicStep.css";
 
 interface Props {
   onAddToTimeline?: (track: MusicTrack) => void;
+  activeMusicPath?: string | null;
+  onCollapse?: () => void;
 }
 
 function formatDuration(seconds: number | null): string {
@@ -21,7 +24,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function MusicStep({ onAddToTimeline }: Props) {
+export default function MusicStep({ onAddToTimeline, activeMusicPath, onCollapse }: Props) {
   const [tracks, setTracks] = useState<MusicTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -30,6 +33,7 @@ export default function MusicStep({ onAddToTimeline }: Props) {
   const [paused, setPaused] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [justAddedPath, setJustAddedPath] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -112,13 +116,11 @@ export default function MusicStep({ onAddToTimeline }: Props) {
 
   return (
     <div className="music-step">
-      {/* Header */}
-      <div>
-        <h2>Music Library</h2>
-        <p className="music-step-subtitle">
-          Global music tracks — available across all projects
-        </p>
-      </div>
+      <StepHeader
+        title="Music Library"
+        subtitle="Global music tracks — available across all projects"
+        onCollapse={onCollapse}
+      />
 
       {/* Upload area with Drag and Drop */}
       <div
@@ -168,8 +170,13 @@ export default function MusicStep({ onAddToTimeline }: Props) {
               <button
                 onClick={() => togglePlay(track)}
                 className={`music-play-btn ${playing === track.file_path ? "playing" : ""}`}
+                title={playing === track.file_path && !paused ? "Pause preview" : "Play preview"}
               >
-                {playing === track.file_path && !paused ? <Pause size={14} /> : <Play size={14} className="music-play-icon" />}
+                {playing === track.file_path && !paused ? (
+                  <Pause size={30} fill="#fff" color="#fff" />
+                ) : (
+                  <Play size={30} fill="#fff" color="#fff" />
+                )}
               </button>
 
               {/* Track info */}
@@ -179,10 +186,10 @@ export default function MusicStep({ onAddToTimeline }: Props) {
                 </div>
                 <div className="music-meta">
                   <span className="music-meta-item">
-                    <Clock size={10} /> {formatDuration(track.duration_seconds)}
+                    <Clock size={13} /> {formatDuration(track.duration_seconds)}
                   </span>
                   <span className="music-meta-item">
-                    <HardDrive size={10} /> {formatSize(track.size_bytes)}
+                    <HardDrive size={13} /> {formatSize(track.size_bytes)}
                   </span>
                 </div>
               </div>
@@ -197,13 +204,30 @@ export default function MusicStep({ onAddToTimeline }: Props) {
               {/* Actions */}
               <div className="music-actions">
                 {onAddToTimeline && (
-                  <button
-                    className="btn-secondary music-add-btn"
-                    onClick={() => onAddToTimeline(track)}
-                    title="Add to timeline"
-                  >
-                    <Plus size={11} /> Add
-                  </button>
+                  (() => {
+                    const isCurrent = activeMusicPath === track.file_path || justAddedPath === track.file_path;
+                    return (
+                      <button
+                        className={isCurrent ? "btn-primary music-add-btn" : "btn-secondary music-add-btn"}
+                        onClick={() => {
+                          onAddToTimeline(track);
+                          setJustAddedPath(track.file_path);
+                          setTimeout(() => setJustAddedPath(null), 1500);
+                        }}
+                        title={isCurrent ? "Active track in timeline" : "Use track in timeline"}
+                      >
+                        {isCurrent ? (
+                          <>
+                            <Check size={11} /> Added
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={11} /> Use
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()
                 )}
                 <button
                   className="btn-secondary music-delete-btn"

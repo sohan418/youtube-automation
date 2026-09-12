@@ -6,6 +6,7 @@ import threading
 import urllib.parse
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
@@ -81,14 +82,14 @@ def list_global_clips():
 async def upload_global_clip(file: UploadFile = File(...)):
     from app.services.video import video_service
 
-    valid_exts = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+    valid_exts = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".png", ".jpg", ".jpeg", ".webp"}
     import os
 
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in valid_exts:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid video format '{ext}'. Supported formats: {', '.join(sorted(valid_exts))}",
+            detail=f"Invalid file format '{ext}'. Supported formats: {', '.join(sorted(valid_exts))}",
         )
 
     content = await file.read()
@@ -107,6 +108,59 @@ def delete_global_clip(filename: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Video clip not found")
     return {"message": f"Deleted '{filename}'"}
+
+
+class SaveSceneToGalleryRequest(BaseModel):
+    category_prefix: str | None = None
+    custom_name: str | None = None
+
+
+@router.post("/clips/save-scene/{scene_id}", response_model=VideoClipResponse)
+def save_scene_to_gallery(
+    scene_id: int,
+    payload: SaveSceneToGalleryRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    import re
+    from app.models import Scene
+    from app.services.storage import storage_service
+    from app.services.video import video_service
+
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    rel_media_path = scene.video_path
+    if not rel_media_path and scene.videos and len(scene.videos) > 0:
+        rel_media_path = scene.videos[0].file_path
+    if not rel_media_path and scene.image_path:
+        rel_media_path = scene.image_path
+    if not rel_media_path and scene.images and len(scene.images) > 0:
+        rel_media_path = scene.images[0].file_path
+
+    if not rel_media_path:
+        raise HTTPException(
+            status_code=400, detail="No video or image media attached to this scene."
+        )
+
+    full_path = (storage_service.root.parent / rel_media_path).resolve()
+    if not full_path.exists() or not full_path.is_file():
+        raise HTTPException(
+            status_code=404, detail=f"Media file '{rel_media_path}' not found."
+        )
+
+    prefix = payload.category_prefix.strip().lower() if (payload and payload.category_prefix and payload.category_prefix.strip()) else ""
+    if payload and payload.custom_name and payload.custom_name.strip():
+        name_base = payload.custom_name.strip()
+    else:
+        name_base = full_path.stem
+
+    clean_base = re.sub(r"[^\w.-]", "_", name_base).strip("_")
+    filename = f"{prefix}_{clean_base}{full_path.suffix}" if prefix else f"{clean_base}{full_path.suffix}"
+
+    content = full_path.read_bytes()
+    clip = video_service.save_global_clip(filename, content)
+    return clip
 
 
 @router.get("/project/{project_id}/music/suggest", response_model=MusicSuggestionResponse)
@@ -291,7 +345,7 @@ def _run_build(
             force_rebuild=payload.force_rebuild,
             timeline_clips=timeline_clips,
             track_states=track_states,
-            logo_overlay=payload.logo_overlay,
+            logo_overlay=payload.logo_overlay if payload.logo_overlay else bool(project.logo_overlay),
             logo_position=logo_position,
             logo_size=logo_size,
             logo_margin=logo_margin,
@@ -307,10 +361,35 @@ def _run_build(
             db.close()
         logger.info("Video build finished for project %s -> %s", slug, video_path)
     except Exception as exc:  # pragma: no cover - defensive
-        logger.exception("Video build failed for project %s", slug)
-        video_service.set_progress(
-            slug, 0, "error", "Video build failed.", running=False, error=str(exc)
-        )
+        if video_service.is_cancelled(slug) or "cancelled" in str(exc).lower():
+            logger.info("Video build cancelled for project %s", slug)
+            video_service.set_progress(
+                slug, 0, "cancelled", "Video build cancelled by user", running=False, error="Build cancelled by user"
+            )
+        else:
+            logger.exception("Video build failed for project %s", slug)
+            video_service.set_progress(
+                slug, 0, "error", "Video build failed.", running=False, error=str(exc)
+            )
+    finally:
+        video_service.clear_cancel(slug)
+
+
+@router.post("/project/{project_id}/cancel", response_model=MessageResponse)
+def cancel_video_build(
+    project_id: int, db: Session = Depends(get_db)
+):
+    from app.services.video import video_service
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    video_service.request_cancel(project.slug)
+    return MessageResponse(
+        message="Video build cancellation requested",
+        detail=f"Cancellation flag set for project {project.slug}",
+    )
 
 
 @router.post("/project/{project_id}/build", response_model=MessageResponse)

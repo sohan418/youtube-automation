@@ -106,9 +106,9 @@ export const api = {
 
   // YouTube
   getYoutubeConfig: () =>
-    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean }>("/youtube/config"),
+    request<import("../types").YouTubeConfig>("/youtube/config"),
   saveYoutubeConfig: (data: { youtube_api_key?: string; youtube_playlist_id?: string; youtube_client_id?: string; youtube_client_secret?: string }) =>
-    request<{ youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean }>("/youtube/config", {
+    request<import("../types").YouTubeConfig>("/youtube/config", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -122,10 +122,13 @@ export const api = {
     request<{ connected: boolean; channel_id?: string; title?: string; description?: string; avatar?: string; subscribers?: string; videos?: string }>("/youtube/channel"),
   verifyYoutubeConnection: () =>
     request<{ connected: boolean; needs_reconnect: boolean; reason: string }>("/youtube/verify"),
-  uploadToYouTube: (projectId: number, privacyStatus: string) =>
+  uploadToYouTube: (projectId: number, privacyStatus: string, publishAt?: string) =>
     request<{ message: string; slug: string }>(`/youtube/upload/${projectId}`, {
       method: "POST",
-      body: JSON.stringify({ privacy_status: privacyStatus }),
+      body: JSON.stringify({
+        privacy_status: privacyStatus,
+        publish_at: publishAt || null,
+      }),
     }),
   getYoutubeUploadStatus: (projectId: number) =>
     request<{ running: boolean; progress: number; stage: string; message: string; video_id: string | null; video_url: string | null; error: string | null }>(`/youtube/upload/${projectId}/status`),
@@ -435,6 +438,11 @@ export const api = {
       `/video/clips/${encodeURIComponent(filename)}`,
       { method: "DELETE" },
     ),
+  saveSceneToGallery: (sceneId: number, data?: { category_prefix?: string; custom_name?: string }) =>
+    request<import("../types").VideoClip>(`/video/clips/save-scene/${sceneId}`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    }),
   listGlobalMusic: () =>
     request<import("../types").MusicTrack[]>("/video/music/library"),
   uploadGlobalMusic: (file: File) => {
@@ -478,6 +486,11 @@ export const api = {
   videoStatus: (projectId: number) =>
     request<import("../types").VideoStatus>(
       `/video/project/${projectId}/status`,
+    ),
+  cancelVideoBuild: (projectId: number) =>
+    request<{ message: string; detail: string }>(
+      `/video/project/${projectId}/cancel`,
+      { method: "POST" },
     ),
   importFinalVideo: (projectId: number, file: File) => {
     const form = new FormData();
@@ -539,7 +552,7 @@ export const api = {
       `/seo/project/${projectId}/category`,
       { method: "PATCH", body: JSON.stringify({ category_id: categoryId }) },
     ),
-  updateSEO: (projectId: number, data: { title?: string; description?: string; tags?: string; hashtags?: string }) =>
+  updateSEO: (projectId: number, data: { title?: string; description?: string; tags?: string; hashtags?: string; timestamps?: string }) =>
     request<import("../types").SEOMetadata>(`/seo/project/${projectId}`, {
       method: "PATCH",
       body: JSON.stringify(data),

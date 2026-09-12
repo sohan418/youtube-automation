@@ -320,3 +320,38 @@
 .seo-ed-placeholder {
   color: var(--text-muted);
 }
+
+.seo-export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 125px;
+  padding: 4px;
+}
+
+.seo-export-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.seo-export-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--primary);
+}

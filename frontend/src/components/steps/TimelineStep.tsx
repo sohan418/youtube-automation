@@ -179,8 +179,104 @@ export default function TimelineStep({
     if (!timeline && scenes.length > 0 && !seededRef.current) {
       seededRef.current = true;
       seedDefaults(scenes);
+      return;
     }
     if (timeline) seededRef.current = true;
+    if (!timeline || scenes.length === 0) return;
+
+    const sceneByIdMap = new Map(scenes.map((s) => [s.id, s]));
+    const existingSceneIds = new Set(scenes.map((s) => s.id));
+    const sceneClipMap = new Set(
+      timeline.clips.filter((c) => c.scene_id >= 0).map((c) => c.scene_id),
+    );
+
+    const missingScenes = scenes.filter((s) => !sceneClipMap.has(s.id));
+    const hasOrphanedClips = timeline.clips.some(
+      (c) => c.scene_id >= 0 && !existingSceneIds.has(c.scene_id),
+    );
+
+    let mediaChanged = false;
+    let updatedClips = timeline.clips
+      .filter((c) => c.scene_id < 0 || existingSceneIds.has(c.scene_id))
+      .map((c) => {
+        if (c.scene_id >= 0) {
+          const s = sceneByIdMap.get(c.scene_id);
+          if (s) {
+            const expectedImage = s.image_path || s.images?.[0]?.file_path || null;
+            const expectedVideo = s.video_path || null;
+            const expectedAudio = s.audio_path || null;
+            let changed = false;
+            const patch: Partial<TimelineClip> = {};
+            if (c.track === "video") {
+              if (c.video_path !== expectedVideo) {
+                patch.video_path = expectedVideo;
+                changed = true;
+              }
+              if (c.image_path !== expectedImage) {
+                patch.image_path = expectedImage;
+                changed = true;
+              }
+            } else if (c.track === "narration") {
+              if (c.audio_path !== expectedAudio) {
+                patch.audio_path = expectedAudio;
+                changed = true;
+              }
+            }
+            if (changed) {
+              mediaChanged = true;
+              return { ...c, ...patch };
+            }
+          }
+        }
+        return c;
+      });
+
+    if (missingScenes.length === 0 && !hasOrphanedClips && !mediaChanged) return;
+
+    if (missingScenes.length > 0) {
+      let t = updatedClips.reduce((max, c) => Math.max(max, c.start + c.duration), 0);
+      for (const s of missingScenes) {
+        const duration = s.duration_seconds ?? 5;
+        const image = s.image_path || s.images?.[0]?.file_path || null;
+        updatedClips.push({
+          id: `v-${s.id}-${t.toFixed(2)}`,
+          scene_id: s.id,
+          track: "video",
+          start: Math.round(t * 100) / 100,
+          duration,
+          image_path: image,
+          video_path: s.video_path,
+          audio_path: null,
+          audio_in: 0,
+          audio_out: null,
+          volume: 1,
+          motion_effect: s.motion_effect || "none",
+        });
+        if (s.audio_path) {
+          updatedClips.push({
+            id: `n-${s.id}-${t.toFixed(2)}`,
+            scene_id: s.id,
+            track: "narration",
+            start: Math.round(t * 100) / 100,
+            duration,
+            image_path: null,
+            video_path: null,
+            audio_path: s.audio_path,
+            audio_in: 0,
+            audio_out: null,
+            volume: 1,
+          });
+        }
+        t += duration;
+      }
+    }
+
+    const maxT = updatedClips.reduce((max, c) => Math.max(max, c.start + c.duration), 0);
+    onTimelineChange({
+      ...timeline,
+      clips: updatedClips,
+      duration: Math.round(maxT * 100) / 100,
+    });
   }, [timeline, scenes]);
 
   const handleChange = (tl: TimelineData) => {
@@ -271,13 +367,9 @@ export default function TimelineStep({
       )}
 
       {/* Build controls */}
-      <div
-        className="timeline-build-controls"
-      >
-        {building && videoStatus && (
-          <div
-            className="timeline-building-status"
-          >
+      {building && videoStatus && (
+        <div className="timeline-build-controls">
+          <div className="timeline-building-status">
             <span className="timeline-building-message">
               {videoStatus.message}
             </span>
@@ -285,8 +377,8 @@ export default function TimelineStep({
               {videoStatus.progress}%
             </strong>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

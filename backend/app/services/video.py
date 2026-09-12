@@ -27,6 +27,49 @@ class VideoService:
         self._progress: dict[str, dict] = {}
         self._scene_status: dict[str, dict[int, str]] = {}
         self._convert_lock = threading.Lock()
+        self._cancellations: set[str] = set()
+        self._active_processes: dict[str, list[subprocess.Popen]] = {}
+        self._process_lock = threading.Lock()
+
+    def _register_process(self, slug: str, proc: subprocess.Popen) -> None:
+        with self._process_lock:
+            if slug not in self._active_processes:
+                self._active_processes[slug] = []
+            self._active_processes[slug].append(proc)
+
+    def _unregister_process(self, slug: str, proc: subprocess.Popen) -> None:
+        with self._process_lock:
+            if slug in self._active_processes:
+                try:
+                    self._active_processes[slug].remove(proc)
+                except ValueError:
+                    pass
+
+    def request_cancel(self, slug: str) -> bool:
+        self._cancellations.add(slug)
+        self.set_progress(
+            slug,
+            0,
+            "cancelled",
+            "Video build cancelled by user",
+            running=False,
+            error="Build cancelled by user",
+        )
+        with self._process_lock:
+            procs = list(self._active_processes.get(slug, []))
+            for proc in procs:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            self._active_processes[slug] = []
+        return True
+
+    def is_cancelled(self, slug: str) -> bool:
+        return slug in self._cancellations
+
+    def clear_cancel(self, slug: str) -> None:
+        self._cancellations.discard(slug)
 
     def _set_scene_status(self, slug: str, order: int, status: str) -> None:
         if slug not in self._scene_status:
@@ -60,8 +103,16 @@ class VideoService:
     def get_progress(self, slug: str) -> dict:
         if slug not in self._progress:
             project_path = storage_service.get_project_path(slug)
-            final_video_path = project_path / "video" / "final.mp4"
-            if final_video_path.exists():
+            video_dir = project_path / "video"
+            final_video_path = video_dir / "final.mp4"
+            if not final_video_path.exists() or final_video_path.stat().st_size <= 1024:
+                for alt_name in ("final_post.mp4", "final_narr.mp4", "final_watermarked.mp4", "final_subtitled.mp4"):
+                    alt = video_dir / alt_name
+                    if alt.exists() and alt.stat().st_size > 1024:
+                        final_video_path = alt
+                        break
+
+            if final_video_path.exists() and final_video_path.stat().st_size > 1024:
                 relative = str(final_video_path.relative_to(storage_service.root.parent))
                 return {
                     "running": False,
@@ -176,7 +227,7 @@ class VideoService:
 
     def list_global_clips(self) -> list[dict]:
         folder = self.global_clips_dir()
-        valid_exts = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+        valid_exts = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".png", ".jpg", ".jpeg", ".webp"}
         clips: list[dict] = []
         for file in sorted(folder.iterdir()):
             if file.is_file() and file.suffix.lower() in valid_exts:
@@ -735,6 +786,8 @@ class VideoService:
 
         def _timed(step: str) -> None:
             nonlocal t_prev
+            if self.is_cancelled(slug):
+                raise RuntimeError("Build cancelled by user")
             now = time.perf_counter()
             logger.info("[build:%s] %-20s %.2fs", slug, step, now - t_prev)
             t_prev = now
@@ -866,6 +919,8 @@ class VideoService:
             done_lock = threading.Lock()
 
             def _build_one(plan: dict) -> Path | None:
+                if self.is_cancelled(slug):
+                    raise RuntimeError("Build cancelled by user")
                 nonlocal done_images
                 order = plan["order"]
                 duration = plan["duration"]
@@ -981,7 +1036,7 @@ class VideoService:
                         if sub_segments:
                             self._concat_list(sub_segments, segment, reencode=True)
 
-                    if segment.exists():
+                    if segment.exists() and segment.stat().st_size > 1024:
                         rendered_orders.add(order)
                         self._set_scene_status(slug, order, "done")
                         logger.info(
@@ -1076,50 +1131,45 @@ class VideoService:
         if output_path.exists():
             if narration_events:
                 self.set_progress(slug, 94, "joining", "Overlaying voice narration...")
-                self._overlay_narrations(output_path, narration_events, current_time)
+                output_path = self._overlay_narrations(output_path, narration_events, current_time)
             if music_path:
                 self.set_progress(slug, 95, "joining", "Mixing background music...")
                 mixed = self._add_background_music(output_path, music_path, video_dir, music_volume)
                 if mixed != output_path and mixed.exists() and mixed.stat().st_size > 1024:
                     output_path = mixed
-            if ass_path:
-                self.set_progress(slug, 96, "joining", "Burning subtitles...")
-                subtitled = video_dir / "final_subtitled.mp4"
-                self._burn_subtitles(output_path, ass_path, subtitled)
-                if subtitled.exists() and subtitled.stat().st_size > 1024:
-                    try:
-                        output_path.unlink(missing_ok=True)
-                        subtitled.rename(output_path)
-                    except (PermissionError, OSError):
-                        logger.warning(
-                            "Could not replace %s (locked/open?) — using %s as the final video",
-                            output_path.name, subtitled.name,
-                        )
-                        output_path = subtitled
-
-        _timed("join / concat")
-
-        # Optional: burn semi-transparent channel logo watermark
+        # Resolve channel logo if enabled
+        logo_path: Path | None = None
         if logo_overlay and output_path.exists():
-            self.set_progress(slug, 96, "joining", "Overlaying channel logo...")
             logo = self._get_branding_logo(slug)
             if logo and logo.exists() and logo.stat().st_size > 0:
-                watermarked = video_dir / "final_watermarked.mp4"
-                if self._overlay_logo(
-                    output_path, logo, watermarked,
-                    logo_height=logo_height_px,
-                    position=logo_position,
-                    margin=logo_margin,
-                    opacity=logo_opacity,
-                ) and watermarked.exists():
-                    try:
-                        output_path.unlink(missing_ok=True)
-                    except OSError:
-                        pass
-                    watermarked.rename(output_path)
+                logo_path = logo
             else:
                 logger.warning("Logo overlay enabled but channel logo unavailable — skipping")
-            _timed("logo overlay")
+
+        if ass_path or logo_path:
+            self.set_progress(slug, 96, "joining", "Applying subtitles & logo...")
+            post_processed = video_dir / "final_post.mp4"
+            if self._apply_subtitles_and_logo(
+                output_path, ass_path, logo_path, post_processed,
+                logo_height=logo_height_px,
+                position=logo_position,
+                margin=logo_margin,
+                opacity=logo_opacity,
+            ) and post_processed.exists():
+                try:
+                    output_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                try:
+                    post_processed.rename(output_path)
+                except (PermissionError, OSError):
+                    logger.warning(
+                        "Could not replace %s (locked/open?) — using %s as the final video",
+                        output_path.name, post_processed.name,
+                    )
+                    output_path = post_processed
+
+        _timed("join / concat")
 
         relative = str(output_path.relative_to(storage_service.root.parent))
         self.set_progress(
@@ -1875,10 +1925,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         cmd = [
             settings.ffmpeg_path, "-y",
             "-i", str(input_video),
-            "-i", str(logo),
+            "-loop", "1", "-i", str(logo),
             "-filter_complex",
             f"[1:v]{scale},format=rgba,colorchannelmixer=aa={alpha:.2f}[logo];"
-            f"[0:v][logo]overlay={x_expr}:{y_expr}:format=auto:enable='gte(t,0)'[vx];"
+            f"[0:v][logo]overlay={x_expr}:{y_expr}:format=auto:shortest=1[vx];"
             f"[vx]format=yuv420p[v]",
             "-map", "[v]", "-map", "0:a?",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
@@ -1890,36 +1940,232 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.error("Logo overlay failed -> %s", output_video.name)
         return ok and output_video.exists() and output_video.stat().st_size > 1024
 
+    def _apply_subtitles_and_logo(
+        self,
+        input_video: Path,
+        ass_path: Path | None,
+        logo_path: Path | None,
+        output_video: Path,
+        logo_height: int = 0,
+        position: str = "bottom-right",
+        margin: int = 30,
+        opacity: float = 0.85,
+    ) -> bool:
+        if not ass_path and not logo_path:
+            return False
+
+        if ass_path and not logo_path:
+            self._burn_subtitles(input_video, ass_path, output_video)
+            return output_video.exists() and output_video.stat().st_size > 1024
+
+        if logo_path and not ass_path:
+            return self._overlay_logo(
+                input_video, logo_path, output_video,
+                logo_height=logo_height, position=position, margin=margin, opacity=opacity
+            )
+
+        # Single combined pass for both subtitles and logo overlay
+        escaped_ass = ass_path.as_posix().replace(":", "\\:")
+        if logo_height and logo_height > 0:
+            scale = f"scale=-2:{logo_height}"
+        else:
+            scale = "scale='min(ih*0.5\\,iw)':-2"
+        if "left" in position:
+            x_expr = str(margin)
+        else:
+            x_expr = f"W-w-{margin}"
+        if "top" in position:
+            y_expr = str(margin)
+        else:
+            y_expr = f"H-h-{margin}"
+        alpha = max(0.0, min(1.0, opacity))
+
+        filter_str = (
+            f"[0:v]ass='{escaped_ass}'[vsub];"
+            f"[1:v]{scale},format=rgba,colorchannelmixer=aa={alpha:.2f}[logo];"
+            f"[vsub][logo]overlay={x_expr}:{y_expr}:format=auto:shortest=1[vx];"
+            f"[vx]format=yuv420p[v]"
+        )
+
+        cmd = [
+            settings.ffmpeg_path, "-y",
+            "-i", str(input_video),
+            "-loop", "1", "-i", str(logo_path),
+            "-filter_complex", filter_str,
+            "-map", "[v]", "-map", "0:a?",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-c:a", "copy", "-movflags", "+faststart",
+            str(output_video),
+        ]
+        ok = self._run_ffmpeg(cmd)
+        if not ok:
+            logger.error("Combined subtitles + logo pass failed -> falling back to separate passes")
+            sub_tmp = output_video.parent / "temp_subtitled.mp4"
+            target_in = input_video
+            if ass_path:
+                self._burn_subtitles(input_video, ass_path, sub_tmp)
+                if sub_tmp.exists() and sub_tmp.stat().st_size > 1024:
+                    target_in = sub_tmp
+
+            self._overlay_logo(
+                target_in, logo_path, output_video,
+                logo_height=logo_height, position=position, margin=margin, opacity=opacity
+            )
+            if target_in != input_video:
+                try:
+                    target_in.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        return output_video.exists() and output_video.stat().st_size > 1024
+
     def _get_branding_logo(self, slug: str) -> Path | None:
         from app.services.youtube import youtube_service
 
         return youtube_service.get_channel_logo_path(slug)
 
+    def _build_combined_narration_audio(
+        self, events: list[dict], total_duration: float | None, output_audio: Path
+    ) -> bool:
+        """Pre-mix multiple narration events into a single audio track in ~0.1s (audio-only pass)."""
+        if not events:
+            return False
+
+        if len(events) == 1 and abs(float(events[0].get("pos") or 0)) < 0.01 and abs(float(events[0].get("offset") or 0)) < 0.01:
+            src = Path(events[0]["path"])
+            if src.exists():
+                try:
+                    shutil.copy2(src, output_audio)
+                    return True
+                except Exception:
+                    pass
+
+        cmd = [settings.ffmpeg_path, "-y"]
+        for ev in events:
+            cmd += ["-i", str(ev["path"])]
+
+        chains: list[str] = []
+        labels: list[str] = []
+        for j, ev in enumerate(events):
+            d = float(ev.get("dur") or 0)
+            off = float(ev.get("offset") or 0)
+            vol = max(0.0, min(2.0, float(ev.get("volume") or 1.0)))
+            ch = f"[{j}:a]atrim=start={off:.3f},asetpts=PTS-STARTPTS"
+            if abs(vol - 1.0) > 1e-3:
+                ch += f",volume={vol:.3f}"
+            fi = min(max(float(ev.get("fade_in") or 0), 0.0), d)
+            fo = min(max(float(ev.get("fade_out") or 0), 0.0), d)
+            if fi > 0.01:
+                ch += f",afade=t=in:st=0:d={fi:.3f}"
+            if fo > 0.01 and d - fo > 0:
+                ch += f",afade=t=out:st={d - fo:.3f}:d={fo:.3f}"
+            ms = int(round(float(ev.get("pos") or 0) * 1000))
+            ch += f",adelay={ms}|{ms}[e{j}]"
+            labels.append(f"[e{j}]")
+            chains.append(ch)
+
+        if len(labels) == 1:
+            mix_label = labels[0]
+        else:
+            chains.append("".join(labels) + f"amix=inputs={len(labels)}:normalize=0[mix]")
+            mix_label = "[mix]"
+
+        tail = ""
+        if total_duration and total_duration > 0:
+            tail = f",apad,atrim=0:{float(total_duration):.3f}"
+        chains.append(f"{mix_label}anull{tail}[outa]")
+
+        cmd += [
+            "-filter_complex", ";".join(chains),
+            "-map", "[outa]",
+            "-c:a", "pcm_s16le",
+            str(output_audio),
+        ]
+        ok = self._run_ffmpeg(cmd)
+        return ok and output_audio.exists() and output_audio.stat().st_size > 1024
+
     def _overlay_narrations(
         self, video: Path, events: list[dict], total_duration: float | None
-    ) -> None:
+    ) -> Path:
         tmp_list = video.parent / "concat_overlay.txt"
+        combined_wav = video.parent / "narration_combined.wav"
+        active_events = events
+        res_video = video
+
         try:
+            # Check for pre-existing combined audio file in project audio folder first
+            project_audio_dir = video.parent.parent / "audio"
+            candidates = [
+                project_audio_dir / "preview.mp3",
+                project_audio_dir / "combined.mp3",
+                project_audio_dir / "combined.wav",
+                project_audio_dir / "narration.mp3",
+                project_audio_dir / "full_narration.mp3",
+            ]
+            used_combined = None
+            if not events:
+                for cand in candidates:
+                    if cand.exists() and cand.stat().st_size > 1024:
+                        dur = self._probe_audio_duration(cand)
+                        if dur and dur > 0:
+                            used_combined = cand
+                            logger.info("Using existing pre-combined audio file: %s (%.2fs)", cand.name, dur)
+                            break
+
+            if used_combined:
+                active_events = [{
+                    "pos": 0.0,
+                    "path": str(used_combined),
+                    "offset": 0.0,
+                    "volume": 1.0,
+                    "fade_in": 0,
+                    "fade_out": 0,
+                    "dur": round(self._probe_audio_duration(used_combined) or (total_duration or 0), 3),
+                    "src": "voice",
+                }]
+            elif len(events) > 1:
+                # Fast pre-combine multiple narration events into single WAV (audio-only pass ~0.1s)
+                if self._build_combined_narration_audio(events, total_duration, combined_wav):
+                    dur = self._probe_audio_duration(combined_wav) or total_duration or 0
+                    active_events = [{
+                        "pos": 0.0,
+                        "path": str(combined_wav),
+                        "offset": 0.0,
+                        "volume": 1.0,
+                        "fade_in": 0,
+                        "fade_out": 0,
+                        "dur": round(dur, 3),
+                        "src": "voice",
+                    }]
+                    logger.info("Pre-combined %d narration events into single audio file for fast build", len(events))
+
             tmp_list.write_text(f"file '{video.as_posix()}'\n", encoding="utf-8")
             out = video.parent / "final_narr.mp4"
             ok = self._concat_with_extras(
                 tmp_list, out, None, 0.12, None,
-                narration_events=events, total_duration=total_duration,
+                narration_events=active_events, total_duration=total_duration,
             )
             if ok and out.exists() and out.stat().st_size > 1024:
                 try:
                     video.unlink(missing_ok=True)
                     out.replace(video)
-                    logger.info("Narration overlay fallback applied -> %s", video.name)
+                    logger.info("Timeline narration overlay successfully applied -> %s", video.name)
+                    res_video = video
                 except (PermissionError, OSError) as e:
                     logger.warning(
-                        "Could not replace %s (locked/open?). Keeping it. %s",
-                        video.name, e,
+                        "Could not replace %s (locked/open?) — using %s. Error: %s",
+                        video.name, out.name, e,
                     )
-                finally:
-                    out.unlink(missing_ok=True)
+                    res_video = out
         finally:
-            tmp_list.unlink(missing_ok=True)
+            try:
+                tmp_list.unlink(missing_ok=True)
+            except OSError:
+                pass
+            try:
+                combined_wav.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return res_video
 
     def _has_audio_stream_from_concat(self, concat_file: Path) -> bool:
         """Check if first segment in concat list has an audio stream."""
@@ -2124,24 +2370,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         except OSError:
             return False
 
-    def _run_ffmpeg(self, cmd: list[str]) -> bool:
+    def _run_ffmpeg(self, cmd: list[str], slug: str | None = None) -> bool:
+        if slug and self.is_cancelled(slug):
+            raise RuntimeError("Build cancelled by user")
         started = time.perf_counter()
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds, check=False
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
+            if slug:
+                self._register_process(slug, proc)
+
+            try:
+                stdout, stderr = proc.communicate(timeout=settings.ffmpeg_timeout_seconds)
+            finally:
+                if slug:
+                    self._unregister_process(slug, proc)
+
             elapsed = time.perf_counter() - started
             label = self._ffmpeg_label(cmd)
-            if result.returncode != 0:
-                logger.error("FFmpeg error (%.2fs): %s", elapsed, result.stderr)
+            if proc.returncode != 0:
+                if slug and self.is_cancelled(slug):
+                    raise RuntimeError("Build cancelled by user")
+                logger.error("FFmpeg error (%.2fs): %s", elapsed, stderr)
                 return False
             logger.info("[ffmpeg] %s ok in %.2fs", label, elapsed)
             return True
         except FileNotFoundError:
             logger.error("FFmpeg not found. Install FFmpeg and add to PATH.")
             return False
-        except subprocess.TimeoutExpired:
-            logger.error("FFmpeg timed out after %ds: %s", settings.ffmpeg_timeout_seconds, " ".join(cmd[:6]))
+        except Exception as exc:
+            if slug and self.is_cancelled(slug):
+                raise RuntimeError("Build cancelled by user")
+            logger.error("FFmpeg execution failed: %s", exc)
             return False
 
     @staticmethod
@@ -2152,24 +2413,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         base = os.path.basename(str(last))
         return base if base else str(last)
 
-    def _run_ffmpeg_with_result(self, cmd: list[str]) -> subprocess.CompletedProcess[str] | None:
+    def _run_ffmpeg_with_result(self, cmd: list[str], slug: str | None = None) -> subprocess.CompletedProcess[str] | None:
+        if slug and self.is_cancelled(slug):
+            raise RuntimeError("Build cancelled by user")
         started = time.perf_counter()
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds, check=False
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
+            if slug:
+                self._register_process(slug, proc)
+
+            try:
+                stdout, stderr = proc.communicate(timeout=settings.ffmpeg_timeout_seconds)
+            finally:
+                if slug:
+                    self._unregister_process(slug, proc)
+
             elapsed = time.perf_counter() - started
             label = self._ffmpeg_label(cmd)
-            if result.returncode != 0:
-                logger.error("FFmpeg error (%.2fs): %s", elapsed, result.stderr)
+            res = subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+            if proc.returncode != 0:
+                if slug and self.is_cancelled(slug):
+                    raise RuntimeError("Build cancelled by user")
+                logger.error("FFmpeg error (%.2fs): %s", elapsed, stderr)
             else:
                 logger.info("[ffmpeg] %s ok in %.2fs", label, elapsed)
-            return result
+            return res
         except FileNotFoundError:
             logger.error("FFmpeg not found. Install FFmpeg and add to PATH.")
             return None
-        except subprocess.TimeoutExpired:
-            logger.error("FFmpeg timed out after %ds: %s", settings.ffmpeg_timeout_seconds, " ".join(cmd[:6]))
+        except Exception as exc:
+            if slug and self.is_cancelled(slug):
+                raise RuntimeError("Build cancelled by user")
+            logger.error("FFmpeg execution failed: %s", exc)
             return None
 
 

@@ -154,6 +154,7 @@ export interface SEOMetadata {
   description: string | null;
   tags: string | null;
   hashtags: string | null;
+  timestamps?: string | null;
   category: string | null;
   category_id: number | null;
   created_at: string;
@@ -283,4 +284,12 @@ export interface SEOConstants {
   timestamps_marker: string;
   section_sep: string;
   default_disclaimer: string;
+}
+
+export interface YouTubeConfig {
+  youtube_api_key_configured: boolean;
+  youtube_playlist_id: string;
+  youtube_client_id_configured: boolean;
+  youtube_client_secret_configured: boolean;
+  youtube_connected: boolean;
 }

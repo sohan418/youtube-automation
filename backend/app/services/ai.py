@@ -571,16 +571,18 @@ class AIService:
     def build_seo_prompt(
         self, script_title: str, script_body: str, language: str, timestamps: str | None = None,
     ) -> dict[str, str]:
-        system = "You are a YouTube SEO expert. Generate metadata as JSON."
-        timestamps_part = f"\n\nTimestamps Context:\n{timestamps.strip()}" if timestamps and timestamps.strip() else ""
+        system = (
+            "You are a YouTube SEO expert. Generate high-CTR, search-optimized metadata as JSON.\n"
+            "Include an engaging video description summary that accurately reflects the video content."
+        )
+        timestamps_part = f"\n\nTimestamps / Chapter Markers Context:\n{timestamps.strip()}" if timestamps and timestamps.strip() else ""
         user = (
             f"Generate SEO metadata for a YouTube video.\nTitle: {script_title}\n"
             f"Script excerpt: {script_body[:500]}\nLanguage: {language}{timestamps_part}\n\n"
-            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}\n'
+            'Return JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "...", "timestamps": "..."}\n'
             "CRITICAL: The tags field is a single comma-separated string. "
             "The entire tags string MUST be 500 characters or fewer (YouTube's hard limit). "
-            "Prioritise the most relevant tags first; drop low-value ones if you approach the limit. "
-            "Do NOT pad with generic filler tags."
+            "Prioritise the most relevant search terms first; drop low-value filler tags."
         )
         return {"system": system, "user": user}
 

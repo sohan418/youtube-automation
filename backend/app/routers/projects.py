@@ -82,13 +82,16 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
             existing = db.query(Project).filter(Project.slug == slug).first()
             counter += 1
 
+    category_name = payload.category or "Education"
+    language_val = payload.language or "hi"
+
     folder = storage_service.create_project_folder(slug)
     project = Project(
         name=payload.name,
         slug=slug,
         description=payload.description,
-        category=payload.category,
-        language=payload.language,
+        category=category_name,
+        language=language_val,
         ratio=payload.ratio,
         status=ProjectStatus.DRAFT,
         folder_path=str(folder.relative_to(storage_service.root.parent)),
@@ -96,6 +99,18 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
     db.add(project)
     db.commit()
     db.refresh(project)
+
+    # Initialize SEO metadata with default Education category (ID 27)
+    cat_match = next((c for c in YOUTUBE_CATEGORIES if c["name"] == category_name), None)
+    cat_id = cat_match["id"] if cat_match else 27
+    seo = SEOMetadata(
+        project_id=project.id,
+        category=category_name,
+        category_id=cat_id,
+    )
+    db.add(seo)
+    db.commit()
+
     return _serialize_project(db, project)
 
 

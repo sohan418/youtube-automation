@@ -4,14 +4,17 @@ import {
   Pause,
   Play,
   Sparkles,
-  X,
   Volume2,
   CheckCircle2,
   Upload,
   Download,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
 } from "lucide-react";
 import type { Scene, VoiceProvider } from "../../types";
 import Select from "../ui/Select";
+import StepHeader from "../studio/StepHeader";
 import "./VoiceStep.css";
 
 const WAVEFORM_HEIGHTS = [
@@ -161,6 +164,7 @@ interface Props {
   mediaUrl: (p: string) => string;
   audioVersion: Record<number, number>;
   formatRecordTime: (s: number) => string;
+  onCollapse?: () => void;
 }
 
 export default function VoiceStep({
@@ -194,6 +198,7 @@ export default function VoiceStep({
   mediaUrl,
   audioVersion,
   formatRecordTime,
+  onCollapse,
 }: Props) {
   const currentProvider = voiceProviders.find((p) => p.id === selectedProvider);
   const currentVoices = currentProvider?.voices || [];
@@ -232,12 +237,18 @@ export default function VoiceStep({
         }}
       />
 
+      <StepHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <Mic size={13} /> Voice Narration
+          </span>
+        }
+        subtitle="Generate AI narration or record audio for your scenes"
+        onCollapse={onCollapse}
+      />
+
       <div className="card voice-header-card">
         <div className="voice-header-row">
-          <span className="voice-title">
-            <Mic size={13} /> Voice
-          </span>
-
           <Select
             value={selectedProvider}
             disabled={!!actionLoading}
@@ -303,20 +314,113 @@ export default function VoiceStep({
           className="card voice-scene-card"
         >
           <div className="voice-scene-header">
-            <h3 className="voice-scene-title">
-              Scene {(activeIdx + 1).toString().padStart(2, "0")} <span className="voice-scene-count">/ {scenes.length.toString().padStart(2, "0")}</span>
-            </h3>
-            <span
-              className="voice-audio-status"
-              style={{
-                background: activeScene.audio_path ? "var(--bg)" : "transparent",
-                color: activeScene.audio_path ? "var(--success)" : "var(--text-muted)",
-                border: `1px solid ${activeScene.audio_path ? "var(--success)" : "var(--border)"}`,
-              }}
-            >
-              {activeScene.audio_path && <CheckCircle2 size={9} />}
-              {activeScene.audio_path ? "Audio Ready" : "No Audio"}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <h3 className="voice-scene-title" style={{ margin: 0 }}>
+                Scene {(activeIdx + 1).toString().padStart(2, "0")}{" "}
+                <span className="voice-scene-count">
+                  / {scenes.length.toString().padStart(2, "0")}
+                </span>
+              </h3>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.2rem",
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={activeIdx <= 0}
+                  onClick={() => setActiveIdx(activeIdx - 1)}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid var(--border)",
+                    color:
+                      activeIdx <= 0 ? "var(--text-muted)" : "var(--text)",
+                    borderRadius: "4px",
+                    width: "24px",
+                    height: "24px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: activeIdx <= 0 ? "not-allowed" : "pointer",
+                    padding: 0,
+                    opacity: activeIdx <= 0 ? 0.4 : 1,
+                  }}
+                  title="Previous Scene"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  disabled={activeIdx >= scenes.length - 1}
+                  onClick={() => setActiveIdx(activeIdx + 1)}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid var(--border)",
+                    color:
+                      activeIdx >= scenes.length - 1
+                        ? "var(--text-muted)"
+                        : "var(--text)",
+                    borderRadius: "4px",
+                    width: "24px",
+                    height: "24px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor:
+                      activeIdx >= scenes.length - 1
+                        ? "not-allowed"
+                        : "pointer",
+                    padding: 0,
+                    opacity: activeIdx >= scenes.length - 1 ? 0.4 : 1,
+                  }}
+                  title="Next Scene"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              {activeScene.audio_path && (
+                <button
+                  type="button"
+                  onClick={() => onClearAudio(activeScene.id)}
+                  disabled={!!actionLoading}
+                  title="Clear audio for this scene"
+                  style={{
+                    background: "rgba(239, 68, 68, 0.12)",
+                    color: "#f87171",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    borderRadius: "12px",
+                    padding: "2px 8px",
+                    fontSize: "0.65rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "3px",
+                  }}
+                >
+                  <Trash2 size={10} /> Clear
+                </button>
+              )}
+              <span
+                className="voice-audio-status"
+                style={{
+                  background: activeScene.audio_path
+                    ? "var(--bg)"
+                    : "transparent",
+                  color: activeScene.audio_path
+                    ? "var(--success)"
+                    : "var(--text-muted)",
+                  border: `1px solid ${activeScene.audio_path ? "var(--success)" : "var(--border)"}`,
+                }}
+              >
+                {activeScene.audio_path && <CheckCircle2 size={9} />}
+                {activeScene.audio_path ? "Audio Ready" : "No Audio"}
+              </span>
+            </div>
           </div>
 
           <div
@@ -445,42 +549,9 @@ export default function VoiceStep({
             )}
           </div>
 
-          {activeScene.audio_path && (
-            <button
-              onClick={() => onClearAudio(activeScene.id)}
-              disabled={!!actionLoading}
-              className="voice-clear-btn"
-            >
-              <X size={10} /> Clear Audio
-            </button>
-          )}
 
-          <div className="voice-footer">
-            <button
-              className="btn-secondary voice-nav-btn"
-              disabled={activeIdx <= 0}
-              onClick={() => setActiveIdx(activeIdx - 1)}
-            >
-              ← Prev
-            </button>
 
-            <span className="voice-pager">
-              {(activeIdx + 1).toString().padStart(2, "0")} / {scenes.length.toString().padStart(2, "0")}
-            </span>
 
-            <button
-              disabled={activeIdx >= scenes.length - 1}
-              onClick={() => setActiveIdx(activeIdx + 1)}
-              className="voice-next-btn"
-              style={{
-                background: activeIdx >= scenes.length - 1 ? "var(--border)" : "var(--primary)",
-                color: activeIdx >= scenes.length - 1 ? "var(--text-muted)" : "white",
-                cursor: activeIdx >= scenes.length - 1 ? "not-allowed" : "pointer",
-              }}
-            >
-              Next →
-            </button>
-          </div>
         </div>
       )}
     </div>

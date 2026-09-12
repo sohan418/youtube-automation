@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Download, Upload, X, Clock, ShieldAlert, FileText, Edit2, Check, RotateCcw } from "lucide-react";
+import { Sparkles, Download, Upload, X, Clock, ShieldAlert, Edit2, Check, RotateCcw, Zap } from "lucide-react";
 import type { SEOConstants, SEOMetadata, Scene, Script, TimelineData } from "../../types";
 import { api } from "../../api/client";
+import StepHeader from "../studio/StepHeader";
 import FreeAIGuide from "../editors/FreeAIGuide";
 import "./SeoStep.css";
 
@@ -58,9 +59,9 @@ function parseDescription(
   const disclaimerIdx = full.indexOf(`${c.section_sep}\n${c.disclaimer_marker}`);
   let tsIdx = full.indexOf(`\n\n${c.timestamps_marker}`);
   let tsLeader = 2;
-  if (tsIdx === -1 && full.startsWith(c.timestamps_marker)) {
-    tsIdx = 0;
-    tsLeader = 0;
+  if (tsIdx === -1) {
+    tsIdx = full.indexOf(`\n${c.timestamps_marker}`);
+    tsLeader = 1;
   }
 
   let body = full;
@@ -68,28 +69,32 @@ function parseDescription(
   let disclaimer = c.default_disclaimer;
 
   if (disclaimerIdx !== -1) {
-    const block = full.slice(disclaimerIdx);
-    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const inner = block.match(
-      new RegExp(`${esc(c.section_sep)}\\n${esc(c.disclaimer_marker)}\\n([\\s\\S]*?)\\n${esc(c.section_sep)}`)
-    );
-    disclaimer = inner ? inner[1].trim() : c.default_disclaimer;
-    body = full.slice(0, disclaimerIdx).trimEnd();
+    disclaimer = full.slice(disclaimerIdx + c.section_sep.length + 1 + c.disclaimer_marker.length).trim();
+    body = full.slice(0, disclaimerIdx).trim();
   }
 
-  if (tsIdx !== -1) {
-    const tsEnd = disclaimerIdx !== -1 ? disclaimerIdx : undefined;
-    timestamps = full.slice(tsIdx + tsLeader, tsEnd).trim();
-    body = full.slice(0, tsIdx).trimEnd();
+  if (tsIdx !== -1 && (disclaimerIdx === -1 || tsIdx < disclaimerIdx)) {
+    const endIdx = disclaimerIdx !== -1 ? disclaimerIdx : full.length;
+    timestamps = full.slice(tsIdx + tsLeader + c.timestamps_marker.length, endIdx).trim();
+    body = full.slice(0, tsIdx).trim();
   }
 
   return { body, timestamps, disclaimer };
 }
 
-function combineDescription(body: string, timestamps: string, disclaimer: string, c: SEOConstants): string {
-  let result = body.trimEnd();
-  if (timestamps.trim()) result += `\n\n${timestamps.trim()}`;
-  result += `\n\n${c.section_sep}\n${c.disclaimer_marker}\n${disclaimer.trim()}\n${c.section_sep}`;
+function combineDescription(
+  body: string,
+  timestamps: string,
+  disclaimer: string,
+  c: SEOConstants,
+): string {
+  let result = body.trim();
+  if (timestamps.trim()) {
+    result += `\n\n${c.timestamps_marker}\n${timestamps.trim()}`;
+  }
+  if (disclaimer.trim()) {
+    result += `${c.section_sep}\n${c.disclaimer_marker}\n${disclaimer.trim()}`;
+  }
   return result;
 }
 
@@ -104,8 +109,9 @@ interface Props {
   actionLoading: string;
   projectCategory: string;
   onGenerate: () => void;
-  onSave: (data: { title?: string; description?: string; tags?: string; hashtags?: string }) => Promise<void>;
+  onSave: (data: { title?: string; description?: string; tags?: string; hashtags?: string; timestamps?: string }) => Promise<void>;
   onFreeAIResponse?: (data: Partial<SEOMetadata>) => void;
+  onCollapse?: () => void;
 }
 
 // ─── Editable field (compact) ────────────────────────────────────────────────
@@ -167,6 +173,35 @@ function EditableField({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+function formatTimestampsValue(val: unknown): string {
+  if (!val) return "";
+  if (typeof val === "string") return val.trim();
+  if (Array.isArray(val)) {
+    return val
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (typeof item === "object" && item !== null) {
+          const rec = item as Record<string, unknown>;
+          const t = rec.time || rec.timestamp || rec.ts || rec.start || "";
+          const l = rec.label || rec.title || rec.name || rec.description || "";
+          if (t && l) return `${t} - ${l}`;
+          if (t) return String(t);
+          if (l) return String(l);
+          return JSON.stringify(item);
+        }
+        return String(item);
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (typeof val === "object" && val !== null) {
+    return Object.entries(val as Record<string, unknown>)
+      .map(([k, v]) => `${k} - ${v}`)
+      .join("\n");
+  }
+  return String(val);
+}
+
 function parseFreeAIResponse(text: string): Partial<SEOMetadata> {
   const result: Partial<SEOMetadata> = {};
   try {
@@ -182,6 +217,7 @@ function parseFreeAIResponse(text: string): Partial<SEOMetadata> {
             if (parsed.description) result.description = parsed.description;
             if (parsed.tags) result.tags = Array.isArray(parsed.tags) ? parsed.tags.join(", ") : parsed.tags;
             if (parsed.hashtags) result.hashtags = Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags;
+            if (parsed.timestamps != null) result.timestamps = formatTimestampsValue(parsed.timestamps);
             if (result.title) return result;
           }
         } catch { /* keep scanning */ }
@@ -194,17 +230,19 @@ function parseFreeAIResponse(text: string): Partial<SEOMetadata> {
     const descMatch = line.match(/^Description[:\s]+(.+)/i);
     const tagsMatch = line.match(/^Tags[:\s]+(.+)/i);
     const hashMatch = line.match(/^Hashtags?[:\s]+(.+)/i);
+    const tsMatch = line.match(/^Timestamps?[:\s]+(.+)/i);
     if (titleMatch) result.title = titleMatch[1].trim();
     else if (descMatch) result.description = descMatch[1].trim();
     else if (tagsMatch) result.tags = tagsMatch[1].trim();
     else if (hashMatch) result.hashtags = hashMatch[1].trim();
+    else if (tsMatch) result.timestamps = tsMatch[1].trim();
   }
   return result;
 }
 
 export default function SeoStep({
   projectId, projectLanguage, seo, scenes, timeline, activeScript, actionLoading, projectCategory,
-  onGenerate, onSave, onFreeAIResponse,
+  onGenerate, onSave, onFreeAIResponse, onCollapse,
 }: Props) {
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
@@ -233,9 +271,10 @@ export default function SeoStep({
   const parsed = constants
     ? parseDescription(seo?.description ?? null, constants)
     : { body: seo?.description ?? "", timestamps: "", disclaimer: "" };
-  const { body, timestamps, disclaimer } = parsed;
+  const { body, timestamps: extractedTs, disclaimer } = parsed;
+  const timestamps = (seo?.timestamps && seo.timestamps.trim()) ? seo.timestamps : extractedTs;
 
-  const freeAIPrompt = `SYSTEM PROMPT:\nYou are a YouTube SEO expert. Generate metadata as JSON.\n\nUSER PROMPT:\nGenerate SEO metadata for a YouTube video.\nTitle: ${activeScript?.title || "Your Video Title"}\nScript excerpt: ${(activeScript?.body || "").substring(0, 500)}\nLanguage: ${projectLanguage || "en"}${tsContext ? `\n\nTimestamps Context:\n${tsContext}` : ""}\n\nReturn JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "..."}`;
+  const freeAIPrompt = `SYSTEM PROMPT:\nYou are a YouTube SEO expert. Generate metadata as JSON.\n\nUSER PROMPT:\nGenerate SEO metadata for a YouTube video.\nTitle: ${activeScript?.title || "Your Video Title"}\nScript excerpt: ${(activeScript?.body || "").substring(0, 500)}\nLanguage: ${projectLanguage || "en"}${tsContext ? `\n\nTimestamps Context:\n${tsContext}` : ""}\n\nReturn JSON: {"title": "...", "description": "...", "tags": "...", "hashtags": "...", "timestamps": "..."}`;
 
   const handleFreeAIResponse = (text: string) => {
     if (!onFreeAIResponse) return;
@@ -261,6 +300,8 @@ export default function SeoStep({
     downloadFile(text, "seo-metadata.txt", "text/plain");
   };
 
+  const [showExport, setShowExport] = useState(false);
+
   const downloadFile = (content: string, filename: string, type: string) => {
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
@@ -279,30 +320,35 @@ export default function SeoStep({
 
   return (
     <div className="card">
-      {/* Compact header */}
-      <div className="seo-header">
-        <h3 className="seo-title">
-          <span className="seo-title-dot" />
-          SEO
-        </h3>
-        <div className="seo-header-actions">
-          {seo && (
-            <>
-              <button className="btn-secondary seo-compact-btn" onClick={handleExportJSON} title="Export JSON">
-                <Download size={11} /> JSON
-              </button>
-              <button className="btn-secondary seo-compact-btn" onClick={handleExportText} title="Export text">
-                <Download size={11} /> TXT
-              </button>
-            </>
-          )}
-          <button className="btn-secondary seo-compact-btn" onClick={() => setShowImport(!showImport)} title="Import SEO">
-            <Upload size={11} /> Import
-          </button>
-          <button className="btn-primary seo-compact-btn" disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
-            {actionLoading === "seo" ? "Generating…" : <><Sparkles size={11} /> Generate</>}
-          </button>
-        </div>
+      <StepHeader title="SEO" subtitle="Optimize title, description, tags, and hashtags" onCollapse={onCollapse} />
+
+      <div className="seo-header-actions">
+        <button className="btn-primary seo-compact-btn" disabled={!!actionLoading || !activeScript} onClick={onGenerate}>
+          {actionLoading === "seo" ? "Generating…" : <><Sparkles size={11} /> Generate</>}
+        </button>
+        <button className={`btn-secondary seo-compact-btn ${showFreeAI ? "active" : ""}`} onClick={() => setShowFreeAI(!showFreeAI)}>
+          <Zap size={11} /> {showFreeAI ? "Hide Free AI" : "Free AI"}
+        </button>
+        <button className="btn-secondary seo-compact-btn" onClick={() => setShowImport(!showImport)} title="Import SEO">
+          <Upload size={11} /> Import
+        </button>
+        {seo && (
+          <div style={{ position: "relative" }}>
+            <button className="btn-secondary seo-compact-btn" onClick={() => setShowExport(!showExport)} title="Export options">
+              <Download size={11} /> Export
+            </button>
+            {showExport && (
+              <div className="seo-export-menu">
+                <button onClick={() => { handleExportJSON(); setShowExport(false); }}>
+                  <Download size={11} /> Export JSON
+                </button>
+                <button onClick={() => { handleExportText(); setShowExport(false); }}>
+                  <Download size={11} /> Export Text
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Import panel (collapsible) */}
@@ -323,9 +369,6 @@ export default function SeoStep({
         </div>
       )}
 
-      <button className="btn-secondary seo-freeai-btn" onClick={() => setShowFreeAI(!showFreeAI)}>
-        {showFreeAI ? "Hide Free AI" : "Free AI"}
-      </button>
       {showFreeAI && (
         <FreeAIGuide
           title="Generate SEO with Free AI"
@@ -357,6 +400,14 @@ export default function SeoStep({
           <EditableField label="Description" value={body} multiline rows={4}
             onSave={(v) => constants ? onSave({ description: combineDescription(v, timestamps, disclaimer, constants) }) : Promise.resolve()} />
 
+          {/* Tags + Hashtags side by side (right after Description) */}
+          <div className="seo-tags-grid">
+            <EditableField label="Tags" value={seo.tags ?? ""} multiline rows={2}
+              onSave={(v) => onSave({ tags: v })} />
+            <EditableField label="Hashtags" value={seo.hashtags ?? ""}
+              onSave={(v) => onSave({ hashtags: v })} />
+          </div>
+
           {/* Timestamps */}
           <div className="seo-panel">
             <div className="seo-panel-header seo-panel-header-spread">
@@ -377,15 +428,17 @@ export default function SeoStep({
               </button>
             </div>
             <div className="seo-panel-body">
-              {timestamps ? (
-                <pre className="seo-pre">
-                  {timestamps}
-                </pre>
-              ) : (
-                <p className="seo-timestamps-empty">
-                  No timestamps yet. {scenes.length > 0 ? "Click Rebuild to generate from scenes." : "Add scenes with voice audio first."}
-                </p>
-              )}
+              <EditableField
+                label=""
+                value={timestamps}
+                multiline
+                rows={4}
+                onSave={(v) =>
+                  constants
+                    ? onSave({ description: combineDescription(body, v, disclaimer, constants), timestamps: v })
+                    : Promise.resolve()
+                }
+              />
             </div>
           </div>
 
@@ -400,24 +453,6 @@ export default function SeoStep({
                 onSave={(v) => constants ? onSave({ description: combineDescription(body, timestamps, v, constants) }) : Promise.resolve()} />
             </div>
           </div>
-
-          {/* Tags + Hashtags side by side */}
-          <div className="seo-tags-grid">
-            <EditableField label="Tags" value={seo.tags ?? ""} multiline rows={2}
-              onSave={(v) => onSave({ tags: v })} />
-            <EditableField label="Hashtags" value={seo.hashtags ?? ""}
-              onSave={(v) => onSave({ hashtags: v })} />
-          </div>
-
-          {/* Full description preview */}
-          <details className="seo-details">
-            <summary>
-              <FileText size={11} /> Preview full YouTube description
-            </summary>
-            <pre className="seo-details-pre">
-              {seo.description}
-            </pre>
-          </details>
 
         </div>
       ) : (

@@ -18,6 +18,15 @@
 .tile-action-btn-star:hover { background: rgba(255,184,0,0.12) !important; color: #f0b429 !important; }
 .tile-action-btn-copy:hover { background: rgba(0,184,212,0.1) !important; color: var(--accent) !important; }
 
+.images-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  width: 100%;
+}
+
 .images-header {
   display: flex;
   justify-content: space-between;

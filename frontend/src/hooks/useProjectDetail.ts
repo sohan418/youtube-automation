@@ -6,14 +6,18 @@ import type {
   LogoConfig,
   Project,
   Scene,
+  SceneVideo,
   Script,
   SEOCategory,
   SEOMetadata,
   Thumbnail,
+  TimelineClip,
   TimelineData,
+  VideoClip,
   VideoStatus,
   VoiceConfig,
   VoiceProvider,
+  YouTubeConfig,
 } from "../types";
 import type { DragMedia, MediaTile } from "../components/steps/ImagesStep";
 import { buildMediaStrip } from "../components/steps/ImagesStep";
@@ -31,15 +35,25 @@ export function useProjectDetail(projectId: number) {
     const saved = localStorage.getItem(`project-${projectId}-tab`);
     return saved || "ideas";
   });
-  const [activeSceneIdx, setActiveSceneIdx] = useState(0);
+  const [activeSceneIdx, setActiveSceneIdx] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(`project-${projectId}-sceneIdx`);
+      return saved ? parseInt(saved, 10) || 0 : 0;
+    } catch {
+      return 0;
+    }
+  });
 
-  // Persist tab to localStorage
+  // Persist tab & activeSceneIdx to localStorage
   useEffect(() => {
     localStorage.setItem(`project-${projectId}-tab`, activeTab);
   }, [activeTab, projectId]);
+
   useEffect(() => {
-    setActiveSceneIdx(0);
-  }, [activeTab]);
+    if (projectId) {
+      localStorage.setItem(`project-${projectId}-sceneIdx`, String(activeSceneIdx));
+    }
+  }, [activeSceneIdx, projectId]);
 
   useEffect(() => {
     if (scenes.length === 0) {
@@ -66,7 +80,7 @@ export function useProjectDetail(projectId: number) {
   const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [selectedVoiceRate, setSelectedVoiceRate] = useState("+0%");
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
-  const [youtubeConfig, setYoutubeConfig] = useState<{ youtube_api_key_configured: boolean; youtube_playlist_id: string; youtube_client_id_configured: boolean; youtube_connected: boolean } | null>(null);
+  const [youtubeConfig, setYoutubeConfig] = useState<YouTubeConfig | null>(null);
   const [recentVideos, setRecentVideos] = useState<import("../types").YouTubeVideo[]>([]);
   const [youtubeUploadStatus, setYoutubeUploadStatus] = useState<import("../types").YouTubeUploadStatus | null>(null);
   const youtubeUploadPollRef = useRef<number | null>(null);
@@ -138,6 +152,7 @@ export function useProjectDetail(projectId: number) {
     logo_margin: 30,
     logo_opacity: 0.85,
   });
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("studio_sidebar_collapsed") === "true";
@@ -159,82 +174,147 @@ export function useProjectDetail(projectId: number) {
   const activeScript: Script | null = scripts.find((s) => s.is_active) ?? null;
 
   const [prompts, setPrompts] = useState<Record<string, { system: string; user: string }>>({});
+  const loadedStepsRef = useRef<Set<string>>(new Set());
 
-  const loadAll = useCallback(
-    async (isInitial = false) => {
+  const fetchProjectCore = useCallback(async () => {
+    try {
+      if (!project) setLoading(true);
+      setError("");
+      const proj = await api.getProject(projectId);
+      setProject(proj);
+      if (proj.ratio) setSelectedRatio(proj.ratio);
+      setEnableSubtitles(proj.captions_enabled);
+      setSubtitleStyle(proj.caption_style);
+      setSubtitlePosition(proj.caption_position);
+      if (proj.caption_position?.startsWith("custom:")) {
+        const y = parseFloat(proj.caption_position.split(":")[1]);
+        if (!isNaN(y)) setSubtitleCustomY(y);
+      }
+      setSubtitleColor(proj.caption_color);
+      setSubtitleOutlineColor(proj.caption_outline_color);
+      setSubtitleOutline(proj.caption_outline);
+      setSubtitleFontSize(proj.caption_font_size);
+      setLogoOverlay(proj.logo_overlay);
+      setLogoConfig({
+        logo_position: proj.logo_position,
+        logo_size: proj.logo_size,
+        logo_margin: proj.logo_margin,
+        logo_opacity: proj.logo_opacity,
+      });
+      api.videoStatus(projectId).then((vSt) => {
+        if (vSt) setVideoStatus(vSt);
+      }).catch(() => {});
+      api.getYoutubeConfig().then(setYoutubeConfig).catch(() => {});
+      api.getRecentVideos(10).then((vids) => {
+        if (vids && vids.length > 0) setRecentVideos(vids);
+      }).catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load project");
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  const fetchStepData = useCallback(
+    async (stepKey: string, force = false) => {
+      if (!project) return;
+      if (!force && loadedStepsRef.current.has(stepKey)) return;
+      loadedStepsRef.current.add(stepKey);
+
       try {
-        if (isInitial) setLoading(true);
-        setError("");
-        const [proj, ideaList, scriptList, sceneList, thumbList, seoData, categoryList, promptMap] = await Promise.all([
-          api.getProject(projectId),
-          api.listIdeas(projectId),
-          api.listScripts(projectId),
-          api.listScenes(projectId),
-          api.listThumbnails(projectId),
-          api.getSEO(projectId),
-          api.listSEOCategories(),
-          api.getPrompts(projectId).catch(() => ({})),
-        ]);
-        setPrompts(promptMap || {});
-        Promise.all([api.listVoices(proj.language), api.getVoiceConfig().catch(() => null)])
-          .then(([cat, cfg]) => {
-            setVoiceConfig(cfg);
-            setVoiceProviders(cat.providers);
-            const initial = cat.providers.find((p) => p.id === cat.default_provider) || cat.providers[0];
-            if (initial) {
-              setSelectedProvider((prev) => prev || initial.id);
-              setSelectedVoice((prev) => (initial.voices.includes(prev) ? prev : initial.default));
-            }
-          })
-          .catch(() => {});
-        api.getYoutubeConfig().then(setYoutubeConfig).catch(() => {});
-        api.getRecentVideos(10).then(setRecentVideos).catch(() => {});
-        setProject(proj);
-        if (proj.ratio) setSelectedRatio(proj.ratio);
-        setEnableSubtitles(proj.captions_enabled);
-        setSubtitleStyle(proj.caption_style);
-        setSubtitlePosition(proj.caption_position);
-        if (proj.caption_position?.startsWith("custom:")) {
-          const y = parseFloat(proj.caption_position.split(":")[1]);
-          if (!isNaN(y)) setSubtitleCustomY(y);
+        if (stepKey === "ideas") {
+          const [ideaList, promptMap, recents, ytCfg] = await Promise.all([
+            api.listIdeas(projectId),
+            api.getPrompts(projectId).catch(() => ({})),
+            api.getRecentVideos(10).catch(() => []),
+            api.getYoutubeConfig().catch(() => null),
+          ]);
+          setIdeas(ideaList);
+          setPrompts(promptMap || {});
+          if (recents && recents.length > 0) setRecentVideos(recents);
+          if (ytCfg) setYoutubeConfig(ytCfg);
+          const selectedIdea = ideaList.find((i) => i.is_selected);
+          setScriptTopic((prev) => prev || selectedIdea?.title || project.name);
+        } else if (stepKey === "script") {
+          const scriptList = await api.listScripts(projectId);
+          setScripts(scriptList);
+        } else if (
+          stepKey === "scenes" ||
+          stepKey === "images" ||
+          stepKey === "music" ||
+          stepKey === "captions"
+        ) {
+          try {
+            const t = await api.getTimeline(projectId);
+            if (t.data) setTimeline(t.data);
+          } catch {}
+          const sceneList = await api.listScenes(projectId);
+          setScenes(sceneList);
+        } else if (stepKey === "voice") {
+          const [cat, cfg] = await Promise.all([
+            api.listVoices(project.language),
+            api.getVoiceConfig().catch(() => null),
+          ]);
+          setVoiceConfig(cfg);
+          setVoiceProviders(cat.providers);
+          const initial =
+            cat.providers.find((p) => p.id === cat.default_provider) ||
+            cat.providers[0];
+          if (initial) {
+            setSelectedProvider((prev) => prev || initial.id);
+            setSelectedVoice((prev) =>
+              initial.voices.includes(prev) ? prev : initial.default,
+            );
+          }
+        } else if (stepKey === "timeline" || stepKey === "video") {
+          try {
+            const t = await api.getTimeline(projectId);
+            if (t.data) setTimeline(t.data);
+          } catch {}
+          const [sceneList, vStatus] = await Promise.all([
+            api.listScenes(projectId),
+            api.videoStatus(projectId).catch(() => null),
+          ]);
+          setScenes(sceneList);
+          if (vStatus) setVideoStatus(vStatus);
+        } else if (stepKey === "thumbnail" || stepKey === "seo") {
+          const [seoData, categoryList, thumbList] = await Promise.all([
+            api.getSEO(projectId),
+            api.listSEOCategories(),
+            api.listThumbnails(projectId),
+          ]);
+          setSeo(seoData);
+          setCategories(categoryList);
+          setThumbnails(thumbList);
+        } else if (stepKey === "upload") {
+          const [ytCfg, recents] = await Promise.all([
+            api.getYoutubeConfig().catch(() => null),
+            api.getRecentVideos(10).catch(() => []),
+          ]);
+          if (ytCfg) setYoutubeConfig(ytCfg);
+          if (recents && recents.length > 0) setRecentVideos(recents);
         }
-        setSubtitleColor(proj.caption_color);
-        setSubtitleOutlineColor(proj.caption_outline_color);
-        setSubtitleOutline(proj.caption_outline);
-        setSubtitleFontSize(proj.caption_font_size);
-        setLogoOverlay(proj.logo_overlay);
-        setLogoConfig({
-          logo_position: proj.logo_position,
-          logo_size: proj.logo_size,
-          logo_margin: proj.logo_margin,
-          logo_opacity: proj.logo_opacity,
-        });
-        setIdeas(ideaList);
-        const selectedIdea = ideaList.find((i) => i.is_selected);
-        setScriptTopic((prev) => prev || selectedIdea?.title || proj.name);
-        setScripts(scriptList);
-        setThumbnails(thumbList);
-        setSeo(seoData);
-        setCategories(categoryList);
-        api.videoStatus(projectId).then(setVideoStatus).catch(() => {});
-        // Fetch timeline BEFORE setting scenes to prevent seedDefaults race condition
-        try {
-          const t = await api.getTimeline(projectId);
-          if (t.data) setTimeline(t.data);
-        } catch {}
-        setScenes(sceneList);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load project");
-      } finally {
-        if (isInitial) setLoading(false);
+        console.warn(`Lazy fetch failed for step ${stepKey}:`, err);
       }
     },
-    [projectId],
+    [projectId, project],
   );
 
+  const loadAll = useCallback(async () => {
+    loadedStepsRef.current.clear();
+    await fetchProjectCore();
+  }, [fetchProjectCore]);
+
   useEffect(() => {
-    loadAll(true);
-  }, [loadAll]);
+    fetchProjectCore();
+  }, [fetchProjectCore]);
+
+  useEffect(() => {
+    if (project) {
+      fetchStepData(activeTab);
+    }
+  }, [activeTab, project, fetchStepData]);
 
   useEffect(() => {
     return () => {
@@ -279,7 +359,8 @@ export function useProjectDetail(projectId: number) {
       setError("");
       setSuccess("");
       await action();
-      await loadAll(false);
+      // Smooth background sync without wiping step caches
+      await fetchStepData(activeTab, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -294,7 +375,8 @@ export function useProjectDetail(projectId: number) {
       setSuccess("");
       await task();
       setSuccess(successMsg);
-      await loadAll();
+      // Smooth background sync without wiping step caches
+      await fetchStepData(activeTab, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Operation failed");
     } finally {
@@ -377,6 +459,16 @@ export function useProjectDetail(projectId: number) {
       const updated = await api.updateProject(projectId, patch);
       setProject(updated);
     } catch {}
+  };
+
+  const uploadLogo = async (file: File) => {
+    try {
+      const res = await api.uploadProjectLogo(projectId, file);
+      setLogoUrl(mediaUrl(res.logo_url));
+      setSuccess("Custom logo uploaded successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload logo");
+    }
   };
 
   const generateIdeas = async () => {
@@ -650,6 +742,27 @@ export function useProjectDetail(projectId: number) {
     });
   };
 
+  const cancelVideoBuild = async () => {
+    try {
+      if (videoPollRef.current) clearInterval(videoPollRef.current);
+      await api.cancelVideoBuild(projectId);
+      setVideoStatus({
+        running: false,
+        progress: 0,
+        stage: "cancelled",
+        message: "Build cancelled by user.",
+        output: null,
+        error: "Build cancelled",
+        updated_at: null,
+        scene_statuses: {},
+      });
+      setActionLoading("");
+      setSuccess("Video build cancelled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cancel build");
+    }
+  };
+
   const importVideo = async (file: File) => {
     await runAction("video-import", async () => {
       const result = await api.importFinalVideo(projectId, file);
@@ -691,17 +804,247 @@ export function useProjectDetail(projectId: number) {
     setAddSceneAt(null);
   };
 
-  const quickAddScene = async (): Promise<Scene | null> => {
+  const updateSceneMedia = async (sceneId: number, mediaPath: string, isVideo = true) => {
+    setScenes((prev) =>
+      prev.map((s) =>
+        s.id === sceneId
+          ? isVideo
+            ? { ...s, video_path: mediaPath, image_path: "" }
+            : { ...s, image_path: mediaPath, video_path: "" }
+          : s,
+      ),
+    );
+
+    if (timeline) {
+      const updatedClips = timeline.clips.map((c) => {
+        if (c.scene_id === sceneId && c.track === "video") {
+          return isVideo
+            ? { ...c, video_path: mediaPath, image_path: "" }
+            : { ...c, image_path: mediaPath, video_path: "" };
+        }
+        return c;
+      });
+      const updatedTimeline = { ...timeline, clips: updatedClips };
+      setTimeline(updatedTimeline);
+      api.saveTimeline(projectId, updatedTimeline).catch(() => {});
+    }
+
+    try {
+      if (isVideo) {
+        await api.updateScene(sceneId, { video_path: mediaPath, image_path: "" });
+      } else {
+        await api.updateScene(sceneId, { image_path: mediaPath, video_path: "" });
+      }
+    } catch (err) {
+      console.error("Failed to update scene media:", err);
+    }
+  };
+
+  const quickAddScene = async (atTime?: number): Promise<Scene | null> => {
     try {
       const scene = await api.createScene(projectId, { narration: "" });
       setScenes((prev) =>
         [...prev, scene].sort((a, b) => a.order_index - b.order_index),
       );
+
+      if (timeline) {
+        let startTime = atTime;
+        if (startTime === undefined || startTime === null) {
+          let end = 0;
+          for (const c of timeline.clips) end = Math.max(end, c.start + c.duration);
+          startTime = end;
+        }
+
+        const dur = Math.max(5, scene.duration_seconds ?? 5);
+        const newClip: TimelineClip = {
+          id: `v-${scene.id}-${startTime.toFixed(2)}`,
+          scene_id: scene.id,
+          track: "video",
+          start: Math.round(startTime * 100) / 100,
+          duration: dur,
+          image_path: scene.image_path ?? null,
+          video_path: scene.video_path ?? null,
+          audio_path: null,
+          audio_in: 0,
+          audio_out: null,
+          volume: 1,
+          motion_effect: scene.motion_effect || "none",
+        };
+
+        const updatedTimeline: TimelineData = {
+          ...timeline,
+          duration: Math.round(Math.max(timeline.duration, startTime + dur) * 100) / 100,
+          clips: [...timeline.clips, newClip].sort((a, b) => a.start - b.start),
+        };
+
+        setTimeline(updatedTimeline);
+        api.saveTimeline(projectId, updatedTimeline).catch(() => {});
+      }
       return scene;
     } catch (err) {
       console.error("Failed to add scene from timeline", err);
-      setError("Could not add scene. Generate a script first.");
+      setError("Could not add scene.");
       return null;
+    }
+  };
+
+  const addGalleryClipToTimeline = async (clip: VideoClip, atTime?: number) => {
+    try {
+      const isImg = /\.(png|jpg|jpeg|webp)$/i.test(clip.filename || clip.file_path);
+      const duration = clip.duration_seconds && clip.duration_seconds > 0 ? clip.duration_seconds : 5;
+      const targetScene = scenes[activeSceneIdx] || scenes[0];
+      let sceneId = targetScene ? targetScene.id : -1;
+
+      if (!targetScene) {
+        const scene = await api.createScene(projectId, {
+          narration: `${clip.name} (Gallery)`,
+          video_prompt: clip.name,
+        });
+        await api.updateScene(scene.id, isImg ? { image_path: clip.file_path } : { video_path: clip.file_path }).catch(() => {});
+        sceneId = scene.id;
+        const fullScene: Scene = {
+          ...scene,
+          image_path: isImg ? clip.file_path : null,
+          video_path: isImg ? null : clip.file_path,
+          images: isImg
+            ? [
+                {
+                  id: Date.now(),
+                  scene_id: scene.id,
+                  file_path: clip.file_path,
+                  source: "gallery",
+                  position: 0,
+                  created_at: new Date().toISOString(),
+                },
+              ]
+            : [],
+          videos: !isImg
+            ? [
+                {
+                  id: Date.now(),
+                  scene_id: scene.id,
+                  file_path: clip.file_path,
+                  source: "gallery",
+                  position: 0,
+                  created_at: new Date().toISOString(),
+                },
+              ]
+            : [],
+        };
+        setScenes((prev) => [...prev, fullScene].sort((a, b) => a.order_index - b.order_index));
+      } else {
+        if (isImg) {
+          const newImgObj = {
+            id: Date.now(),
+            scene_id: targetScene.id,
+            file_path: clip.file_path,
+            source: "gallery",
+            position: targetScene.images ? targetScene.images.length : 0,
+            created_at: new Date().toISOString(),
+          };
+          setScenes((prev) =>
+            prev.map((s) => {
+              if (s.id === targetScene.id) {
+                const updatedImages = s.images ? [...s.images, newImgObj] : [newImgObj];
+                return {
+                  ...s,
+                  image_path: clip.file_path,
+                  images: updatedImages,
+                };
+              }
+              return s;
+            }),
+          );
+          await api.updateScene(targetScene.id, { image_path: clip.file_path }).catch(() => {});
+        } else {
+          const newVideoObj: SceneVideo = {
+            id: Date.now(),
+            scene_id: targetScene.id,
+            file_path: clip.file_path,
+            source: "gallery",
+            position: targetScene.videos ? targetScene.videos.length : 0,
+            created_at: new Date().toISOString(),
+          };
+
+          setScenes((prev) =>
+            prev.map((s) => {
+              if (s.id === targetScene.id) {
+                const updatedVideos = s.videos ? [...s.videos, newVideoObj] : [newVideoObj];
+                return {
+                  ...s,
+                  video_path: clip.file_path,
+                  videos: updatedVideos,
+                };
+              }
+              return s;
+            }),
+          );
+
+          await api.updateScene(targetScene.id, { video_path: clip.file_path }).catch(() => {});
+        }
+      }
+
+      let baseTimeline = timeline;
+      if (!baseTimeline) {
+        let t = 0;
+        const initClips: TimelineClip[] = [];
+        for (const s of scenes) {
+          const d = s.duration_seconds ?? 5;
+          initClips.push({
+            id: `v-${s.id}-${t.toFixed(2)}`,
+            scene_id: s.id,
+            track: "video",
+            start: t,
+            duration: d,
+            image_path: s.image_path || s.images?.[0]?.file_path || null,
+            video_path: s.video_path,
+            audio_path: null,
+            audio_in: 0,
+            audio_out: null,
+            volume: 1,
+            motion_effect: s.motion_effect || "none",
+          });
+          t += d;
+        }
+        baseTimeline = { version: 1, duration: t, clips: initClips };
+      }
+
+      let startTime = atTime;
+      if (startTime === undefined || startTime === null) {
+        let end = 0;
+        for (const c of baseTimeline.clips) end = Math.max(end, c.start + c.duration);
+        startTime = end;
+      }
+
+      const newClip: TimelineClip = {
+        id: `v-${sceneId}-${Date.now()}`,
+        scene_id: sceneId,
+        track: "video",
+        start: Math.round(startTime * 100) / 100,
+        duration: Math.round(duration * 100) / 100,
+        image_path: isImg ? clip.file_path : null,
+        video_path: isImg ? null : clip.file_path,
+        audio_path: null,
+        audio_in: 0,
+        audio_out: null,
+        volume: 1,
+        motion_effect: "none",
+      };
+
+      const updatedTimeline: TimelineData = {
+        ...baseTimeline,
+        duration: Math.round(Math.max(baseTimeline.duration, startTime + duration) * 100) / 100,
+        clips: [...baseTimeline.clips, newClip].sort((a, b) => a.start - b.start),
+      };
+
+      setTimeline(updatedTimeline);
+      api.saveTimeline(projectId, updatedTimeline).catch((err) => {
+        console.error("Failed to save timeline with gallery clip:", err);
+      });
+      setSuccess(`Added "${clip.name}" to timeline at cursor!`);
+    } catch (err) {
+      console.error("Failed to add gallery clip to timeline:", err);
+      setError("Could not add clip to timeline.");
     }
   };
 
@@ -895,6 +1238,8 @@ export function useProjectDetail(projectId: number) {
     if (!file) return;
     try {
       setActionLoading("upload-audio");
+      const idx = scenes.findIndex((s) => s.id === sceneId);
+      if (idx !== -1) setActiveSceneIdx(idx);
       const scene = await api.uploadVoice(sceneId, file, 0);
       setScenes((prev) => prev.map((s) => (s.id === scene.id ? { ...s, audio_path: scene.audio_path, duration_seconds: scene.duration_seconds } : s)));
       bumpAudioVersion(scene.id);
@@ -1015,9 +1360,9 @@ export function useProjectDetail(projectId: number) {
     await copySceneImageTo(imageId, sceneId);
   };
 
-  const uploadYouTube = async (privacy: string) => {
+  const uploadYouTube = async (privacy: string, publishAt?: string) => {
     await runAction("youtube-upload", async () => {
-      await api.uploadToYouTube(projectId, privacy);
+      await api.uploadToYouTube(projectId, privacy, publishAt);
       setSuccess("Upload started! Check the Upload tab for progress.");
       // Start polling upload status
       if (youtubeUploadPollRef.current) clearInterval(youtubeUploadPollRef.current);
@@ -1061,7 +1406,7 @@ export function useProjectDetail(projectId: number) {
     subtitlePosition, setSubtitlePosition, subtitleCustomY, setSubtitleCustomY, handleSubtitlePositionChange, subtitleColor, setSubtitleColor,
     subtitleOutlineColor, setSubtitleOutlineColor, subtitleOutline, setSubtitleOutline,
     subtitleFontSize, setSubtitleFontSize, logoOverlay, setLogoOverlay, saveLogoOverlay,
-    logoConfig, setLogoConfig, saveLogoConfig,
+    logoConfig, setLogoConfig, saveLogoConfig, uploadLogo, logoUrl, setLogoUrl,
     setActiveTab, setActiveSceneIdx, setError, setSuccess, setEditingSettings,
     setScriptTopic, setScriptForm, setCreatingScript, setEditingScript, setIdeaTopic, setSceneCount,
     setNewSceneNarration, setImageUrlInputs, setDragMedia, setDraggingOverScene,
@@ -1076,10 +1421,10 @@ export function useProjectDetail(projectId: number) {
     handleVideoFileSelected, applyVideoUpload, removeSceneVideo, removeSceneImage,
     makePrimaryImage, reorderSceneMedia, copySceneImageTo,
     addScene, openAddScene, closeAddScene, generateScenes, removeScene,
-    quickAddScene,
+    quickAddScene, updateSceneMedia, addGalleryClipToTimeline,
     openSceneEdit, cancelSceneEdit, saveSceneEdit, clearScenes, updateSceneEffect,
     startRecording, toggleRecordingPause, stopRecording, handleAudioFileSelected,
-    clearSceneAudio, combineAudioPreview, downloadCombinedAudio, audioPreviewUrl, formatRecordTime, buildVideo,
+    clearSceneAudio, combineAudioPreview, downloadCombinedAudio, audioPreviewUrl, formatRecordTime, buildVideo, cancelVideoBuild,
     importVideo,
     handleTileDragOver, handleTileDrop, handleSceneDrop, handleUploadTileDrop, handlePaste,
     audioInputRef, uploadYouTube,

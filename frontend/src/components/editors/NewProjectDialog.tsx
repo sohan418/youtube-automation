@@ -12,12 +12,12 @@ interface Props {
 }
 
 export default function NewProjectDialog({ isOpen, categories, creating, onClose, onCreate }: Props) {
-  const [form, setForm] = useState({ name: "", description: "", category: "", language: "en", ratio: "16:9" });
+  const [form, setForm] = useState({ name: "", description: "", category: "Education", language: "hi", ratio: "16:9" });
 
   useEffect(() => {
     if (isOpen) {
       const autoName = `Project ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
-      setForm({ name: autoName, description: "", category: "", language: "en", ratio: "16:9" });
+      setForm({ name: autoName, description: "", category: "Education", language: "hi", ratio: "16:9" });
     }
   }, [isOpen]);
 
@@ -27,7 +27,7 @@ export default function NewProjectDialog({ isOpen, categories, creating, onClose
     e.preventDefault();
     if (!form.name.trim()) return;
     await onCreate(form);
-    setForm({ name: "", description: "", category: "", language: "en", ratio: "16:9" });
+    setForm({ name: "", description: "", category: "Education", language: "hi", ratio: "16:9" });
   };
 
   return (

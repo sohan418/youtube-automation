@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Sparkles, Check, Upload, Copy, Zap, Wand2, Trash2, FileText } from "lucide-react";
 import type { Thumbnail } from "../../types";
+import StepHeader from "../studio/StepHeader";
 import FreeAIGuide from "../editors/FreeAIGuide";
 import "./ThumbnailStep.css";
 
@@ -14,6 +15,7 @@ interface Props {
   onSelect: (id: number) => void;
   onUpload: (file: File) => Promise<void>;
   onDelete?: (id: number) => void;
+  onCollapse?: () => void;
 }
 
 export default function ThumbnailStep({
@@ -26,6 +28,7 @@ export default function ThumbnailStep({
   onSelect,
   onUpload,
   onDelete,
+  onCollapse,
 }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -65,29 +68,28 @@ export default function ThumbnailStep({
 
   return (
     <div className="card thumb-card-padding">
-      <div className="thumb-header">
-        <h3 className="thumb-title">Thumbnails</h3>
-        <div className="thumb-header-actions">
-          <button
-            className={`btn-secondary thumb-freeai-btn ${showFreeAI ? "active" : ""}`}
-            onClick={() => setShowFreeAI(!showFreeAI)}
-          >
-            <Zap size={13} /> {showFreeAI ? "Hide Free AI" : "Free AI"}
-          </button>
-          <button
-            className="btn-primary thumb-generate-btn"
-            disabled={!!actionLoading}
-            onClick={() => onGenerate(customPrompt, topic)}
-          >
-            {actionLoading === "thumbnails" ? (
-              "Generating..."
-            ) : (
-              <>
-                <Sparkles size={13} /> Generate
-              </>
-            )}
-          </button>
-        </div>
+      <StepHeader title="Thumbnails" subtitle="Generate or upload custom YouTube video thumbnails" onCollapse={onCollapse} />
+
+      <div className="thumb-header-actions" style={{ marginBottom: "0.75rem" }}>
+        <button
+          className="btn-primary thumb-generate-btn"
+          disabled={!!actionLoading}
+          onClick={() => onGenerate(customPrompt, topic)}
+        >
+          {actionLoading === "thumbnails" ? (
+            "Generating..."
+          ) : (
+            <>
+              <Sparkles size={13} /> Generate
+            </>
+          )}
+        </button>
+        <button
+          className={`btn-secondary thumb-freeai-btn ${showFreeAI ? "active" : ""}`}
+          onClick={() => setShowFreeAI(!showFreeAI)}
+        >
+          <Zap size={13} /> {showFreeAI ? "Hide Free AI" : "Free AI"}
+        </button>
       </div>
 
       {/* Video Context & Topic Input */}

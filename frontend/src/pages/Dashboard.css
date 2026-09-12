@@ -137,6 +137,23 @@
   opacity: 0.4;
 }
 
+.dashboard-ratio-badge {
+  position: absolute;
+  bottom: 0.45rem;
+  left: 0.45rem;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+  z-index: 2;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
 .dashboard-card-body {
   display: flex;
   flex-direction: column;

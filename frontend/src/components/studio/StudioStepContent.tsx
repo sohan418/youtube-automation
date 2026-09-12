@@ -1,15 +1,18 @@
 import { api, mediaUrl } from "../../api/client";
 import { useProjectDetail } from "../../hooks/useProjectDetail";
-import type { TimelineData } from "../../types";
+import type { TimelineData, TimelineClip } from "../../types";
 import "./StudioStepContent.css";
 
+import StepHeader from "./StepHeader";
 import IdeasStep from "../steps/IdeasStep";
 import ScriptStep from "../steps/ScriptStep";
 import ScenesStep from "../steps/ScenesStep";
 import ImagesStep from "../steps/ImagesStep";
+import GalleryStep from "../steps/GalleryStep";
 import VoiceStep from "../steps/VoiceStep";
 import MusicStep from "../steps/MusicStep";
 
+import type { TimelinePlaybackState } from "./TimelineVideoCanvas";
 import CaptionsStep from "../steps/CaptionsStep";
 import ThumbnailStep from "../steps/ThumbnailStep";
 import SeoStep from "../steps/SeoStep";
@@ -17,10 +20,46 @@ import UploadStep from "../steps/UploadStep";
 
 interface Props {
   ctx: ReturnType<typeof useProjectDetail>;
+  playbackState?: TimelinePlaybackState | null;
+  onCollapse?: () => void;
 }
 
-export default function StudioStepContent({ ctx }: Props) {
+export default function StudioStepContent({ ctx, playbackState, onCollapse }: Props) {
   const { activeTab } = ctx;
+
+  const getSceneIdxAtCursor = () => {
+    const time = playbackState?.time ?? 0;
+    if (ctx.timeline && ctx.timeline.clips.length > 0) {
+      const exactClip = ctx.timeline.clips.find(
+        (c) =>
+          c.track === "video" &&
+          c.scene_id >= 0 &&
+          c.start <= time &&
+          time <= c.start + c.duration,
+      );
+      if (exactClip) {
+        const idx = ctx.scenes.findIndex((s) => s.id === exactClip.scene_id);
+        if (idx !== -1) return idx;
+      }
+      let closestId = -1;
+      let minDiff = Infinity;
+      for (const c of ctx.timeline.clips) {
+        if (c.track === "video" && c.scene_id >= 0) {
+          const mid = c.start + c.duration / 2;
+          const diff = Math.abs(time - mid);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestId = c.scene_id;
+          }
+        }
+      }
+      if (closestId >= 0) {
+        const idx = ctx.scenes.findIndex((s) => s.id === closestId);
+        if (idx !== -1) return idx;
+      }
+    }
+    return ctx.activeSceneIdx ?? 0;
+  };
 
   return (
     <div className="studio-main-content">
@@ -39,6 +78,7 @@ export default function StudioStepContent({ ctx }: Props) {
           onFreeAIResponse={ctx.importFreeIdeas}
           recentVideos={ctx.recentVideos}
           onOpenSettings={ctx.openSettings}
+          onCollapse={onCollapse}
         />
       )}
 
@@ -74,6 +114,7 @@ export default function StudioStepContent({ ctx }: Props) {
               ctx.setSuccess(replace ? "Script imported and made active!" : "Script imported as a new version.");
             });
           }}
+          onCollapse={onCollapse}
         />
       )}
 
@@ -111,6 +152,7 @@ export default function StudioStepContent({ ctx }: Props) {
             });
           }}
           projectName={ctx.project?.name ?? ""}
+          onCollapse={onCollapse}
         />
       )}
 
@@ -151,6 +193,23 @@ export default function StudioStepContent({ ctx }: Props) {
           handleSceneDrop={ctx.handleSceneDrop}
           handleUploadTileDrop={ctx.handleUploadTileDrop}
           onUpdateSceneEffect={ctx.updateSceneEffect}
+          onUpdateSceneMedia={ctx.updateSceneMedia}
+          onRefreshScenes={ctx.loadAll}
+          onQuickAddScene={ctx.quickAddScene}
+          onCollapse={onCollapse}
+        />
+      )}
+
+      {activeTab === "gallery" && (
+        <GalleryStep
+          projectId={ctx.projectId}
+          scenes={ctx.scenes}
+          activeSceneIdx={getSceneIdxAtCursor()}
+          onAddClipToTimeline={(clip) => ctx.addGalleryClipToTimeline(clip, playbackState?.time)}
+          onUpdateSceneMedia={ctx.updateSceneMedia}
+          onQuickAddScene={() => ctx.quickAddScene(playbackState?.time)}
+          onRefreshScenes={ctx.loadAll}
+          onCollapse={onCollapse}
         />
       )}
 
@@ -191,39 +250,94 @@ export default function StudioStepContent({ ctx }: Props) {
           mediaUrl={mediaUrl}
           audioVersion={ctx.audioVersion}
           formatRecordTime={ctx.formatRecordTime}
+          onCollapse={onCollapse}
         />
       )}
 
       {activeTab === "music" && (
         <MusicStep
+          activeMusicPath={
+            ctx.timeline?.music?.file_path ||
+            ctx.timeline?.clips?.find((c) => c.track === "music")?.audio_path
+          }
           onAddToTimeline={(track) => {
-            if (!ctx.timeline) return;
-            const newClip = {
+            let baseTimeline = ctx.timeline;
+            if (!baseTimeline) {
+              let t = 0;
+              const clips: TimelineClip[] = [];
+              for (const s of ctx.scenes) {
+                const duration = s.duration_seconds ?? 5;
+                clips.push({
+                  id: `v-${s.id}-${t.toFixed(2)}`,
+                  scene_id: s.id,
+                  track: "video",
+                  start: t,
+                  duration,
+                  image_path: s.image_path || s.images?.[0]?.file_path || null,
+                  video_path: s.video_path,
+                  audio_path: null,
+                  audio_in: 0,
+                  audio_out: null,
+                  volume: 1,
+                  motion_effect: s.motion_effect || "none",
+                });
+                if (s.audio_path) {
+                  clips.push({
+                    id: `n-${s.id}-${t.toFixed(2)}`,
+                    scene_id: s.id,
+                    track: "narration",
+                    start: t,
+                    duration,
+                    image_path: null,
+                    video_path: null,
+                    audio_path: s.audio_path,
+                    audio_in: 0,
+                    audio_out: null,
+                    volume: 1,
+                  });
+                }
+                t += duration;
+              }
+              baseTimeline = { version: 1, duration: t, clips };
+            }
+
+            const filteredClips = baseTimeline.clips.filter((c) => c.track !== "music");
+
+            const musicDur =
+              track.duration_seconds && track.duration_seconds > 0
+                ? track.duration_seconds
+                : Math.max(baseTimeline.duration || 30, 30);
+
+            const newClip: TimelineClip = {
               id: `music-${Date.now()}`,
-              track: "music" as const,
-              source: mediaUrl(track.file_path),
+              scene_id: -1,
+              track: "music",
               start: 0,
-              duration: track.duration_seconds || 30,
-              in: 0,
-              out: track.duration_seconds || 30,
-              audio_path: track.file_path,
-              audio_in: 0,
-              audio_out: track.duration_seconds || 30,
-              volume: 0.15,
-              muted: false,
-              locked: false,
-              scene_id: 0,
+              duration: musicDur,
               image_path: null,
               video_path: null,
+              audio_path: track.file_path,
+              audio_in: 0,
+              audio_out: musicDur,
+              volume: 0.15,
+              motion_effect: "none",
             };
+
+            const totalDuration = Math.max(baseTimeline.duration, musicDur);
+
             const updated: TimelineData = {
-              ...ctx.timeline,
-              clips: [...ctx.timeline.clips, newClip],
+              ...baseTimeline,
+              duration: totalDuration,
+              clips: [...filteredClips, newClip],
               music: { file_path: track.file_path, volume: 0.15 },
             };
+
             ctx.setTimeline(updated);
-            api.saveTimeline(ctx.projectId, updated).catch(() => {});
+            api.saveTimeline(ctx.projectId, updated).catch((err) => {
+              console.error("Failed to save timeline with music track:", err);
+            });
           }}
+          onCollapse={onCollapse}
         />
       )}
 
@@ -246,22 +360,26 @@ export default function StudioStepContent({ ctx }: Props) {
           subtitleFontSize={ctx.subtitleFontSize}
           setSubtitleFontSize={ctx.setSubtitleFontSize}
           onSave={ctx.saveCaptions}
+          onCollapse={onCollapse}
         />
       )}
 
       {activeTab === "timeline" && (
-        <div className="card timeline-guide">
-          <h3>🎞️ Timeline Guide</h3>
-          <p>
-            Use the timeline editor at the bottom right to arrange clips, trim audio narrations, and adjust layout durations.
-          </p>
-          <div className="timeline-guide-box">
-            <strong>Keyboard & Editor Shortcuts:</strong>
-            <ul>
-              <li><strong>Spacebar:</strong> Play/pause final video preview.</li>
-              <li><strong>Shift + Drag:</strong> Hold shift and drag to slide clips horizontally.</li>
-              <li><strong>Resize Edges:</strong> Drag crop boundaries to adjust durations.</li>
-            </ul>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <StepHeader
+            title="Timeline & Video Layout"
+            subtitle="Arrange clips, trim audio narrations, and adjust layout durations"
+            onCollapse={onCollapse}
+          />
+          <div className="card timeline-guide">
+            <div className="timeline-guide-box">
+              <strong>Keyboard & Editor Shortcuts:</strong>
+              <ul>
+                <li><strong>Spacebar:</strong> Play/pause final video preview.</li>
+                <li><strong>Shift + Drag:</strong> Hold shift and drag to slide clips horizontally.</li>
+                <li><strong>Resize Edges:</strong> Drag crop boundaries to adjust durations.</li>
+              </ul>
+            </div>
           </div>
         </div>
       )}
@@ -297,6 +415,7 @@ export default function StudioStepContent({ ctx }: Props) {
               ctx.setSuccess("Thumbnail deleted!");
             })
           }
+          onCollapse={onCollapse}
         />
       )}
 
@@ -325,16 +444,18 @@ export default function StudioStepContent({ ctx }: Props) {
           }}
           onFreeAIResponse={(data) =>
             ctx.runAction("seo-import", async () => {
-              const update: { title?: string; description?: string; tags?: string; hashtags?: string } = {};
+              const update: { title?: string; description?: string; tags?: string; hashtags?: string; timestamps?: string } = {};
               if (data.title != null) update.title = data.title;
               if (data.description != null) update.description = data.description;
               if (data.tags != null) update.tags = data.tags;
               if (data.hashtags != null) update.hashtags = data.hashtags;
+              if (data.timestamps != null) update.timestamps = data.timestamps;
               const updated = await api.updateSEO(ctx.projectId, update);
               ctx.setSeo(updated);
               ctx.setSuccess("SEO data imported!");
             })
           }
+          onCollapse={onCollapse}
         />
       )}
 
@@ -347,6 +468,7 @@ export default function StudioStepContent({ ctx }: Props) {
           youtubeConfig={ctx.youtubeConfig}
           youtubeUploadStatus={ctx.youtubeUploadStatus}
           onUploadYouTube={ctx.uploadYouTube}
+          onCollapse={onCollapse}
         />
       )}
     </div>

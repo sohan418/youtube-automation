@@ -25,8 +25,41 @@ class ExportService:
             dest.mkdir(exist_ok=True)
             for file in src.iterdir():
                 if file.is_file():
-                    shutil.copy2(file, dest / file.name)
-                    exported_files.append((dest / file.name).relative_to(export_dir).as_posix())
+                    target = dest / file.name
+                    try:
+                        shutil.copy2(file, target)
+                    except (PermissionError, OSError):
+                        try:
+                            target.write_bytes(file.read_bytes())
+                        except Exception:
+                            pass
+                    if target.exists():
+                        rel = target.relative_to(export_dir).as_posix()
+                        if rel not in exported_files:
+                            exported_files.append(rel)
+
+        # Ensure export video/final.mp4 is synced with the latest built video file
+        video_src = project_path / "video"
+        video_dest = export_dir / "video"
+        if video_src.exists():
+            video_dest.mkdir(exist_ok=True)
+            latest_video = None
+            for name in ("final_post.mp4", "final_narr.mp4", "final_watermarked.mp4", "final_subtitled.mp4", "final.mp4"):
+                cand = video_src / name
+                if cand.exists() and cand.stat().st_size > 1024:
+                    latest_video = cand
+                    break
+            if latest_video:
+                final_target = video_dest / "final.mp4"
+                try:
+                    shutil.copy2(latest_video, final_target)
+                except (PermissionError, OSError):
+                    try:
+                        final_target.write_bytes(latest_video.read_bytes())
+                    except Exception:
+                        pass
+                if final_target.exists() and "video/final.mp4" not in exported_files:
+                    exported_files.insert(0, "video/final.mp4")
 
         if seo_data:
             seo_path = export_dir / "metadata" / "seo.json"
