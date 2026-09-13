@@ -36,6 +36,7 @@ export const TRACK_ROWS: TrackDef[] = [
   { id: "video", label: "Video", color: "#5aa2ff", softColor: "rgba(59,130,246,0.14)", height: 64, collapsedHeight: 30, kind: "video" },
   { id: "narration", label: "Voiceover", color: "#3fd68f", softColor: "rgba(34,197,94,0.13)", height: 48, collapsedHeight: 26, kind: "audio" },
   { id: "music", label: "Music", color: "#2dd4bf", softColor: "rgba(20,184,166,0.13)", height: 46, collapsedHeight: 26, kind: "audio" },
+  { id: "sfx", label: "SFX & Audio", color: "#f59e0b", softColor: "rgba(245,158,11,0.13)", height: 46, collapsedHeight: 26, kind: "audio" },
 ];
 
 export const TRACK_BY_ID: Record<TimelineTrack, TrackDef> = Object.fromEntries(

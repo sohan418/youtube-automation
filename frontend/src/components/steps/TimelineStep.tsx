@@ -61,23 +61,43 @@ async function applyOriginalMediaLengths(
     if (arr.length === 0) continue;
 
     const narClip = arr.find((c) => c.track === "narration");
-    const vidClip = arr.find((c) => c.track === "video");
+    const vidClips = arr.filter((c) => c.track === "video");
 
-    const sceneDuration = narClip?.duration && narClip.duration > 0
-      ? narClip.duration
-      : vidClip?.duration && vidClip.duration > 0
-        ? vidClip.duration
-        : 5;
+    const sceneDuration =
+      narClip?.duration && narClip.duration > 0
+        ? narClip.duration
+        : vidClips.length > 0
+          ? vidClips.reduce((sum, c) => sum + c.duration, 0)
+          : 5;
 
-    let sceneEnd = cursor;
-    for (const c of arr) {
-      const ns = r2(cursor);
-      const newDur = c.track === "video" && narClip?.duration ? r2(sceneDuration) : c.duration;
-      if (Math.abs(ns - c.start) > 1e-6 || Math.abs(newDur - c.duration) > 1e-6) moved = true;
-      placed.push({ ...c, start: ns, duration: newDur });
-      sceneEnd = Math.max(sceneEnd, ns + newDur);
+    let vCursor = cursor;
+    const numVids = vidClips.length;
+    if (numVids > 0) {
+      const baseSubDur = sceneDuration / numVids;
+      vidClips.forEach((c, idx) => {
+        const isLast = idx === numVids - 1;
+        const subDur = isLast
+          ? r2(cursor + sceneDuration - vCursor)
+          : r2(baseSubDur);
+        const ns = r2(vCursor);
+        if (
+          Math.abs(ns - c.start) > 1e-6 ||
+          Math.abs(subDur - c.duration) > 1e-6
+        )
+          moved = true;
+        placed.push({ ...c, start: ns, duration: Math.max(0.2, subDur) });
+        vCursor += subDur;
+      });
     }
-    cursor = sceneEnd;
+
+    for (const c of arr) {
+      if (c.track === "video") continue;
+      const ns = r2(cursor);
+      if (Math.abs(ns - c.start) > 1e-6) moved = true;
+      placed.push({ ...c, start: ns });
+    }
+
+    cursor = r2(cursor + sceneDuration);
   }
   if (!changed && !moved) return clips;
   return [...placed, ...loose].sort((a, b) => a.start - b.start);

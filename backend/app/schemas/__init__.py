@@ -280,6 +280,9 @@ class TimelineClip(BaseModel):
     muted: bool = False
     fade_in: float = 0.0
     fade_out: float = 0.0
+    speed: float = 1.0
+    transition: str | None = "none"
+    transition_duration: float = 1.0
 
 
 class TimelineMusic(BaseModel):

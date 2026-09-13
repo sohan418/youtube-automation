@@ -203,9 +203,10 @@ export const VideoClipView = memo(function VideoClipView(
     thumbUrl: string | null;
     probeUrl?: string | null;
     onExtendToSource?: () => void;
+    onSelectTransition?: (clip: TimelineClip) => void;
   },
 ) {
-  const { clip, widthPx, orderIndex, thumbUrl, probeUrl, onExtendToSource } =
+  const { clip, widthPx, orderIndex, thumbUrl, probeUrl, onExtendToSource, onSelectTransition } =
     props;
   const hasVideo = !!clip.video_path;
   const srcDur = useMediaDuration(probeUrl ?? null, "video");
@@ -278,6 +279,50 @@ export const VideoClipView = memo(function VideoClipView(
         srcDur={hasVideo ? srcDur : null}
         onSrcClick={onExtendToSource}
       />
+      {/* Transition Badge Button (⧓ double triangle) */}
+      {widthPx >= 36 && (
+        <div
+          title={
+            clip.transition && clip.transition !== "none"
+              ? `Transition: ${clip.transition}`
+              : "Set visual transition"
+          }
+          style={{
+            position: "absolute",
+            right: 4,
+            bottom: 3,
+            zIndex: 12,
+            pointerEvents: "auto",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 20,
+            borderRadius: 5,
+            background:
+              clip.transition && clip.transition !== "none" && clip.transition !== "cut"
+                ? "rgba(245, 158, 11, 0.95)"
+                : "rgba(20, 20, 30, 0.85)",
+            border:
+              clip.transition && clip.transition !== "none" && clip.transition !== "cut"
+                ? "1.5.px solid #fef08a"
+                : "1.5px solid rgba(255, 209, 102, 0.8)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.6)",
+            color: "#fff",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectTransition?.(clip);
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <polygon points="2,4 12,12 2,20" />
+            <polygon points="22,4 12,12 22,20" />
+          </svg>
+        </div>
+      )}
     </Shell>
   );
 });

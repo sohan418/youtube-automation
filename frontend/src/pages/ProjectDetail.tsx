@@ -26,11 +26,20 @@ export default function ProjectDetail() {
   const [timelineHeight, setTimelineHeight] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewKey, setPreviewKey] = useState<number>(Date.now());
   const [playbackState, setPlaybackState] = useState<TimelinePlaybackState | null>(null);
   const [selectedClipInfo, setSelectedClipInfo] = useState<any | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [toolPanelCollapsed, setToolPanelCollapsed] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+
+  const handleTogglePreview = async () => {
+    if (!previewModalOpen) {
+      setPreviewKey(Date.now());
+      await h.refreshVideoStatus();
+    }
+    setPreviewModalOpen((v) => !v);
+  };
 
   const handleFetchLogo = (refresh = false) => {
     if (!projectId) return;
@@ -191,7 +200,7 @@ export default function ProjectDetail() {
         onLogoOverlayChange={(value) => void h.saveLogoOverlay(value)}
         logoConfig={h.logoConfig}
         onLogoConfigChange={(patch) => void h.saveLogoConfig(patch)}
-        onTogglePreview={() => setPreviewModalOpen((v) => !v)}
+        onTogglePreview={() => void handleTogglePreview()}
         previewActive={previewModalOpen}
         onRefreshLogo={() => handleFetchLogo(true)}
         onUploadLogo={(file) => void h.uploadLogo(file)}
@@ -251,7 +260,8 @@ export default function ProjectDetail() {
               >
                 {h.videoStatus?.output ? (
                   <video
-                    src={mediaUrl(h.videoStatus.output)}
+                    key={`${h.videoStatus.output}_${previewKey}`}
+                    src={`${mediaUrl(h.videoStatus.output)}?t=${previewKey}`}
                     controls
                     autoPlay
                     className="preview-frame-media"

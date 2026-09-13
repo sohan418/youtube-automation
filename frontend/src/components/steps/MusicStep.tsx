@@ -7,7 +7,7 @@ import Tabs from "../ui/Tabs";
 import "./MusicStep.css";
 
 interface Props {
-  onAddToTimeline?: (track: MusicTrack) => void;
+  onAddToTimeline?: (track: MusicTrack, targetTrack?: "music" | "sfx") => void;
   activeMusicPath?: string | null;
   onCollapse?: () => void;
 }
@@ -313,37 +313,44 @@ export default function MusicStep({ onAddToTimeline, activeMusicPath, onCollapse
               )}
 
               {/* Actions */}
-              <div className="music-actions">
+              <div className="music-actions" style={{ display: "flex", gap: "4px" }}>
                 {onAddToTimeline && (
                   (() => {
                     const isCurrent = activeMusicPath === track.file_path || justAddedPath === track.file_path;
                     return (
-                      <button
-                        className={isCurrent ? "btn-primary music-add-btn" : "btn-secondary music-add-btn"}
-                        onClick={() => {
-                          onAddToTimeline(track);
-                          setJustAddedPath(track.file_path);
-                          setTimeout(() => setJustAddedPath(null), 1500);
-                        }}
-                        title={isCurrent ? "Active track in timeline" : "Use track in timeline"}
-                      >
-                        {isCurrent ? (
-                          <>
-                            <Check size={11} /> Added
-                          </>
-                        ) : (
-                          <>
-                            <Plus size={11} /> Use
-                          </>
-                        )}
-                      </button>
+                      <>
+                        <button
+                          className={isCurrent ? "btn-primary music-add-btn" : "btn-primary music-add-btn"}
+                          onClick={() => {
+                            onAddToTimeline(track, "music");
+                            setJustAddedPath(track.file_path);
+                            setTimeout(() => setJustAddedPath(null), 1500);
+                          }}
+                          title="Add to Music track at playhead"
+                          style={{ padding: "0.25rem 0.5rem", fontSize: "0.72rem" }}
+                        >
+                          {isCurrent ? <Check size={11} /> : <Plus size={11} />} Music
+                        </button>
+                        <button
+                          className="btn-secondary music-add-btn"
+                          onClick={() => {
+                            onAddToTimeline(track, "sfx");
+                            setJustAddedPath(track.file_path);
+                            setTimeout(() => setJustAddedPath(null), 1500);
+                          }}
+                          title="Add to SFX track at playhead"
+                          style={{ padding: "0.25rem 0.5rem", fontSize: "0.72rem" }}
+                        >
+                          <Plus size={11} /> SFX
+                        </button>
+                      </>
                     );
                   })()
                 )}
                 <button
                   className="btn-secondary music-delete-btn"
                   onClick={() => handleDelete(track.filename)}
-                  title="Delete"
+                  title="Delete track"
                 >
                   <Trash2 size={11} />
                 </button>

@@ -141,8 +141,12 @@ export function clipLabel(clip: TimelineClip, orderIndex?: number): string {
           : "Voiceover";
     case "music":
       return clip.audio_path ? fileBase(clip.audio_path) : "Music";
+    case "sfx":
+      return clip.audio_path ? fileBase(clip.audio_path) : "SFX";
     case "text":
       return clip.text?.trim() || "Caption";
+    default:
+      return "Clip";
   }
 }
 

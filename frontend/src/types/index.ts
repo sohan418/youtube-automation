@@ -234,7 +234,7 @@ export interface VideoStatus {
   scene_statuses: Record<number, string>;
 }
 
-export type TimelineTrack = "video" | "narration" | "text" | "music";
+export type TimelineTrack = "video" | "narration" | "text" | "music" | "sfx";
 
 export interface TimelineClip {
   id: string;
@@ -255,6 +255,8 @@ export interface TimelineClip {
   fade_in?: number;
   fade_out?: number;
   speed?: number;
+  transition?: string;
+  transition_duration?: number;
 }
 
 export type TimelineTrackState = { muted: boolean; locked: boolean };

@@ -10,6 +10,14 @@ import {
   Waves,
   Volume2,
   VolumeX,
+  Ban,
+  Layers,
+  Square,
+  Maximize2,
+  Wind,
+  Zap,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import type { TimelineClip } from "../../../types";
 import { mediaUrl } from "../../../api/client";
@@ -19,15 +27,72 @@ import { THEME, TRACK_BY_ID } from "./constants";
 const MONO =
   "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
 
-const ZOOM_OPTIONS: { value: string; label: string }[] = [
-  { value: "none", label: "None" },
-  { value: "zoom_in", label: "Zoom In" },
-  { value: "zoom_out", label: "Zoom Out" },
-  { value: "pan_left", label: "Pan Left" },
-  { value: "pan_right", label: "Pan Right" },
-  { value: "pan_up", label: "Pan Up" },
-  { value: "pan_down", label: "Pan Down" },
+
+
+const TRANSITION_ITEMS = [
+  { value: "none", label: "None", icon: <Ban size={14} /> },
+  { value: "cut", label: "Cut", icon: <Scissors size={14} /> },
+  { value: "crossfade", label: "Crossfade", icon: <Layers size={14} /> },
+  { value: "fade_black", label: "Fade Black", icon: <Square size={14} fill="#000" stroke="#888" /> },
+  { value: "fade_white", label: "Fade White", icon: <Square size={14} fill="#fff" stroke="#ccc" /> },
+  { value: "zoom_in", label: "Zoom In", icon: <Maximize2 size={14} /> },
+  { value: "whip_pan", label: "Whip Pan", icon: <Wind size={14} /> },
+  { value: "glitch", label: "Glitch", icon: <Zap size={14} /> },
+  { value: "slide_left", label: "Slide Left", icon: <ArrowLeft size={14} /> },
+  { value: "slide_right", label: "Slide Right", icon: <ArrowRight size={14} /> },
 ];
+
+function TransitionGridPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const currentVal = value || "none";
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: "6px",
+        marginTop: "6px",
+      }}
+    >
+      {TRANSITION_ITEMS.map((item) => {
+        const active = currentVal === item.value;
+        return (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onChange(item.value)}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "3px",
+              padding: "7px 4px",
+              borderRadius: "6px",
+              border: active ? "1.5px solid #f59e0b" : "1px solid rgba(255,255,255,0.12)",
+              background: active
+                ? "linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.15) 100%)"
+                : "rgba(255, 255, 255, 0.04)",
+              color: active ? "#fef08a" : "var(--text-muted, #ccc)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span style={{ fontSize: "14px", lineHeight: 1 }}>{item.icon}</span>
+            <span style={{ fontSize: "0.68rem", fontWeight: active ? 700 : 500, whiteSpace: "nowrap" }}>
+              {item.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 interface Props {
   clip: TimelineClip;
@@ -105,7 +170,7 @@ export function Inspector({
   variant = "bar",
 }: Props) {
   const def = TRACK_BY_ID[clip.track];
-  const isAudio = clip.track === "narration" || clip.track === "music";
+  const isAudio = clip.track === "narration" || clip.track === "music" || clip.track === "sfx";
   const name =
     clip.track === "text"
       ? clip.text || "Caption"
@@ -119,7 +184,7 @@ export function Inspector({
         {/* Header */}
         <div className="inspector-sidebar-header">
           <span className="inspector-track-icon" style={{ background: def.softColor, borderColor: `${def.color}55`, color: def.color }}>
-            {clip.track === "video" ? (clip.video_path ? <Film size={13} /> : <ImageIcon size={13} />) : clip.track === "text" ? <Type size={13} /> : clip.track === "music" ? <Music2 size={13} /> : <Mic size={13} />}
+            {clip.track === "video" ? (clip.video_path ? <Film size={13} /> : <ImageIcon size={13} />) : clip.track === "text" ? <Type size={13} /> : clip.track === "music" ? <Music2 size={13} /> : clip.track === "sfx" ? <Volume2 size={13} /> : <Mic size={13} />}
           </span>
           <div className="inspector-title-group">
             <strong title={name}>{name}</strong>
@@ -309,19 +374,31 @@ export function Inspector({
           </div>
         )}
 
-        {/* Motion Section */}
+        {/* Visual Transition Section */}
         {clip.track === "video" && (
           <div className="inspector-section">
-            <label className="inspector-section-label">Motion Effect</label>
-            <select
-              value={clip.motion_effect ?? "none"}
-              onChange={(e) => onPatch({ motion_effect: e.target.value })}
-              className="inspector-select"
-            >
-              {ZOOM_OPTIONS.map((z) => (
-                <option key={z.value} value={z.value}>{z.label}</option>
-              ))}
-            </select>
+            <label className="inspector-section-label">Visual Transition</label>
+            <TransitionGridPicker
+              value={clip.transition ?? "none"}
+              onChange={(t) => onPatch({ transition: t })}
+            />
+            {clip.transition && clip.transition !== "none" && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 4 }}>
+                  <span>Transition Duration</span>
+                  <span>{(clip.transition_duration ?? 1.0).toFixed(1)}s</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.2}
+                  max={3.0}
+                  step={0.1}
+                  value={clip.transition_duration ?? 1.0}
+                  onChange={(e) => onPatch({ transition_duration: parseFloat(e.target.value) })}
+                  className="inspector-volume-slider"
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -630,15 +707,15 @@ export function Inspector({
           </Field>
         )}
         {clip.track === "video" && (
-          <Field label="Motion">
+          <Field label="Transition">
             <select
-              value={clip.motion_effect ?? "none"}
-              onChange={(e) => onPatch({ motion_effect: e.target.value })}
+              value={clip.transition ?? "none"}
+              onChange={(e) => onPatch({ transition: e.target.value })}
               style={{ width: 110, padding: "3px 7px", fontSize: 11.5 }}
             >
-              {ZOOM_OPTIONS.map((z) => (
-                <option key={z.value} value={z.value}>
-                  {z.label}
+              {TRANSITION_ITEMS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.icon} {t.label}
                 </option>
               ))}
             </select>

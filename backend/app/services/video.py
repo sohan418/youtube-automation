@@ -621,7 +621,7 @@ class VideoService:
     ) -> tuple[list[dict], list[dict], float, list[dict]]:
         ts = track_states or {}
         ts_muted = {
-            k: bool((ts.get(k) or {}).get("muted")) for k in ("video", "narration", "music")
+            k: bool((ts.get(k) or {}).get("muted")) for k in ("video", "narration", "music", "sfx")
         }
         visuals = [c for c in clips if c.get("track") == "video"]
         narrations = [
@@ -635,10 +635,10 @@ class VideoService:
         music_clips = [
             c
             for c in clips
-            if c.get("track") == "music"
+            if c.get("track") in ("music", "sfx")
             and c.get("audio_path")
             and not c.get("muted")
-            and not ts_muted["music"]
+            and not ts_muted.get(c.get("track"), False)
         ]
         visuals.sort(key=lambda c: float(c.get("start") or 0))
 
@@ -660,6 +660,7 @@ class VideoService:
         cursor = 0.0
         idx = 0
 
+        scene_clip_counter: dict = {}
         for v in visuals:
             tl_start = float(v.get("start") or 0)
             duration = float(v.get("duration") or 0)
@@ -670,7 +671,7 @@ class VideoService:
                 plans.append(
                     {
                         "order": idx,
-                        "key": f"g{idx:02d}",
+                        "key": f"p{idx:03d}_gap",
                         "kind": "gap",
                         "media": [],
                         "audio_ok": False,
@@ -687,22 +688,66 @@ class VideoService:
             vp = v.get("video_path")
             if vp:
                 p = self._resolve_scene_path(vp)
+                if not p.exists() and project_path:
+                    p2 = project_path / "clips" / Path(vp).name
+                    if p2.exists():
+                        p = p2
+                    else:
+                        p3 = project_path / Path(vp).name
+                        if p3.exists():
+                            p = p3
                 if p.exists() and self._is_valid_video(p):
                     media.append({"kind": "video", "path": p})
             if not media:
                 ip = v.get("image_path")
                 if ip:
                     p = self._resolve_scene_path(ip)
+                    if not p.exists() and project_path:
+                        p2 = project_path / "images" / Path(ip).name
+                        if p2.exists():
+                            p = p2
+                        else:
+                            p3 = project_path / Path(ip).name
+                            if p3.exists():
+                                p = p3
                     if p.exists():
                         media.append({"kind": "image", "path": p})
             if not media:
-                scene = scene_map.get(v.get("scene_id"))
+                sid = v.get("scene_id")
+                scene = scene_map.get(sid)
+                if scene is None and sid is not None:
+                    try:
+                        scene = scene_map.get(int(sid))
+                    except (ValueError, TypeError):
+                        pass
                 if scene:
-                    media = self._resolve_scene_media(scene, project_path)
+                    scene_media = self._resolve_scene_media(scene, project_path)
+                    if scene_media:
+                        sub_idx = scene_clip_counter.get(sid, 0)
+                        item = scene_media[sub_idx % len(scene_media)]
+                        media = [item]
+                        scene_clip_counter[sid] = sub_idx + 1
             if not media:
-                logger.warning(
-                    "Timeline clip %s has no resolvable media — skipped", v.get("id")
+                logger.info(
+                    "Timeline clip %s has no media — rendering black placeholder scene", v.get("id")
                 )
+                plans.append(
+                    {
+                        "order": idx,
+                        "key": f"p{idx:03d}_gap",
+                        "kind": "gap",
+                        "media": [],
+                        "audio_ok": False,
+                        "full_audio": None,
+                        "audio_off": 0.0,
+                        "duration": duration,
+                        "motion_effect": "none",
+                        "transition": (v.get("transition") or "none"),
+                        "transition_duration": float(v.get("transition_duration") or 1.0),
+                    }
+                )
+                idx += 1
+                cursor = start + duration
                 continue
 
             scene = scene_map.get(v.get("scene_id"))
@@ -716,17 +761,21 @@ class VideoService:
             is_muted = bool(v.get("muted") or ts_muted["video"] or clip_vol <= 0.001)
             clip_speed = max(0.25, min(4.0, float(v.get("speed") if v.get("speed") is not None else 1.0)))
 
+            trans = (v.get("transition") or (scene or {}).get("transition") or "none")
+            trans_dur = float(v.get("transition_duration") or 1.0)
+
             sig = (
-                f"v5|{idx}|{duration:.3f}|{Path(str(media[0]['path'])).name}"
+                f"v6|{idx}|{duration:.3f}|{Path(str(media[0]['path'])).name}"
                 f"|{clip_vol:.2f}"
                 f"|{1 if is_muted else 0}"
                 f"|{clip_speed:.2f}"
+                f"|{trans}|{trans_dur:.2f}"
             )
             digest = hashlib.md5(sig.encode()).hexdigest()[:8]
             plans.append(
                 {
                     "order": idx,
-                    "key": f"c{idx:02d}_{digest}",
+                    "key": f"p{idx:03d}_c_{digest}",
                     "kind": "clip",
                     "media": media,
                     "audio_ok": False,
@@ -741,6 +790,10 @@ class VideoService:
                     "motion_effect": (v.get("motion_effect") or (scene or {}).get("motion_effect") or "none")
                     if isinstance(scene, dict) or scene is None
                     else "none",
+                    "transition": (v.get("transition") or (scene or {}).get("transition") or "none")
+                    if isinstance(scene, dict) or scene is None
+                    else "none",
+                    "transition_duration": float(v.get("transition_duration") or 1.0),
                 }
             )
             idx += 1
@@ -779,6 +832,8 @@ class VideoService:
             m_in = float(m.get("audio_in") or 0)
             off = min(max(m_in, 0.0), max(real - 0.05, 0.0))
             vol = float(m.get("volume") if m.get("volume") is not None else 0.5)
+            src_type = str(m.get("track") or "music")
+            default_fade_out = 2.0 if src_type == "music" else 0.0
             narration_events.append(
                 {
                     "pos": round(max(ms, 0.0), 3),
@@ -786,9 +841,9 @@ class VideoService:
                     "offset": round(off, 3),
                     "volume": max(0.0, min(2.0, vol)),
                     "fade_in": float(m.get("fade_in") or 0),
-                    "fade_out": float(m.get("fade_out") or 2.0),
+                    "fade_out": float(m.get("fade_out") if m.get("fade_out") is not None else default_fade_out),
                     "dur": round(max(real - off, 0.0), 3),
-                    "src": "music",
+                    "src": src_type,
                 }
             )
         narration_events.sort(key=lambda e: e["pos"])
@@ -799,32 +854,49 @@ class VideoService:
                 total_time = max(total_time, float(e["pos"]) + float(e["dur"]))
 
         tail = total_time - cursor
-        if tail > 0.05 and plans:
-            last_clip = None
-            for p in reversed(plans):
-                if p["kind"] == "clip":
-                    last_clip = p
-                    break
-            if last_clip is not None:
-                logger.info(
-                    "Padding final clip %s by %.3fs to cover trailing audio",
-                    last_clip["key"], tail,
-                )
-                last_clip["duration"] = round(last_clip["duration"] + tail, 3)
+        if tail > 0.05:
+            logger.info("Adding trailing black scene of %.3fs to cover voice/audio", tail)
+            plans.append(
+                {
+                    "order": idx,
+                    "key": f"p{idx:03d}_tail",
+                    "kind": "gap",
+                    "media": [],
+                    "audio_ok": False,
+                    "full_audio": None,
+                    "audio_off": 0.0,
+                    "duration": round(tail, 3),
+                    "motion_effect": "none",
+                    "transition": "none",
+                    "transition_duration": 0.0,
+                }
+            )
+            cursor = total_time
 
         return plans, subtitle_entries, total_time, narration_events
 
     def _create_black_segment(
-        self, duration: float, output: Path, resolution: str
+        self, duration: float, output: Path, resolution: str, label_text: str = "NO MEDIA AVAILABLE"
     ) -> bool:
         width, height = self._parse_resolution(resolution)
+        font_arg = ""
+        win_font = Path("C:/Windows/Fonts/arial.ttf")
+        if win_font.exists():
+            esc_path = win_font.as_posix().replace(":", "\\:")
+            font_arg = f"fontfile='{esc_path}':"
+        vf = (
+            f"drawtext={font_arg}"
+            f"text='{label_text}':fontcolor=0x9CA3AF:fontsize={max(24, width // 40)}:"
+            f"x=(w-text_w)/2:y=(h-text_h)/2"
+        )
         cmd = [
             settings.ffmpeg_path,
             "-y",
             "-f", "lavfi",
-            "-i", f"color=c=black:s={width}x{height}:r=25",
+            "-i", f"color=c=0x111827:s={width}x{height}:r=25",
             "-f", "lavfi",
             "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-vf", vf,
             "-t", f"{duration:.3f}",
             "-c:v", "libx264",
             "-preset", "ultrafast",
@@ -878,11 +950,16 @@ class VideoService:
             logger.info("[build:%s] %-20s %.2fs", slug, step, now - t_prev)
             t_prev = now
 
+        logger.info("==========================================================================")
+        logger.info("[build:%s] STARTING VIDEO RENDERING PIPELINE", slug)
+        logger.info("[build:%s] Resolution: %s | Ratio: %s | Rebuild: %s", slug, resolution, ratio, force_rebuild)
+        logger.info("==========================================================================")
+
         concat_file = video_dir / "concat_list.txt"
         output_path = video_dir / "final.mp4"
 
         if force_rebuild:
-            logger.info("Force rebuild requested — removing existing segments and output")
+            logger.info("[build:%s] Force rebuild requested — removing existing segments and output", slug)
             for old in video_dir.glob("segment_*.mp4"):
                 try:
                     old.unlink()
@@ -909,8 +986,8 @@ class VideoService:
                 if not unlocked:
                     alt = video_dir / f"final_{int(_time.time())}.mp4"
                     logger.warning(
-                        "final.mp4 is locked (open in a player?) - writing to %s instead",
-                        alt.name,
+                        "[build:%s] final.mp4 is locked (open in a player?) - writing to %s instead",
+                        slug, alt.name,
                     )
                     output_path = alt
 
@@ -920,7 +997,23 @@ class VideoService:
         current_time = 0.0
         narration_events: list[dict] = []
         if timeline_clips:
-            scene_map = {d.get("id"): d for d in scenes if isinstance(d, dict)}
+            scene_map: dict = {}
+            for d in scenes:
+                if isinstance(d, dict):
+                    sid = d.get("id")
+                    if sid is not None:
+                        scene_map[sid] = d
+                        try:
+                            scene_map[int(sid)] = d
+                        except (ValueError, TypeError):
+                            pass
+                    sidx = d.get("order_index")
+                    if sidx is not None:
+                        scene_map[sidx] = d
+                        try:
+                            scene_map[int(sidx)] = d
+                        except (ValueError, TypeError):
+                            pass
             plans, subtitle_entries, current_time, narration_events = (
                 self._plans_from_timeline(timeline_clips, scene_map, project_path, track_states)
             )
@@ -931,7 +1024,23 @@ class VideoService:
 
                 media = self._resolve_scene_media(scene, project_path)
                 if not media:
-                    logger.warning("Scene %d has no resolvable media — skipping", order)
+                    logger.info("Scene %d has no media — rendering black placeholder scene", order)
+                    plans.append(
+                        {
+                            "order": order,
+                            "key": f"gap{order:02d}",
+                            "kind": "gap",
+                            "media": [],
+                            "audio_ok": False,
+                            "full_audio": None,
+                            "audio_off": 0.0,
+                            "duration": duration,
+                            "motion_effect": "none",
+                            "transition": scene.get("transition") or "none",
+                            "transition_duration": 1.0,
+                        }
+                    )
+                    current_time += duration
                     continue
 
                 audio_path = scene.get("audio_path")
@@ -971,6 +1080,29 @@ class VideoService:
 
         _timed("prepare plans")
 
+        logger.info("[build:%s] === PREPARED %d RENDERING PLANS (Total Duration: %.2fs) ===", slug, len(plans), current_time)
+        for idx, plan in enumerate(plans, start=1):
+            kind = plan.get("kind", "clip")
+            order = plan.get("order", 0)
+            dur = plan.get("duration", 0.0)
+            media = plan.get("media") or []
+            trans = plan.get("transition", "none")
+            trans_dur = plan.get("transition_duration", 0.0)
+            if kind == "gap":
+                logger.info("[build:%s]   Step %02d/%02d [GAP]     | Dur: %5.2fs | Action: Render black placeholder (#111827)", slug, idx, len(plans), dur)
+            else:
+                m_summary = ", ".join([f"{m['kind']}:{Path(m['path']).name}" for m in media]) if media else "NO MEDIA AVAILABLE"
+                logger.info("[build:%s]   Step %02d/%02d [SCENE %02d] | Dur: %5.2fs | Trans: %-10s (%.1fs) | Media: %s", slug, idx, len(plans), order, dur, trans, trans_dur, m_summary)
+
+        if narration_events:
+            logger.info("[build:%s] === NARRATION OVERLAY TRACKS (%d events) ===", slug, len(narration_events))
+            for nev in narration_events:
+                aud_fn = Path(nev.get("audio_path", "")).name if nev.get("audio_path") else "None"
+                logger.info("[build:%s]   Track: %-10s | Start: %6.2fs | Dur: %5.2fs | Audio: %s", slug, nev.get("src", "narration"), float(nev.get("start", 0)), float(nev.get("duration", 0)), aud_fn)
+
+        if subtitle_entries:
+            logger.info("[build:%s] === SUBTITLE ENTRIES (%d total) ===", slug, len(subtitle_entries))
+
         if not plans:
             out = self._create_placeholder_video(slug, resolution)
             _timed("placeholder video")
@@ -984,6 +1116,8 @@ class VideoService:
             return video_dir / f"segment_{plan['key']}.mp4"
 
         def _needs_render(plan: dict) -> bool:
+            if force_rebuild:
+                return True
             seg = _segment_path(plan)
             if not seg.exists():
                 return True
@@ -1150,20 +1284,25 @@ class VideoService:
                     futures = {pool.submit(_build_one, p): p for p in plans}
                     for future in as_completed(futures):
                         try:
-                            result = future.result()
-                            if result:
-                                segment_files.append(result)
+                            future.result()
                         except Exception:
                             logger.exception("Scene segment failed")
             else:
                 for plan in plans:
-                    result = _build_one(plan)
-                    if result:
-                        segment_files.append(result)
+                    _build_one(plan)
 
         _timed("render segments")
 
-        segment_files.sort()
+        # Collect produced segment files in STRICT timeline plan order
+        segment_files = []
+        valid_plans = []
+        for plan in plans:
+            seg = _segment_path(plan)
+            if seg.exists() and seg.stat().st_size > 1024:
+                segment_files.append(seg)
+                valid_plans.append(plan)
+        plans = valid_plans
+
         if not segment_files:
             err = "No scene segments produced"
             if build_errors:
@@ -1211,28 +1350,44 @@ class VideoService:
             if not ass_path.exists():
                 ass_path = None
 
-        # Fast, modular FFmpeg pass: stream-copy concat -> narrations -> background music -> subtitles
-        self.set_progress(slug, 93, "joining", "Joining video segments...")
-        self._concat_segments(concat_file, output_path, reencode=False)
+        # Fast, modular FFmpeg pass: stream-copy concat / xfade transitions -> narrations -> background music -> subtitles
+        has_transitions = any(p.get("transition") and p.get("transition") not in ("none", "cut") for p in plans)
+        if has_transitions and len(segment_files) > 1:
+            logger.info("[build:%s] STEP: Joining %d scene segment files with xfade visual transitions...", slug, len(segment_files))
+            self.set_progress(slug, 93, "joining", "Applying visual scene transitions...")
+            ok = self._concat_with_transitions(segment_files, plans, output_path, resolution)
+            if not ok or not output_path.exists():
+                logger.warning("[build:%s] xfade transition build failed — falling back to standard concat", slug)
+                self._concat_segments(concat_file, output_path, reencode=False)
+        else:
+            logger.info("[build:%s] STEP: Joining %d video segments (concat)...", slug, len(segment_files))
+            self.set_progress(slug, 93, "joining", "Joining video segments...")
+            self._concat_segments(concat_file, output_path, reencode=False)
+
         if output_path.exists():
             if narration_events:
+                logger.info("[build:%s] STEP: Overlaying %d narration voice audio tracks...", slug, len(narration_events))
                 self.set_progress(slug, 94, "joining", "Overlaying voice narration...")
                 output_path = self._overlay_narrations(output_path, narration_events, current_time)
             if music_path:
+                logger.info("[build:%s] STEP: Mixing background music track: %s (vol=%.2f)...", slug, music_path.name, music_volume)
                 self.set_progress(slug, 95, "joining", "Mixing background music...")
                 mixed = self._add_background_music(output_path, music_path, video_dir, music_volume)
                 if mixed != output_path and mixed.exists() and mixed.stat().st_size > 1024:
                     output_path = mixed
+
         # Resolve channel logo if enabled
         logo_path: Path | None = None
         if logo_overlay and output_path.exists():
             logo = self._get_branding_logo(slug)
             if logo and logo.exists() and logo.stat().st_size > 0:
                 logo_path = logo
+                logger.info("[build:%s] STEP: Channel logo overlay resolved: %s", slug, logo_path.name)
             else:
-                logger.warning("Logo overlay enabled but channel logo unavailable — skipping")
+                logger.warning("[build:%s] Logo overlay enabled but channel logo unavailable — skipping", slug)
 
         if ass_path or logo_path:
+            logger.info("[build:%s] STEP: Applying subtitle file (%s) & branding logo (%s)...", slug, ass_path.name if ass_path else "None", logo_path.name if logo_path else "None")
             self.set_progress(slug, 96, "joining", "Applying subtitles & logo...")
             post_processed = video_dir / "final_post.mp4"
             if self._apply_subtitles_and_logo(
@@ -1250,8 +1405,8 @@ class VideoService:
                     post_processed.rename(output_path)
                 except (PermissionError, OSError):
                     logger.warning(
-                        "Could not replace %s (locked/open?) — using %s as the final video",
-                        output_path.name, post_processed.name,
+                        "[build:%s] Could not replace %s (locked/open?) — using %s as final video",
+                        slug, output_path.name, post_processed.name,
                     )
                     output_path = post_processed
 
@@ -1261,7 +1416,11 @@ class VideoService:
         self.set_progress(
             slug, 100, "done", "Video built successfully", running=False, output=relative
         )
-        logger.info("[build:%s] %-20s %.2fs", slug, "TOTAL BUILD TIME", time.perf_counter() - t0)
+        total_build_dur = time.perf_counter() - t0
+        logger.info("==========================================================================")
+        logger.info("[build:%s] VIDEO RENDERING PIPELINE COMPLETED SUCCESSFULLY IN %.2fs", slug, total_build_dur)
+        logger.info("[build:%s] Final Output File: %s", slug, relative)
+        logger.info("==========================================================================")
         return relative
 
     @staticmethod
@@ -1597,29 +1756,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return None
 
     def _get_motion_filter(self, motion_effect: str, width: int, height: int, duration: float) -> str:
-        frames = max(int(25 * duration), 1)
-        if motion_effect == "none":
-            return f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1"
-        factor = 4 if max(width, height) <= 1920 else 2
-        up_w = width * factor
-        up_h = height * factor
-        base = f"scale={up_w}:{up_h}:force_original_aspect_ratio=increase,crop={up_w}:{up_h}"
-        tail = f"d={frames}:s={width}x{height}:fps=25"
-        center = "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        if motion_effect == "zoom_in":
-            return f"{base},zoompan=z='min(1+0.25*on/{frames},1.25)':{center}:{tail},setsar=1"
-        elif motion_effect == "zoom_out":
-            return f"{base},zoompan=z='max(1.25-0.25*on/{frames},1.0)':{center}:{tail},setsar=1"
-        elif motion_effect == "pan_right":
-            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)*(on/{frames})':y='(ih-ih/zoom)/2':{tail},setsar=1"
-        elif motion_effect == "pan_left":
-            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)*(1-on/{frames})':y='(ih-ih/zoom)/2':{tail},setsar=1"
-        elif motion_effect == "pan_up":
-            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*(1-on/{frames})':{tail},setsar=1"
-        elif motion_effect == "pan_down":
-            return f"{base},zoompan=z=1.15:x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*(on/{frames})':{tail},setsar=1"
-        else:
-            return f"{base},setsar=1"
+        return f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1"
 
     def _create_segment_with_audio(
         self,
@@ -1797,6 +1934,135 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if not ok:
             logger.error("Concat failed for %s (reencode=%s)", output.name, reencode)
         return ok
+
+    def _concat_with_transitions(
+        self,
+        segment_files: list[Path],
+        plans: list[dict],
+        output: Path,
+        resolution: str = "1920x1080",
+    ) -> bool:
+        """Join video segments using FFmpeg xfade transition filter complex."""
+        valid = [seg for seg in segment_files if seg.exists() and seg.stat().st_size > 1024]
+        if not valid:
+            return False
+        if len(valid) == 1:
+            return self._concat_segments_direct([valid[0]], output)
+
+        slug = output.parent.name
+        logger.info("==========================================================================")
+        logger.info("[build:%s] === DETAILED SEGMENT JOINING & TRANSITION LOGS ===", slug)
+        logger.info("[build:%s] Total Input Segments: %d | Target Resolution: %s", slug, len(valid), resolution)
+        logger.info("==========================================================================")
+
+        inputs: list[str] = []
+        for seg in valid:
+            inputs.extend(["-i", str(seg)])
+
+        filter_parts: list[str] = []
+        w, h = resolution.split("x") if "x" in resolution else ("1920", "1080")
+        for i in range(len(valid)):
+            filter_parts.append(
+                f"[{i}:v]scale=w={w}:h={h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,settb=1/30,setpts=PTS-STARTPTS,format=yuv420p[v{i}_norm]"
+            )
+            info = self._probe_video_info(valid[i])
+            dur = float(info.get("duration") if info and info.get("duration") else (plans[i].get("duration") or 5.0)) if i < len(plans) else 5.0
+            if self._has_audio_stream(valid[i]):
+                filter_parts.append(
+                    f"[{i}:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a{i}_norm]"
+                )
+            else:
+                filter_parts.append(
+                    f"anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:{dur:.3f},aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a{i}_norm]"
+                )
+
+        last_v = "v0_norm"
+        accumulated_offset = 0.0
+
+        xfade_map = {
+            "crossfade": "fade",
+            "fade_black": "fadeblack",
+            "fade_white": "fadewhite",
+            "zoom_in": "zoomin",
+            "whip_pan": "hlwind",
+            "glitch": "pixelize",
+            "slide_left": "slideleft",
+            "slide_right": "slideright",
+        }
+
+        for idx in range(len(valid) - 1):
+            p_curr = plans[idx] if idx < len(plans) else {}
+            p_next = plans[idx + 1] if idx + 1 < len(plans) else {}
+
+            info_curr = self._probe_video_info(valid[idx])
+            dur_curr = float(info_curr.get("duration") if info_curr and info_curr.get("duration") else (p_curr.get("duration") or 5.0))
+
+            trans = str(p_next.get("transition") or p_curr.get("transition") or "none").lower()
+            next_v = f"v{idx + 1}_norm"
+            out_v = f"v{idx + 1}" if idx < len(valid) - 2 else "vout"
+
+            if trans in ("none", "cut"):
+                filter_parts.append(
+                    f"[{last_v}][{next_v}]concat=n=2:v=1:a=0,settb=1/30,setpts=PTS-STARTPTS[{out_v}]"
+                )
+                logger.info(
+                    "[build:%s]   [JOIN %02d/%02d] File: %-35s | Probed Dur: %6.2fs | TL Start: %6.2fs | Trans: Hard Cut (concat) | End: %6.2fs",
+                    slug, idx + 1, len(valid), valid[idx].name, dur_curr, accumulated_offset, accumulated_offset + dur_curr
+                )
+                accumulated_offset += dur_curr
+            else:
+                trans_dur = float(p_next.get("transition_duration") or p_curr.get("transition_duration") or 1.0)
+                trans_dur = max(0.2, min(trans_dur, dur_curr * 0.5))
+                xfade_name = xfade_map.get(trans, "fade")
+                offset = max(0.0, accumulated_offset + dur_curr - trans_dur)
+
+                logger.info(
+                    "[build:%s]   [JOIN %02d/%02d] File: %-35s | Probed Dur: %6.2fs | TL Start: %6.2fs | Trans: %-10s (%.2fs) | xfade Offset: %6.2fs",
+                    slug, idx + 1, len(valid), valid[idx].name, dur_curr, accumulated_offset, trans, trans_dur, offset
+                )
+
+                accumulated_offset = offset
+                filter_parts.append(
+                    f"[{last_v}][{next_v}]xfade=transition={xfade_name}:duration={trans_dur:.4f}:offset={offset:.4f},settb=1/30,setpts=PTS-STARTPTS[{out_v}]"
+                )
+
+            last_v = out_v
+
+        # Concat all audio streams in sequence
+        audio_inputs = "".join(f"[a{i}_norm]" for i in range(len(valid)))
+        filter_parts.append(f"{audio_inputs}concat=n={len(valid)}:v=0:a=1[aout]")
+
+        # Log final segment details
+        info_last = self._probe_video_info(valid[-1])
+        p_last = plans[-1] if plans else {}
+        dur_last = float(info_last.get("duration") if info_last and info_last.get("duration") else (p_last.get("duration") or 5.0))
+        final_video_len = accumulated_offset + dur_last
+        logger.info(
+            "[build:%s]   [JOIN %02d/%02d] File: %-35s | Probed Dur: %6.2fs | TL Start: %6.2fs | Final Video End: %6.2fs",
+            slug, len(valid), len(valid), valid[-1].name, dur_last, accumulated_offset, final_video_len
+        )
+        logger.info("[build:%s] Calculated Concatenated Visual & Audio Track Length: %.2fs", slug, final_video_len)
+        logger.info("==========================================================================")
+
+        filter_complex = "; ".join(filter_parts)
+
+        cmd = [
+            settings.ffmpeg_path,
+            "-y",
+            *inputs,
+            "-filter_complex", filter_complex,
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            str(output),
+        ]
+
+        logger.info("[build:%s] Executing FFmpeg xfade transition filter graph...", slug)
+        return self._run_ffmpeg(cmd)
 
     def _concat_list(self, segments: list[Path], output: Path, reencode: bool = False) -> None:
         valid = [seg for seg in segments if seg.exists() and seg.stat().st_size > 1024]

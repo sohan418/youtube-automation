@@ -252,16 +252,7 @@ export default function TimelineEditor({
       cb(null);
     }
   }, [
-    sel?.id,
-    sel?.start,
-    sel?.duration,
-    sel?.volume,
-    sel?.muted,
-    sel?.text,
-    sel?.audio_in,
-    sel?.fade_in,
-    sel?.fade_out,
-    sel?.motion_effect,
+    sel,
     selDef?.id,
     selSrcDur,
     t,

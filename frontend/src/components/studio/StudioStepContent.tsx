@@ -270,21 +270,23 @@ export default function StudioStepContent({ ctx, playbackState, onCollapse }: Pr
             ctx.timeline?.music?.file_path ||
             ctx.timeline?.clips?.find((c) => c.track === "music")?.audio_path
           }
-          onAddToTimeline={(track) => {
+          onAddToTimeline={(track, targetTrack = "music") => {
             let baseTimeline = ctx.timeline;
-            if (!baseTimeline) {
+            if (!baseTimeline || !baseTimeline.clips || baseTimeline.clips.length === 0) {
+              const scenes = ctx.scenes || [];
               let t = 0;
               const clips: TimelineClip[] = [];
-              for (const s of ctx.scenes) {
-                const duration = s.duration_seconds ?? 5;
+              for (let i = 0; i < scenes.length; i++) {
+                const s = scenes[i];
+                const duration = Math.max(s.duration_seconds ?? 5, 1);
                 clips.push({
                   id: `v-${s.id}-${t.toFixed(2)}`,
                   scene_id: s.id,
                   track: "video",
                   start: t,
                   duration,
-                  image_path: s.image_path || s.images?.[0]?.file_path || null,
-                  video_path: s.video_path,
+                  image_path: s.image_path || null,
+                  video_path: s.video_path || null,
                   audio_path: null,
                   audio_in: 0,
                   audio_out: null,
@@ -311,40 +313,39 @@ export default function StudioStepContent({ ctx, playbackState, onCollapse }: Pr
               baseTimeline = { version: 1, duration: t, clips };
             }
 
-            const filteredClips = baseTimeline.clips.filter((c) => c.track !== "music");
-
-            const musicDur =
+            const insertStart = playbackState?.time ?? 0;
+            const clipDur =
               track.duration_seconds && track.duration_seconds > 0
                 ? track.duration_seconds
                 : Math.max(baseTimeline.duration || 30, 30);
 
             const newClip: TimelineClip = {
-              id: `music-${Date.now()}`,
+              id: `${targetTrack}-${Date.now()}`,
               scene_id: -1,
-              track: "music",
-              start: 0,
-              duration: musicDur,
+              track: targetTrack,
+              start: insertStart,
+              duration: clipDur,
               image_path: null,
               video_path: null,
               audio_path: track.file_path,
               audio_in: 0,
-              audio_out: musicDur,
-              volume: 0.15,
+              audio_out: clipDur,
+              volume: targetTrack === "music" ? 0.15 : 0.8,
               motion_effect: "none",
             };
 
-            const totalDuration = Math.max(baseTimeline.duration, musicDur);
+            const totalDuration = Math.max(baseTimeline.duration, insertStart + clipDur);
 
             const updated: TimelineData = {
               ...baseTimeline,
               duration: totalDuration,
-              clips: [...filteredClips, newClip],
-              music: { file_path: track.file_path, volume: 0.15 },
+              clips: [...(baseTimeline.clips || []), newClip],
+              ...(targetTrack === "music" ? { music: { file_path: track.file_path, volume: 0.15 } } : {}),
             };
 
             ctx.setTimeline(updated);
             api.saveTimeline(ctx.projectId, updated).catch((err) => {
-              console.error("Failed to save timeline with music track:", err);
+              console.error("Failed to save timeline with audio track:", err);
             });
           }}
           onCollapse={onCollapse}

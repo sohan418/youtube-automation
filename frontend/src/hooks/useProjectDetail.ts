@@ -215,6 +215,16 @@ export function useProjectDetail(projectId: number) {
     }
   }, [projectId]);
 
+  const refreshVideoStatus = useCallback(async () => {
+    try {
+      const st = await api.videoStatus(projectId);
+      if (st) setVideoStatus(st);
+      return st;
+    } catch {
+      return null;
+    }
+  }, [projectId]);
+
   const fetchStepData = useCallback(
     async (stepKey: string, force = false) => {
       if (!project) return;
@@ -1449,7 +1459,7 @@ export function useProjectDetail(projectId: number) {
     openSceneEdit, cancelSceneEdit, saveSceneEdit, clearScenes, updateSceneEffect,
     startRecording, toggleRecordingPause, stopRecording, handleAudioFileSelected,
     clearSceneAudio, combineAudioPreview, downloadCombinedAudio, audioPreviewUrl, formatRecordTime, buildVideo, cancelVideoBuild,
-    importVideo,
+    importVideo, refreshVideoStatus,
     handleTileDragOver, handleTileDrop, handleSceneDrop, handleUploadTileDrop, handlePaste,
     audioInputRef, uploadYouTube,
   };

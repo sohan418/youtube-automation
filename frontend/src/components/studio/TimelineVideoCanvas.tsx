@@ -304,6 +304,45 @@ export default function TimelineVideoCanvas({
 
   const captionText = playbackState?.activeCaption || activeScene?.narration || null;
   const motionEffect = activeVideo?.motion_effect || activeScene?.motion_effect || "none";
+  const transitionEffect = activeVideo?.transition || activeScene?.transition || "none";
+  const transitionDuration = activeVideo?.transition_duration ?? 1.0;
+
+  const isTransitioningStart =
+    transitionEffect !== "none" &&
+    transitionEffect !== "cut" &&
+    clipTime < transitionDuration;
+
+  const tProg = isTransitioningStart ? Math.min(1, Math.max(0, clipTime / transitionDuration)) : 1;
+
+  let transitionTransform = "scale(1)";
+  let transitionOpacity = 1;
+  let transitionFilter = "none";
+  let overlayBackground: string | null = null;
+
+  if (isTransitioningStart) {
+    if (transitionEffect === "crossfade") {
+      transitionOpacity = tProg;
+    } else if (transitionEffect === "fade_black") {
+      overlayBackground = `rgba(0, 0, 0, ${1 - tProg})`;
+    } else if (transitionEffect === "fade_white") {
+      overlayBackground = `rgba(255, 255, 255, ${1 - tProg})`;
+    } else if (transitionEffect === "zoom_in") {
+      const s = 1.35 - 0.35 * tProg;
+      transitionTransform = `scale(${s})`;
+      transitionOpacity = 0.3 + 0.7 * tProg;
+    } else if (transitionEffect === "slide_left") {
+      transitionTransform = `translateX(${(1 - tProg) * 100}%)`;
+    } else if (transitionEffect === "slide_right") {
+      transitionTransform = `translateX(${-(1 - tProg) * 100}%)`;
+    } else if (transitionEffect === "whip_pan") {
+      transitionTransform = `translateX(${(1 - tProg) * 120}%)`;
+      transitionFilter = `blur(${Math.round((1 - tProg) * 8)}px)`;
+    } else if (transitionEffect === "glitch") {
+      const shake = (1 - tProg) * 8;
+      transitionTransform = `translate(${(Math.sin(clipTime * 40)) * shake}px, ${(Math.cos(clipTime * 40)) * shake}px)`;
+      transitionFilter = `hue-rotate(${Math.round((1 - tProg) * 180)}deg) contrast(${1 + (1 - tProg) * 0.8})`;
+    }
+  }
 
   const { containerStyle, textStyle } = getSubtitleOverlayStyles(
     subtitlePosition,
@@ -359,6 +398,12 @@ export default function TimelineVideoCanvas({
     return <span style={textStyle}>{captionText}</span>;
   };
 
+  const finalImgTransform = isTransitioningStart
+    ? transitionTransform
+    : playing && motionEffect === "zoom_in"
+      ? "scale(1.12)"
+      : "scale(1)";
+
   return (
     <div
       ref={frameRef}
@@ -380,7 +425,15 @@ export default function TimelineVideoCanvas({
           muted
           playsInline
           className="preview-frame-media"
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            opacity: transitionOpacity,
+            transform: transitionTransform,
+            filter: transitionFilter,
+            transition: isTransitioningStart ? "none" : "all 0.1s ease",
+          }}
         />
       ) : imageSrc ? (
         <img
@@ -391,12 +444,27 @@ export default function TimelineVideoCanvas({
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            transition: playing ? "transform 5s ease-out" : "none",
-            transform: playing && motionEffect === "zoom_in" ? "scale(1.12)" : "scale(1)",
+            opacity: transitionOpacity,
+            filter: transitionFilter,
+            transition: isTransitioningStart ? "none" : playing ? "transform 5s ease-out" : "none",
+            transform: finalImgTransform,
           }}
         />
       ) : (
         <div className="preview-empty">No media selected for active scene</div>
+      )}
+
+      {/* Visual Transition Overlay Layer (Fade Black / Fade White) */}
+      {overlayBackground && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 25,
+            background: overlayBackground,
+            pointerEvents: "none",
+          }}
+        />
       )}
 
       {/* Dynamic Subtitle Overlay - Interactive Drag to Position */}

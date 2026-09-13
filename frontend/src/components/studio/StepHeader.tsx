@@ -13,7 +13,7 @@ interface StepHeaderProps {
 
 export default function StepHeader({
   title,
-  subtitle,
+  subtitle: _subtitle,
   count,
   children,
   onCollapse,
@@ -26,7 +26,6 @@ export default function StepHeader({
           {title}
           {count != null && <span className="step-header-count"> ({count})</span>}
         </h2>
-        {subtitle && <span className="step-header-subtitle">{subtitle}</span>}
       </div>
 
       <div className="step-header-right">
